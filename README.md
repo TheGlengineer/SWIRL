@@ -11,9 +11,9 @@
 [![Build](https://img.shields.io/github/actions/workflow/status/TheGlengineer/SWIRL/ci.yml?branch=master&label=build)](https://github.com/TheGlengineer/SWIRL/actions/workflows/ci.yml)
 [![License: BSD 3-Clause](https://img.shields.io/badge/license-BSD%203--Clause-blue)](LICENSE.md)
 [![Built on openMenu](https://img.shields.io/badge/built%20on-openMenu-555)](https://github.com/mrneo240/openMenu)
-[![Buy me a coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-support%20SWIRL-f28c28?logo=buymeacoffee&logoColor=white)](https://buymeacoffee.com/thglengineer)
+<br>
 
-<img src="docs/images/swirl-home.png" alt="SWIRL home screen on a Dreamcast" width="720">
+<a href="https://www.buymeacoffee.com/thglengineer" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 
 </div>
 
