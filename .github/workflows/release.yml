@@ -1,0 +1,95 @@
+name: Release
+
+# Push a tag like v2.11.0 to build and publish a release. The tag must match `const version` in
+# swirl/cardmanager/main.go, and its major.minor must match ui/swirl/sw_version.h.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to (re)build, for example v2.11.0'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-22.04
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Check the version numbers
+        run: |
+          V="${TAG#v}"
+          APP=$(sed -n 's/^const version = "\(.*\)"/\1/p' swirl/cardmanager/main.go)
+          MENU=$(sed -n 's/^#define SWIRL_VERSION "\(.*\)"/\1/p' ui/swirl/sw_version.h)
+          echo "tag $V, Card Manager $APP, menu $MENU"
+          [ "$V" = "$APP" ] || { echo "::error::Tag $TAG does not match const version \"$APP\" in main.go"; exit 1; }
+          case "$V" in "$MENU"|"$MENU".*) ;; *) echo "::error::Menu version $MENU does not match $V"; exit 1;; esac
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+
+      - name: Cache the Dreamcast toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/dreamcast
+          key: dc-toolchain-gcc15.1.0-kos2.2.1
+
+      - name: Build the SWIRL menu
+        run: |
+          if [ ! -f ~/dreamcast/kos/environ.sh ]; then swirl/setup_toolchain.sh ~/dreamcast; fi
+          swirl/build.sh
+          cp swirl/build/gdemu/1ST_READ.BIN swirl/cardmanager/assets/1ST_READ.BIN
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: false
+
+      - name: Test Card Manager
+        working-directory: swirl/cardmanager
+        run: go test ./...
+
+      - name: Build Card Manager
+        working-directory: swirl/cardmanager
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq binutils-mingw-w64-x86-64
+          sh winres/make.sh "$VERSION"
+          GOOS=windows GOARCH=amd64 go build -trimpath \
+            -ldflags "-H windowsgui -s -w -X main.updateRepo=${{ github.repository }}" \
+            -o ../../dist/SWIRL-Card-Manager.exe .
+
+      - name: Package
+        run: |
+          cp swirl/build/gdemu/1ST_READ.BIN dist/1ST_READ.BIN
+          cd dist
+          sha256sum SWIRL-Card-Manager.exe 1ST_READ.BIN > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Release notes
+        run: |
+          # the section for this version in CHANGELOG.md, if there is one
+          awk -v v="$VERSION" '
+            $0 ~ "^## \\[?v?"v"[] ]" {on=1; next}
+            on && /^## / {exit}
+            on {print}' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "SWIRL $VERSION" > notes.md
+          printf '\n---\n**Install or update:** download `SWIRL-Card-Manager.exe` and run it, or click **Update now** in Card Manager. Then click **Update SWIRL** to put the new menu on your card.\n' >> notes.md
+          cat notes.md
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/SWIRL-Card-Manager.exe dist/1ST_READ.BIN dist/SHA256SUMS.txt --clobber
+          else
+            gh release create "$TAG" dist/SWIRL-Card-Manager.exe dist/1ST_READ.BIN dist/SHA256SUMS.txt \
+              --title "SWIRL $VERSION" --notes-file notes.md
+          fi

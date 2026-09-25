@@ -1,0 +1,46 @@
+name: Bug report
+description: Something in SWIRL or SWIRL Card Manager does not work as it should
+labels: [bug]
+body:
+  - type: dropdown
+    id: part
+    attributes:
+      label: Where is the problem?
+      options:
+        - SWIRL menu on the Dreamcast
+        - SWIRL Card Manager on the PC
+        - Both, or not sure
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: System > About SWIRL on the Dreamcast, and the version in Card Manager's header
+      placeholder: SWIRL 2.11, Card Manager 2.11.0
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what happened, and what you expected instead
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: Hardware
+      description: GDEMU (original or clone), video cable, VMU, controller
+      placeholder: GDEMU clone 5.20, VGA box, standard VMU
+  - type: textarea
+    id: details
+    attributes:
+      label: Card Manager details
+      description: In Card Manager, open About (F1) and click Copy details, then paste here
+      render: text
+  - type: textarea
+    id: game
+    attributes:
+      label: Game (if one game is affected)
+      description: Name, serial, image format (.gdi or .cdi) and the launch options you tried

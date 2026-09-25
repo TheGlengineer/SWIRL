@@ -1,0 +1,11 @@
+*.sh text eol=lf
+*.bat text eol=crlf
+*.BIN binary
+*.bin binary
+*.syso binary
+*.gz binary
+*.mp3 binary
+*.ico binary
+*.png binary
+*.swf binary
+*.DAT binary

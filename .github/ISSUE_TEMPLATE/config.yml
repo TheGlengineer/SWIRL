@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Missing or wrong box art
+    url: https://github.com/mrneo240/openMenu_imagedb/issues
+    about: Box art comes from the openMenu image database
+  - name: Missing or wrong game info
+    url: https://github.com/mrneo240/openMenu_metadb/issues
+    about: Descriptions, genres and players come from the openMenu metadata database

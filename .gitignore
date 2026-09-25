@@ -1,12 +1,31 @@
-*.ini
+# Dreamcast build outputs
 *.o
-*.bin
 *.elf
 *.map
-*loader*
-gdrom
-.vscode
+/1ST_READ.BIN
+/themeMenu.bin
+/output.map
+swirl/build/
+swirl/test/
+swirl/emulator/
+
+# openMenu tools
 tools/*.exe
 tools/*.dbg
 tools/*.com
 tools/cosmo
+
+# SWIRL Card Manager
+swirl/cardmanager/swirlcardmanager
+swirl/cardmanager/*.exe
+swirl/cardmanager/third_party/go4/
+swirl/cardmanager/third_party/x-sync/
+swirl/cardmanager/third_party/x-text/
+swirl/cardmanager/third_party/yaml3/
+
+# editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

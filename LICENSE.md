@@ -1,7 +1,8 @@
 Modified BSD License
 ====================
 
-_Copyright © `2021`, `Hayden Kowalchuk`_
+_Copyright © `2021`, `Hayden Kowalchuk` (openMenu)_  
+_Copyright © `2026`, `Glen Huszar` (SWIRL and SWIRL Card Manager)_  
 _All rights reserved._
 
 Redistribution and use in source and binary forms, with or without
@@ -26,3 +27,7 @@ LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
 ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+---
+
+Some parts of this repository are covered by their own licenses. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

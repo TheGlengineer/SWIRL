@@ -1,0 +1,16 @@
+name: Idea or feature request
+description: Suggest something new for SWIRL or SWIRL Card Manager
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+      description: Describe the idea and the problem it solves
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Anything else?
+      description: Screenshots, examples from other menus, or how you would use it
