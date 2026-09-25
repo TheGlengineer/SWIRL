@@ -101,7 +101,7 @@ func serve() {
 		}
 		mu.Lock()
 		defer mu.Unlock()
-		l := &logBuf{}
+		l := &logBuf{lines: []string{}}
 		if len(req.Names) > 0 {
 			if err := SaveNames(req.Root, req.Names, l.log); err != nil {
 				fail(w, err)
@@ -122,7 +122,7 @@ func serve() {
 		}
 		mu.Lock()
 		defer mu.Unlock()
-		l := &logBuf{}
+		l := &logBuf{lines: []string{}}
 		if err := RestoreBackup(req.Root, req.Backup, l.log); err != nil {
 			writeJSON(w, map[string]any{"ok": false, "error": err.Error(), "log": l.lines})
 			return
@@ -199,7 +199,7 @@ func serve() {
 		}
 		mu.Lock()
 		defer mu.Unlock()
-		l := &logBuf{}
+		l := &logBuf{lines: []string{}}
 		n, err := FillFromDiscs(req.Root, l.log)
 		if err != nil {
 			fail(w, err)
@@ -215,7 +215,7 @@ func serve() {
 		}
 		mu.Lock()
 		defer mu.Unlock()
-		l := &logBuf{}
+		l := &logBuf{lines: []string{}}
 		if err := RemoveDuplicates(req.Root, l.log); err != nil {
 			writeJSON(w, map[string]any{"ok": false, "error": err.Error(), "log": l.lines})
 			return
@@ -398,7 +398,7 @@ func serve() {
 		for f, n := range req.Names {
 			req.Names[f] = asciiOnly(n)
 		}
-		l := &logBuf{}
+		l := &logBuf{lines: []string{}}
 		if err := SaveNames(req.Root, req.Names, l.log); err != nil {
 			fail(w, err)
 			return
@@ -545,7 +545,7 @@ func serve() {
 				return
 			}
 			root = req.Root
-			l := &logBuf{}
+			l := &logBuf{lines: []string{}}
 			var err error
 			if req.Remove {
 				err = RemoveMusic(root)

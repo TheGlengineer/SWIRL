@@ -1647,7 +1647,7 @@ function renderBackups() {
     if (!confirm(`Put ${btn.dataset.b} back into folder 01? The current menu will be kept as another backup.`)) return;
     try {
       const r = await api("/api/restore", { root: card.root, backup: btn.dataset.b });
-      log(r.log.concat(r.ok ? ["Done."] : ["Error: " + r.error]), r.ok ? "ok" : "err");
+      log((r.log || []).concat(r.ok ? ["Done."] : ["Error: " + r.error]), r.ok ? "ok" : "err");
     } catch (e) { log("Error: " + e.message, "err"); }
     scan();
   });
@@ -1746,13 +1746,13 @@ async function dedupe() {
   const list = card.duplicates.map(d => `${d.name}: keep folder ${d.keep}, remove ${d.extras.join(", ")}`).join("\n");
   if (!confirm(`Remove these extra copies?\n\n${list}\n\nThey are moved to SWIRL_BACKUP on the card (delete them there to free the space). Game folders are then renumbered so there are no gaps, and the menu is rebuilt.`)) return;
   $("dedupe").disabled = true; log("Removing duplicates and renumbering folders... this can take a minute.");
-  try { const r = await api("/api/dedupe", { root: card.root }); log(r.ok ? r.log.concat(["Done. Put the card back in your GDEMU."]) : r.log.concat(["Error: " + r.error]), r.ok ? "ok" : "err"); }
+  try { const r = await api("/api/dedupe", { root: card.root }); log((r.log || []).concat([r.ok ? "Done. Put the card back in your GDEMU." : "Error: " + r.error]), r.ok ? "ok" : "err"); }
   catch (e) { log("Error: " + e.message, "err"); }
   const keep = $("log").innerHTML; await scan(); $("log").innerHTML = keep;
 }
 async function fillArt() {
   $("fillArt").disabled = true; log("Reading artwork from the game discs...");
-  try { const r = await api("/api/fillart", { root: card.root }); log(r.log.concat([`Added art for ${r.count} games. Click Update SWIRL to put it on the Dreamcast.`]), "ok"); }
+  try { const r = await api("/api/fillart", { root: card.root }); log((r.log || []).concat([r.count ? `Added art for ${r.count} game${r.count === 1 ? "" : "s"}. Click Update SWIRL to put it on the Dreamcast.` : "Nothing to add: every game already has box art and a VMU screen, or its disc has no artwork."]), "ok"); }
   catch (e) { log("Error: " + e.message, "err"); }
   const keep = $("log").innerHTML; await scan(); $("log").innerHTML = keep;
 }
@@ -1767,7 +1767,7 @@ $("install").onclick = async () => {
   log("Working... this can take a minute with a large art collection.");
   try {
     const r = await api("/api/install", { root: card.root, dats: $("dats").value.trim() });
-    log(r.ok ? r.log.concat(["Done. Put the card back in your GDEMU."]) : r.log.concat(["Error: " + r.error]), r.ok ? "ok" : "err");
+    log((r.log || []).concat([r.ok ? "Done. Put the card back in your GDEMU." : "Error: " + r.error]), r.ok ? "ok" : "err");
     const keep = $("log").innerHTML;
     await scan();
     $("log").innerHTML = keep;

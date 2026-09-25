@@ -16,6 +16,11 @@ may ship without menu changes; the menu then keeps its major.minor version (2.11
 - The hidden "._" files macOS writes next to every file on a FAT32 card are removed from the card, and are never mistaken for a disc (they made a freshly updated card show "No menu yet")
 - The patched Flycast used for Preview and VMU capture is built for the Mac by the release workflow; its source changes are in swirl/vmucap
 
+### Fixes (Windows and Mac)
+
+- Art from the game discs no longer shows an error when there is nothing to add; it now says every game already has art
+- Hidden "._" files copied from a Mac are never mistaken for a disc
+
 ### SWIRL menu
 
 - Version 2.13 to match; no changes on the Dreamcast.
