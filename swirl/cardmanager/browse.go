@@ -94,6 +94,9 @@ func Browse(p, kind string) (*BrowseResult, error) {
 		r.Parent = parent
 	}
 	for _, e := range entries {
+		if isJunk(e.Name()) { // macOS "._" files and the like are not discs
+			continue
+		}
 		name := e.Name()
 		if strings.HasPrefix(name, "$") || name == "System Volume Information" {
 			continue

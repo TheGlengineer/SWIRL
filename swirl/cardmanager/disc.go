@@ -201,6 +201,9 @@ func readImageIP(folder string) (*ipInfo, string, error) {
 	}
 	var gdi, other string
 	for _, e := range entries {
+		if isJunk(e.Name()) { // macOS "._" files and the like are not discs
+			continue
+		}
 		ext := strings.ToLower(filepath.Ext(e.Name()))
 		switch ext {
 		case ".gdi":
@@ -385,6 +388,9 @@ func detectPSX(folder string) (string, bool) {
 		return "", false
 	}
 	for _, e := range entries {
+		if isJunk(e.Name()) { // macOS "._" files and the like are not discs
+			continue
+		}
 		ext := strings.ToLower(filepath.Ext(e.Name()))
 		if ext != ".cdi" && ext != ".iso" && ext != ".bin" && ext != ".img" && ext != ".mdf" {
 			continue

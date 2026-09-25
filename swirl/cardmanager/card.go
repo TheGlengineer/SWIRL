@@ -138,6 +138,7 @@ func ScanCard(root string) (*Card, error) {
 	if err != nil || !st.IsDir() {
 		return nil, fmt.Errorf("%s is not a folder", root)
 	}
+	tidyMacFiles(root)
 	c := &Card{Root: root, MenuType: "None", Backups: listBackups(root)}
 	var boxIDs, iconIDs, metaIDs, vmuIDs map[string]bool
 	edits := loadEdits(root)
@@ -303,6 +304,9 @@ func findGDI(dir string) string {
 		return ""
 	}
 	for _, e := range entries {
+		if isJunk(e.Name()) { // macOS "._" files and the like are not discs
+			continue
+		}
 		if strings.EqualFold(filepath.Ext(e.Name()), ".gdi") {
 			return filepath.Join(dir, e.Name())
 		}
@@ -496,6 +500,7 @@ func buildMenuImageInto(root, datDir string, allowEmpty bool, log Logger) (strin
 }
 
 func installSwirl(root, datDir string, allowEmpty bool, log Logger) error {
+	defer tidyMacFiles(root)
 	work, out, c, err := buildMenuImage(root, datDir, allowEmpty, log)
 	if work != "" {
 		defer os.RemoveAll(work)

@@ -12,6 +12,7 @@ may ship without menu changes; the menu then keeps its major.minor version (2.11
 - Formatting uses the same FAT32 writer as on Windows, asks for your Mac password, and refuses the startup disk, internal drives and disk images; you confirm by typing the card's name
 - The app window uses Chrome, Edge or Brave in app mode when one is installed, otherwise Safari
 - Spotlight is kept from indexing cards formatted by the app, so macOS does not write its index onto them
+- The hidden "._" files macOS writes next to every file on a FAT32 card are removed from the card, and are never mistaken for a disc (they made a freshly updated card show "No menu yet")
 - The patched Flycast used for Preview and VMU capture is built for the Mac by the release workflow; its source changes are in swirl/vmucap
 
 ### SWIRL menu

@@ -132,7 +132,7 @@ jobs:
         run: |
           go vet ./...
           # failures are also posted as annotations, which anyone can read on the run's page
-          go test -v -run 'MacDisk|ZipTree|Update|HeaderLogo|Backup|Titles' ./... 2>&1 | tee test.log || true
+          go test -v -run 'MacDisk|ZipTree|Update|HeaderLogo|Backup|Titles|AppleDouble' ./... 2>&1 | tee test.log || true
           if ! grep -q '^ok' test.log || grep -qE '^(--- )?FAIL' test.log; then
             grep -E -- '--- FAIL|_test.go:[0-9]+|panic|^FAIL|cannot|undefined' test.log | head -40 | while IFS= read -r l; do echo "::error::$l"; done
             exit 1

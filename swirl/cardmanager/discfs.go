@@ -104,6 +104,9 @@ func openGameDisc(folder string) (sectorReader, error) {
 	}
 	var other string
 	for _, e := range entries {
+		if isJunk(e.Name()) { // macOS "._" files and the like are not discs
+			continue
+		}
 		ext := strings.ToLower(filepath.Ext(e.Name()))
 		if ext == ".gdi" {
 			return openGDI(filepath.Join(folder, e.Name()))

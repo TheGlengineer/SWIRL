@@ -110,6 +110,9 @@ var imageExts = map[string]bool{".gdi": true, ".cdi": true, ".mds": true, ".ccd"
 func hasImage(dir string) bool {
 	entries, _ := os.ReadDir(dir)
 	for _, e := range entries {
+		if isJunk(e.Name()) { // macOS "._" files and the like are not discs
+			continue
+		}
 		if !e.IsDir() && imageExts[strings.ToLower(filepath.Ext(e.Name()))] {
 			return true
 		}
@@ -155,6 +158,9 @@ func planCopy(src string) (*copyPlan, error) {
 	var loose []string
 	maxNum := 1
 	for _, e := range entries {
+		if isJunk(e.Name()) { // macOS "._" files and the like are not discs
+			continue
+		}
 		name := e.Name()
 		if e.IsDir() {
 			switch {

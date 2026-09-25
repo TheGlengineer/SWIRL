@@ -131,6 +131,9 @@ func findDisc(dir string) string {
 	}
 	entries, _ := os.ReadDir(dir)
 	for _, e := range entries {
+		if isJunk(e.Name()) { // macOS "._" files and the like are not discs
+			continue
+		}
 		if !e.IsDir() && strings.EqualFold(filepath.Ext(e.Name()), ".cdi") {
 			return filepath.Join(dir, e.Name())
 		}

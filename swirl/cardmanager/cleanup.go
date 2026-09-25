@@ -25,6 +25,9 @@ func folderSize(dir string) (int64, []string) {
 	var sig []string
 	entries, _ := os.ReadDir(dir)
 	for _, e := range entries {
+		if isJunk(e.Name()) { // macOS "._" files and the like are not discs
+			continue
+		}
 		if e.IsDir() {
 			continue
 		}
