@@ -10,6 +10,7 @@ may ship without menu changes; the menu then keeps its major.minor version (2.11
 - SWIRL Card Manager now runs on Macs (macOS 10.15 or newer, Apple Silicon and Intel) with every feature of the Windows app: adding games and archives, names, art, screenshots, collections, music, backups, the health check, New card from scratch, Preview in Flycast and VMU screen capture
 - Download the .dmg and drag the app to Applications, or use Move to Applications from inside the app; it updates itself like the Windows version
 - Formatting uses the same FAT32 writer as on Windows, asks for your Mac password, and refuses the startup disk, internal drives and disk images; you confirm by typing the card's name
+- A card is only called write protected when macOS reports its lock switch is on. When macOS does not let the app write to the card directly, it formats it with macOS Disk Utility instead
 - The app window uses Chrome, Edge or Brave in app mode when one is installed, otherwise Safari
 - Spotlight is kept from indexing cards formatted by the app, so macOS does not write its index onto them
 - The hidden "._" files macOS writes next to every file on a FAT32 card are removed from the card, and are never mistaken for a disc (they made a freshly updated card show "No menu yet")

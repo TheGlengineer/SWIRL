@@ -101,6 +101,20 @@ func TestMacDiskJudge(t *testing.T) {
 	if info.OK {
 		t.Fatal("disk image accepted")
 	}
+	// the lock switch, as macOS reports it
+	locked := mustDict(t, sdReaderPlist)
+	locked["WritableMedia"] = false
+	info = DiskInfo{}
+	judgeMacDisk(&info, locked, nil)
+	if info.OK || !strings.Contains(info.Reason, "lock switch") {
+		t.Fatalf("locked card: %+v", info)
+	}
+	unlocked := mustDict(t, sdReaderPlist)
+	unlocked["WritableMedia"] = true
+	info = DiskInfo{}
+	if judgeMacDisk(&info, unlocked, nil); !info.OK {
+		t.Fatalf("unlocked card refused: %+v", info)
+	}
 	// no card in the reader
 	info = DiskInfo{}
 	judgeMacDisk(&info, mustDict(t, strings.ReplaceAll(sdReaderPlist, "63864569856", "0")), nil)

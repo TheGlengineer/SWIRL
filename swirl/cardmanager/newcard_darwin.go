@@ -118,32 +118,41 @@ func doFormat(root string, disk int, report func(float64, string)) (string, erro
 		return "", fmt.Errorf("macOS could not unmount the card; close any Finder windows or apps using it and try again (%v)", err)
 	}
 	f, err := os.OpenFile(fmt.Sprintf("/dev/rdisk%d", disk), os.O_RDWR, 0)
-	if err != nil {
-		diskutil("mountDisk", dev)
-		if errors.Is(err, syscall.EROFS) || errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM) {
-			return "", errors.New("the card is write protected; slide its lock switch up and try again")
+	switch {
+	case err == nil:
+		l, perr := planFAT32(info.SizeBytes/secSize, "SWIRL")
+		if perr != nil {
+			f.Close()
+			return "", perr
 		}
-		return "", err
-	}
-	l, err := planFAT32(info.SizeBytes/secSize, "SWIRL")
-	if err != nil {
+		report(0.02, "Writing FAT32")
+		err = writeFreshCard(f, l, func(done, total uint64) {
+			report(0.02+0.9*float64(done)/float64(total), "")
+		})
+		if err == nil {
+			err = f.Sync()
+		}
 		f.Close()
-		return "", err
-	}
-	report(0.02, "Writing FAT32")
-	err = writeFreshCard(f, l, func(done, total uint64) {
-		report(0.02+0.9*float64(done)/float64(total), "")
-	})
-	if err == nil {
-		err = f.Sync()
-	}
-	f.Close()
-	if err != nil {
-		diskutil("mountDisk", dev)
-		if errors.Is(err, syscall.EROFS) || errors.Is(err, syscall.EPERM) {
-			return "", errors.New("the card is write protected; slide its lock switch up and try again")
+		if err != nil {
+			diskutil("mountDisk", dev)
+			if errors.Is(err, syscall.EROFS) {
+				return "", errors.New("the card is write protected; take it out, slide its lock switch up, away from LOCK, and put it back")
+			}
+			return "", fmt.Errorf("writing the card failed: %v", err)
 		}
-		return "", err
+	case errors.Is(err, syscall.EROFS):
+		diskutil("mountDisk", dev)
+		return "", errors.New("the card is write protected; take it out, slide its lock switch up, away from LOCK, and put it back")
+	case errors.Is(err, syscall.EPERM) || errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EBUSY):
+		// macOS does not let this app write to the disk directly (newer macOS versions keep unsigned
+		// apps away from raw disks). Apple's diskutil formats it instead.
+		if ferr := formatWithDiskutil(disk, report); ferr != nil {
+			diskutil("mountDisk", dev)
+			return "", ferr
+		}
+	default:
+		diskutil("mountDisk", dev)
+		return "", fmt.Errorf("the card could not be opened for formatting: %v", err)
 	}
 
 	report(0.95, "Waiting for macOS to mount the card")
@@ -169,6 +178,26 @@ func doFormat(root string, disk int, report func(float64, string)) (string, erro
 		}
 	}
 	return "", errors.New("the card was formatted but macOS did not mount it; take the card out, put it back in, then use Install SWIRL")
+}
+
+// formatWithDiskutil formats the card with Apple's tools: an MBR partition table and one FAT32
+// partition, then (when macOS allows it) 32 KB clusters, which GDEMU reads fastest.
+func formatWithDiskutil(disk int, report func(float64, string)) error {
+	dev := fmt.Sprintf("/dev/disk%d", disk)
+	report(0.05, "Formatting with macOS Disk Utility")
+	if err := diskutil("eraseDisk", "FAT32", "SWIRL", "MBRFormat", dev); err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "write") && strings.Contains(strings.ToLower(err.Error()), "protect") {
+			return errors.New("the card is write protected; take it out, slide its lock switch up, away from LOCK, and put it back")
+		}
+		return fmt.Errorf("macOS could not format the card (%v)", err)
+	}
+	report(0.8, "Setting the cluster size GDEMU likes")
+	part := fmt.Sprintf("/dev/disk%ds1", disk)
+	if diskutil("unmount", "force", part) == nil {
+		// if this is refused too, the card keeps diskutil's FAT32, which GDEMU also reads
+		exec.Command("/sbin/newfs_msdos", "-F", "32", "-c", "64", "-v", "SWIRL", fmt.Sprintf("/dev/rdisk%ds1", disk)).Run()
+	}
+	return nil
 }
 
 // runFormatHelper is the child process started with administrator rights by formatCard.

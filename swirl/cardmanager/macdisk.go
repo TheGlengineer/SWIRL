@@ -62,6 +62,8 @@ func judgeMacDisk(info *DiskInfo, whole plistDict, protected map[int]bool) {
 		info.Reason = fmt.Sprintf("this is an internal %s drive, not an SD card", strings.TrimSpace(info.Bus+" "+"disk"))
 	case !(sdBus || removable || ejectable || strings.EqualFold(info.Bus, "USB")):
 		info.Reason = "this does not look like an SD card or USB card reader"
+	case !writableMedia(whole):
+		info.Reason = "the card is write protected; take it out, slide its lock switch up, away from LOCK, and put it back"
 	case info.SizeBytes == 0:
 		info.Reason = "could not read the card size; is a card in the reader?"
 	case info.SizeBytes > 2<<40:
@@ -71,6 +73,14 @@ func judgeMacDisk(info *DiskInfo, whole plistDict, protected map[int]bool) {
 	default:
 		info.OK = true
 	}
+}
+
+// writableMedia is macOS's own reading of the card's lock switch (missing means writable).
+func writableMedia(whole plistDict) bool {
+	if w, ok := whole.boolean("WritableMedia"); ok {
+		return w
+	}
+	return true
 }
 
 // confirmWord is what the person types to confirm erasing a Mac card: its name in capitals, or ERASE.
