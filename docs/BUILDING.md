@@ -97,7 +97,7 @@ major.minor.
 `rsrc_windows_amd64.syso` holds the icon, the version info and the manifest. After changing the version run:
 
 ```sh
-sudo apt install binutils-mingw-w64-x86-64
+sudo apt install binutils-mingw-w64-x86-64 gcc-mingw-w64-x86-64   # windres uses the C preprocessor
 sh winres/make.sh 2.11.0
 ```
 

@@ -59,7 +59,7 @@ jobs:
       - name: Build Card Manager
         working-directory: swirl/cardmanager
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq binutils-mingw-w64-x86-64
+          sudo apt-get update -qq && sudo apt-get install -y -qq binutils-mingw-w64-x86-64 gcc-mingw-w64-x86-64
           sh winres/make.sh "$VERSION"
           GOOS=windows GOARCH=amd64 go build -trimpath \
             -ldflags "-H windowsgui -s -w -X main.updateRepo=${{ github.repository }}" \
