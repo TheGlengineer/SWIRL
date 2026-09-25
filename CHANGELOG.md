@@ -20,6 +20,7 @@ may ship without menu changes; the menu then keeps its major.minor version (2.11
 
 - Art from the game discs no longer shows an error when there is nothing to add; it now says every game already has art
 - Hidden "._" files copied from a Mac are never mistaken for a disc
+- Version tags are left out of game names: a game added as "Toy Commander v1.022" is named "Toy Commander" even when its serial is not in the Redump list, and Tidy names offers the same for games already on the card
 
 ### SWIRL menu
 

@@ -98,7 +98,9 @@ var (
 	tagRe      = regexp.MustCompile(`\s*[\(\[][^\)\]]*[\)\]]`)
 	discWordRe = regexp.MustCompile(`(?i)[\s_\-\.]*(disc|disk|cd)[\s_\-\.]*\d+(\s*of\s*\d+)?\b`)
 	spaceRe    = regexp.MustCompile(`\s+`)
-	romanRe    = regexp.MustCompile(`^(?i)(ii|iii|iv|vi|vii|viii|ix|x|xi|xii|xiii)$`)
+	// "v1.022", "V1.0", "ver 1.2", "Rev A", "Rev 1", "Version 2" at the end of a name or before other words
+	versionRe = regexp.MustCompile(`(?i)[\s_\-]+((v|ver\.?|version)\s*\d+(\.\d+)*[a-z]?|(rev\.?|revision)\s*(\d+(\.\d+)*|[a-z]))\b`)
+	romanRe   = regexp.MustCompile(`^(?i)(ii|iii|iv|vi|vii|viii|ix|x|xi|xii|xiii)$`)
 )
 
 // cleanLabel tidies a file or folder name: "Crazy_Taxi_(USA)_[!]" becomes "Crazy Taxi".
@@ -109,6 +111,7 @@ func cleanLabel(s string) string {
 		s = strings.ReplaceAll(s, ".", " ")
 	}
 	s = discWordRe.ReplaceAllString(s, "")
+	s = versionRe.ReplaceAllString(s, "")
 	s = spaceRe.ReplaceAllString(s, " ")
 	s = strings.Trim(s, " -.,")
 	if m := regexp.MustCompile(`^(.*), (The|A|An)$`).FindStringSubmatch(s); m != nil {
@@ -192,8 +195,15 @@ func suggestedName(g *Game) string {
 	if e, ok := lookupTitle(g.Product, d); ok {
 		return e.Title
 	}
-	if !g.Custom && meaningful(g.Name) && g.Name == strings.ToUpper(g.Name) {
+	if g.Custom || !meaningful(g.Name) {
+		return ""
+	}
+	if g.Name == strings.ToUpper(g.Name) {
 		return titleCase(g.Name)
+	}
+	// a name with a version tag or dump tags left in, such as "Toy Commander v1.022"
+	if l := cleanLabel(g.Name); l != g.Name && meaningful(l) {
+		return l
 	}
 	return ""
 }

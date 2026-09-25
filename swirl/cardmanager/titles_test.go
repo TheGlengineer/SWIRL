@@ -50,6 +50,40 @@ func TestTitleLookup(t *testing.T) {
 	}
 }
 
+func TestCleanLabelVersions(t *testing.T) {
+	for in, want := range map[string]string{
+		"Toy Commander v1.022":              "Toy Commander",
+		"Toy_Commander_v1.022_(2000)(Sega)": "Toy Commander",
+		"Soul Calibur V1.001 (USA)":         "Soul Calibur",
+		"Sonic Adventure 2 Rev A":           "Sonic Adventure 2",
+		"Crazy Taxi ver 1.004":              "Crazy Taxi",
+		"Rayman 2 v1.0 Disc 1":              "Rayman 2",
+		"V-Rally 2":                         "V-Rally 2",
+		"Re-Volt":                           "Re-Volt",
+		"Vigilante 8 2nd Offense":           "Vigilante 8 2nd Offense",
+		"Street Fighter III 3rd Strike":     "Street Fighter III 3rd Strike",
+		"Virtua Tennis 2":                   "Virtua Tennis 2",
+		"Marvel vs. Capcom 2":               "Marvel vs. Capcom 2",
+		"Capcom vs SNK":                     "Capcom vs SNK",
+	} {
+		if got := cleanLabel(in); got != want {
+			t.Errorf("cleanLabel(%q) = %q, want %q", in, got, want)
+		}
+	}
+	if suggestedName(&Game{Name: "Toy Commander v1.022", Product: "HB-1"}) != "Toy Commander" {
+		t.Fatal("Tidy names did not offer the name without its version")
+	}
+	if suggestedName(&Game{Name: "Toy Commander v1.022", Product: "HB-1", Custom: true}) != "" {
+		t.Fatal("Tidy names offered to change a name the person typed")
+	}
+	if suggestedName(&Game{Name: "Toy Commander", Product: "HB-1"}) != "" {
+		t.Fatal("Tidy names offered a change for a clean name")
+	}
+	if properName(nil, "Toy Commander v1.022") != "Toy Commander" {
+		t.Fatal("a version tag was kept in a name with no known serial")
+	}
+}
+
 func TestDiscSetsAndNames(t *testing.T) {
 	card := t.TempDir()
 	logf := func(f string, a ...any) { t.Logf(f, a...) }

@@ -25,7 +25,7 @@ can also install the app on your PC, start a new card, or close the app.
 - **Add games**: a file browser for folders, disc images and archives (see below).
 - **Remove selected**: tick games, then remove them. They are moved to `SWIRL_BACKUP` on the card, the remaining folders are renumbered with no gaps, and the menu is rebuilt.
 - **Drag to reorder**: drag rows by the handle, or drag covers, then **Save new order**. GDEMU and SWIRL list games in folder order.
-- **Tidy names**: proper titles from the Redump list, matched by each disc's serial. Names you typed yourself are never changed.
+- **Tidy names**: proper titles from the Redump list, matched by each disc's serial. For discs the list does not know, it offers the name without version or dump tags ("Toy Commander v1.022" becomes "Toy Commander"). You see every change before it is made, and names you typed yourself are never changed.
 - **Put discs together**: keeps the discs of multi disc games next to each other and in order. Discs of one game are grouped in the list.
 - **Find a game** (Ctrl+F) filters the list.
 
