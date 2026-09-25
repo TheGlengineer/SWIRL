@@ -1796,11 +1796,18 @@ FUNCTION(UI_NAME, init) {
   draw_load_texture_buffer("EMPTY.PVR", &img_empty_boxart, texman_get_tex_data(t));
   texman_reserve_memory(img_empty_boxart.width, img_empty_boxart.height, 2);
 
-  t = texman_create();
-  draw_load_texture_buffer("THEME/NTSC_U/BG_U_L.PVR", &img_logo_src, texman_get_tex_data(t));
-  have_logo = img_logo_src.texture && img_logo_src.texture != img_empty_boxart.texture && img_logo_src.width >= 128;
-  if (have_logo)
-    texman_reserve_memory(img_logo_src.width, img_logo_src.height, 2);
+  /* the Sega Dreamcast logo for the header, from openMenu's USA theme picture (Card Manager adds it to
+     menu discs that lack it). Checked by opening the file, because EMPTY.PVR may be missing too. */
+  have_logo = 0;
+  file_t lf = fs_open("/cd/THEME/NTSC_U/BG_U_L.PVR", O_RDONLY);
+  if (lf != FILEHND_INVALID) {
+    fs_close(lf);
+    t = texman_create();
+    draw_load_texture_buffer("THEME/NTSC_U/BG_U_L.PVR", &img_logo_src, texman_get_tex_data(t));
+    have_logo = img_logo_src.texture && img_logo_src.width >= 128;
+    if (have_logo)
+      texman_reserve_memory(img_logo_src.width, img_logo_src.height, 2);
+  }
 
   sw_gfx_init();
   sw_vmu_init();

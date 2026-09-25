@@ -3,6 +3,16 @@
 SWIRL (the menu) and SWIRL Card Manager share one version number. Card Manager patch releases (2.11.1)
 may ship without menu changes; the menu then keeps its major.minor version (2.11).
 
+## [2.12.0]
+
+### SWIRL menu
+
+- The Sega Dreamcast logo is back at the top left of every screen, on every card. It is taken from openMenu's USA theme picture on the menu disc, and SWIRL now finds it even when the disc has no `EMPTY.PVR`.
+
+### SWIRL Card Manager
+
+- Update SWIRL adds openMenu's USA theme picture (the source of the header logo) to menu discs that do not have it, such as new cards. It is downloaded once from openMenu's own GitHub release, checked against a fixed checksum and kept with the app's data. Without an internet connection SWIRL shows its name in the header instead, as before.
+
 ## [2.11.0]
 
 First public release.
@@ -38,4 +48,5 @@ First public release.
 - Old menus and removed games kept in SWIRL_BACKUP with restore
 - About window (F1) with shortcuts, credits and copyable details; F5 and Ctrl+F shortcuts
 
+[2.12.0]: https://github.com/TheGlengineer/SWIRL/releases/tag/v2.12.0
 [2.11.0]: https://github.com/TheGlengineer/SWIRL/releases/tag/v2.11.0

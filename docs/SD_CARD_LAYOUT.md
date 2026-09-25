@@ -38,7 +38,7 @@ Folder `01` is a small GD-ROM image that GDEMU boots first. Inside it:
 | `BGM.ADP` | Menu music (AICA ADPCM) | Optional, added by SWIRL |
 | `COLLECT.TXT` | Your own collections | Optional, added by SWIRL |
 | `LOGO.VMU` | Your own VMU logo | Optional, added by SWIRL |
-| `THEME/` | openMenu themes; SWIRL takes the Dreamcast logo for its header from here | Optional |
+| `THEME/` | openMenu themes. SWIRL takes the Sega Dreamcast logo for its header from `THEME/NTSC_U/BG_U_L.PVR`; Card Manager adds that one file from openMenu's release when it is missing | Optional |
 | `PELICAN.BIN` | CodeBreaker, for the "Play with CodeBreaker cheats" option | Optional |
 | `BLEEM.BIN` | Bleem, for PlayStation discs | Optional |
 | `GDEMUNFO.TXT` | Notes which tool made the disc | Optional |

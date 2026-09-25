@@ -18,6 +18,9 @@ are ready, and the VMU shows the SWIRL logo.
 | Keyboard (Library) | Type a name to jump to it |
 | A + B + X + Y + Start while playing | Reset back to SWIRL |
 
+The Sega Dreamcast logo sits at the top left of every screen. It comes from openMenu's theme on the
+menu disc, which Card Manager adds when a card does not have it.
+
 ## Home
 
 ![Home](images/swirl-home.png)
