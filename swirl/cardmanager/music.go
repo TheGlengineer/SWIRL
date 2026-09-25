@@ -346,7 +346,7 @@ func RemoveMusic(root string) error {
 //go:embed assets/default_bgm.mp3
 var defaultBGMmp3 []byte
 
-const defaultMusicName = "TopStrike Main Theme"
+const defaultMusicName = "SWIRL Main Theme"
 
 var defaultBGMmu sync.Mutex
 

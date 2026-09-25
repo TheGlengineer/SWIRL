@@ -15,7 +15,7 @@ First public release.
 - Game page with description, two screenshots, VMU preview, play stats and a disc picker for multi disc games
 - Per game launch options: region, video (Force VGA or game default), boot animation and SEGA screen, CodeBreaker
 - Region free and VGA by default for every game
-- Menu music with a built in theme, navigation sounds, adjustable volumes, and pop free sound chip handling
+- Menu music with a built in theme (SWIRL Main Theme), navigation sounds, adjustable volumes, and pop free sound chip handling
 - Smooth fade in from the boot screen once art and music are ready
 - Five animated screen savers (cover drift, game showcase, swirl, bouncing logo, dim the screen), 1 to 30 minutes, with a preview
 - Accent colours, night and seasonal backdrops, 12 or 24 hour clock, rumble, VMU beep, start on Home or the last played game
@@ -25,6 +25,7 @@ First public release.
 
 ### SWIRL Card Manager
 
+- The SWIRL logo in the app header, the About window, the app icon and shortcuts, and on the VMU
 - One Windows exe that can install itself (Start menu, desktop shortcut, Settings > Apps uninstall) and opens in its own window
 - Checks GitHub for new versions and updates itself, verifying the SHA-256 checksum
 - New card from scratch: FAT32 format with GDEMU friendly settings, pick games one by one or copy a folder

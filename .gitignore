@@ -29,3 +29,6 @@ swirl/cardmanager/third_party/yaml3/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Python
+__pycache__/
