@@ -22,12 +22,12 @@
 #include "serial_sanitize.h"
 
 /* CFG for small pvr pool (128x128 16bit, 16 spaces) */
-#define SM_SLOT_NUM (16)
+#define SM_SLOT_NUM (48) /* SWIRL: carousel + grids show up to ~30 icons */
 #define SM_SLOT_SIZE (128 * 128 * 2)
 #define SM_POOL_SIZE (SM_SLOT_NUM * SM_SLOT_SIZE * sizeof(char))
 
 /* CFG for large pvr pool (256x256 16bit, 4 spaces) */
-#define LG_SLOT_NUM (4)
+#define LG_SLOT_NUM (6) /* SWIRL */
 #define LG_SLOT_SIZE (256 * 256 * 2)
 #define LG_POOL_SIZE (LG_SLOT_NUM * LG_SLOT_SIZE * sizeof(char))
 
@@ -162,4 +162,9 @@ int txr_get_small(const char *id, struct image *img) {
 
 int txr_get_large(const char *id, struct image *img) {
   return txr_get_from_dat_set(id, img, &box_system);
+}
+
+/* SWIRL: whether a sharp cover is already in video memory (no SD card read needed) */
+int txr_large_cached(const char *id) {
+  return find_in_cache(&box_system.cache, serial_santize_art(id)) != -1;
 }

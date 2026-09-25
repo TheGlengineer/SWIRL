@@ -14,6 +14,7 @@
 #include <external/libcrayonvmu/setup.h>
 
 /* Images and such */
+#include "swirl/sw_vmu.h"
 #if __has_include("openmenu_lcd.h") && __has_include("openmenu_pal.h") && __has_include("openmenu_vmu.h")
 #include "openmenu_lcd.h"
 #include "openmenu_pal.h"
@@ -36,9 +37,9 @@ static openmenu_settings savedata;
 static void settings_defaults(void) {
   savedata.identifier[0] = 'O';
   savedata.identifier[1] = 'M';
-  savedata.version = 1;
+  savedata.version = 2;
   savedata.padding = 0;
-  savedata.ui = UI_LINE_DESC;
+  savedata.ui = UI_SWIRL;
   savedata.region = REGION_NTSC_U;
   savedata.aspect = ASPECT_NORMAL;
   savedata.sort = SORT_DEFAULT;
@@ -78,9 +79,8 @@ void settings_init(void) {
   savefile_details.icon = OPENMENU_ICON;
   savefile_details.icon_palette = (unsigned short *)OPENMENU_PAL;
 
-#if OPENMENU_ICONS
-  crayon_vmu_display_icon(savefile_details.valid_vmu_screens, OPENMENU_LCD);
-#endif
+  /* SWIRL: its own logo (or the owner's LOGO.VMU) instead of the openMenu one */
+  sw_vmu_boot_logo();
 
   // Find the first savefile (if it exists)
   for (int iter = 0; iter <= 3; iter++) {
@@ -99,14 +99,19 @@ Exit_loop_1:
 }
 
 void settings_validate(void) {
-  if (savedata.version != 1) {
+  if (savedata.version == 1) {
+    /* SWIRL: keep the user's openMenu settings, switch the style to SWIRL once */
+    savedata.version = 2;
+    savedata.ui = UI_SWIRL;
+    settings_save();
+  } else if (savedata.version != 2) {
     settings_defaults();
     settings_save();
     return;
   }
 
   if ((savedata.ui < UI_START) || (savedata.ui > UI_END)) {
-    savedata.ui = UI_LINE_DESC;
+    savedata.ui = UI_SWIRL;
   }
 
   if ((savedata.region < REGION_START) || (savedata.region > REGION_END)) {
@@ -163,7 +168,7 @@ void settings_save(void) {
   }
   if (savefile_details.valid_memcards) {
     crayon_savefile_save(&savefile_details);
-    savefile_details.valid_saves = crayon_savefile_get_valid_saves(&savefile_details);
+    crayon_savefile_update_valid_saves(&savefile_details, CRAY_SAVEFILE_UPDATE_MODE_BOTH);
     if ((savedata.beep == BEEP_ON) && (vmu)) {
       vmu_beep_raw(vmu, 0x00000000); /* Turn off Beep */
     }

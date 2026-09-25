@@ -7,4 +7,5 @@ CFG(ITEMS, region, "JUE")
 CFG(ITEMS, version, "v1.001")
 CFG(ITEMS, date, "19990909")
 CFG(ITEMS, product, "T-0000A")
+CFG(ITEMS, type, "")
 #undef CFG

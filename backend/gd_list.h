@@ -34,3 +34,7 @@ const struct gd_item **list_get_multidisc(void);
 int list_length(void);
 int list_multidisc_length(void);
 const struct gd_item *list_item_get(int idx);
+
+/* SWIRL: raw slot access (index 0 is the menu itself) */
+int list_slot_count(void);
+const struct gd_item *list_slot_get(int idx);

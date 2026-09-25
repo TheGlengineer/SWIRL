@@ -18,5 +18,6 @@ typedef struct gd_item {
   char version[8];
   char region[4];
   unsigned int slot_num;
-  char vga[1];
+  char vga[2];
+  char type[8]; /* "psx" for PlayStation discs (run through Bleem) */
 } gd_item;

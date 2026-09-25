@@ -22,7 +22,7 @@
 #pragma region Settings_Menu
 
 static const char* menu_choice_text[] = {"Style", "Theme", "Aspect", "Beep", "Sort", "Filter", "Multidisc"};
-static const char* theme_choice_text[] = {"LineDesc", "Grid3", "GDMENU"};
+static const char* theme_choice_text[] = {"LineDesc", "Grid3", "GDMENU", "SWIRL"};
 static const char* region_choice_text[] = {"NTSC-U", "NTSC-J", "PAL"};
 static const char* aspect_choice_text[] = {"4:3", "16:9"};
 static const char* beep_choice_text[] = {"Off", "On"};

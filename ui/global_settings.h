@@ -33,7 +33,8 @@ typedef enum CFG_UI {
   UI_LINE_DESC = UI_START,
   UI_GRID3,
   UI_GDMENU,
-  UI_END = UI_GDMENU
+  UI_SWIRL,
+  UI_END = UI_SWIRL
 } CFG_UI;
 
 typedef enum CFG_SORT {

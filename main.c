@@ -34,6 +34,8 @@
 #undef UI_NAME
 #include "ui/ui_bios.h"
 #undef UI_NAME
+#include "ui/ui_swirl.h"
+#undef UI_NAME
 
 #include "texture/txr_manager.h"
 
@@ -60,6 +62,7 @@ static ui_template ui_choices[] = {
     UI_TEMPLATE(LIST_DESC),
     UI_TEMPLATE(GRID_3),
     UI_TEMPLATE(GDMENU_EMU),
+    UI_TEMPLATE(SWIRL), /* index must equal UI_SWIRL */
     UI_TEMPLATE(BIOS),
 };
 
@@ -232,6 +235,12 @@ static int translate_input(void) {
   return NONE;
 }
 
+/* SWIRL picture quality, read from SWIRL.DAT on the VMU before the screen is set up:
+   High = 32 bit frame buffer (smooth gradients) and horizontal anti-aliasing */
+extern int sw_lib_early_quality(void);
+extern float om_xscale;
+void sw_fix_fsaa_clip(void);
+
 static void init_gfx_pvr(void) {
   /* BlueCrab (c) 2014,
     This assumes that the video mode is initialized as KOS
@@ -243,23 +252,30 @@ static void init_gfx_pvr(void) {
 
   /* Prompt the user for whether to run in PAL50 or PAL60 if the flashrom says
        the Dreamcast is European and a VGA Box is not hooked up. */
+  const int hq = sw_lib_early_quality();
+  const int pm = hq ? PM_RGB888P : PM_RGB565;
   if (dc_region == FLASHROM_REGION_EUROPE && ct != CT_VGA) {
-    if (/*pal_menu()*/ 1 == 1)
-      vid_set_mode(DM_640x480_NTSC_IL, PM_RGB565);
-    else
-      vid_set_mode(DM_640x480_PAL_IL, PM_RGB565);
+    vid_set_mode(DM_640x480_NTSC_IL, pm);
+  } else if (hq) {
+    vid_set_mode(DM_640x480, pm); /* VGA or TV, whichever cable is plugged in */
   }
 
   pvr_init_params_t params = {
-      /* Enable opaque and translucent polygons with size 32 and 32 */
-      {PVR_BINSIZE_32, PVR_BINSIZE_0, PVR_BINSIZE_32, PVR_BINSIZE_0, PVR_BINSIZE_0}, /* Only TR */
-      256 * 1024,                                                                    /* 256kb Vertex buffer  */
-      0,                                                                             /* No DMA, but maybe? */
-      0,                                                                             /* No FSAA */
-      0                                                                              /* Disable TR autosort */
+      /* Opaque and translucent lists only */
+      /* with anti-aliasing each tile covers half the width, so the opaque list (only the backdrop) needs less */
+      .opb_sizes = {hq ? PVR_BINSIZE_16 : PVR_BINSIZE_32, PVR_BINSIZE_0, PVR_BINSIZE_32, PVR_BINSIZE_0, PVR_BINSIZE_0},
+      .vertex_buf_size = 512 * 1024, /* SWIRL: dashboard draws more geometry than the classic views */
+      .dma_enabled = 0,
+      .fsaa_enabled = hq,
+      .autosort_disabled = 0,
+      .opb_overflow_count = hq ? 2 : 3, /* SWIRL: many layered translucent polygons per tile */
   };
 
   pvr_init(&params);
+  if (hq) {
+    om_xscale = 2.f;
+    sw_fix_fsaa_clip();
+  }
   draw_set_list(PVR_LIST_OP_POLY);
 }
 

@@ -10,6 +10,7 @@
 
 #include "ui_line_desc.h"
 
+#include <arch/arch.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -405,7 +406,7 @@ static void handle_input_ui(enum control input) {
       // arch_menu();
       extern void gdemu_set_img_num(uint16_t);
       gdemu_set_img_num((uint16_t)0);
-      arch_set_exit_path(1);
+      arch_set_exit_path(ARCH_EXIT_RETURN);
       arch_exit();
     } break;
 

@@ -12,6 +12,7 @@
 #include "../tools/cosmo/cosmopolitan.h"
 #else
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -93,7 +94,7 @@ static int read_openmenu_ini(void *user, const char *section, const char *name, 
       if (0)
         ;
 #define CFG(s, n, default) else if (strcasecmp(section, #s) == 0 && \
-                                    strcasecmp(plain_name, #n) == 0) strcpy(item->n, value);
+                                    strcasecmp(plain_name, #n) == 0) snprintf(item->n, sizeof(item->n), "%s", value);
 #include "gd_item.def"
 
     } else {
@@ -416,4 +417,14 @@ const gd_item *list_item_get(int idx) {
     return (const gd_item *)list_temp[idx];
 
   return NULL;
+}
+/* SWIRL: raw slot access (index 0 is the menu itself) */
+int list_slot_count(void) {
+  return num_items_BASE;
+}
+
+const struct gd_item *list_slot_get(int idx) {
+  if (idx < 0 || idx >= num_items_BASE)
+    return NULL;
+  return &gd_slots_BASE[idx];
 }
