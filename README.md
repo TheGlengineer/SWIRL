@@ -11,6 +11,7 @@
 [![Build](https://img.shields.io/github/actions/workflow/status/TheGlengineer/SWIRL/ci.yml?branch=master&label=build)](https://github.com/TheGlengineer/SWIRL/actions/workflows/ci.yml)
 [![License: BSD 3-Clause](https://img.shields.io/badge/license-BSD%203--Clause-blue)](LICENSE.md)
 [![Built on openMenu](https://img.shields.io/badge/built%20on-openMenu-555)](https://github.com/mrneo240/openMenu)
+[![Buy me a coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-support%20SWIRL-f28c28?logo=buymeacoffee&logoColor=white)](https://buymeacoffee.com/thglengineer)
 
 <img src="docs/images/swirl-home.png" alt="SWIRL home screen on a Dreamcast" width="720">
 
@@ -196,6 +197,12 @@ They stand on the work of:
 - [Flycast](https://github.com/flyinghead/flycast) by flyinghead, used for Preview and VMU capture
 - [Redump](http://redump.org/) and [libretro-database](https://github.com/libretro/libretro-database) for game titles, [libretro-thumbnails](https://github.com/libretro-thumbnails/Sega_-_Dreamcast) for screenshots
 - The Sora, Barlow and Silkscreen fonts, and the Go libraries listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+
+## Support SWIRL
+
+SWIRL is free and always will be. If it brings your Dreamcast back to life and you would like to say
+thanks, you can [buy me a coffee](https://buymeacoffee.com/thglengineer). It is entirely optional and
+does not unlock anything.
 
 ## The SWIRL logo
 

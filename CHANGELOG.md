@@ -3,6 +3,12 @@
 SWIRL (the menu) and SWIRL Card Manager share one version number. Card Manager patch releases (2.11.1)
 may ship without menu changes; the menu then keeps its major.minor version (2.11).
 
+## [2.12.1]
+
+### SWIRL Card Manager
+
+- A Buy me a coffee link in the About window, for anyone who wants to say thanks. SWIRL stays free.
+
 ## [2.12.0]
 
 ### SWIRL menu
@@ -48,5 +54,6 @@ First public release.
 - Old menus and removed games kept in SWIRL_BACKUP with restore
 - About window (F1) with shortcuts, credits and copyable details; F5 and Ctrl+F shortcuts
 
+[2.12.1]: https://github.com/TheGlengineer/SWIRL/releases/tag/v2.12.1
 [2.12.0]: https://github.com/TheGlengineer/SWIRL/releases/tag/v2.12.0
 [2.11.0]: https://github.com/TheGlengineer/SWIRL/releases/tag/v2.11.0
