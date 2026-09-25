@@ -14,10 +14,10 @@ jobs:
     name: SWIRL menu (Dreamcast)
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Cache the Dreamcast toolchain
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/dreamcast
           key: dc-toolchain-gcc15.1.0-kos2.2.1
@@ -37,7 +37,7 @@ jobs:
             echo "::warning::swirl/cardmanager/assets/1ST_READ.BIN differs from a fresh build. Copy swirl/build/gdemu/1ST_READ.BIN over it if the menu sources changed."
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: swirl-menu
           path: swirl/build/gdemu/1ST_READ.BIN
@@ -49,9 +49,9 @@ jobs:
       run:
         working-directory: swirl/cardmanager
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: '1.22'
           cache: false
@@ -65,7 +65,7 @@ jobs:
       - name: Build the Windows exe
         run: GOOS=windows GOARCH=amd64 go build -ldflags "-H windowsgui -s -w -X main.updateRepo=${{ github.repository }}" -o SWIRL-Card-Manager.exe .
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: SWIRL-Card-Manager-exe
           path: swirl/cardmanager/SWIRL-Card-Manager.exe

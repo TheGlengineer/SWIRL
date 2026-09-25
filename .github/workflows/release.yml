@@ -21,7 +21,7 @@ jobs:
     env:
       TAG: ${{ github.event.inputs.tag || github.ref_name }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
 
@@ -36,7 +36,7 @@ jobs:
           echo "VERSION=$V" >> "$GITHUB_ENV"
 
       - name: Cache the Dreamcast toolchain
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/dreamcast
           key: dc-toolchain-gcc15.1.0-kos2.2.1
@@ -47,7 +47,7 @@ jobs:
           swirl/build.sh
           cp swirl/build/gdemu/1ST_READ.BIN swirl/cardmanager/assets/1ST_READ.BIN
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: '1.22'
           cache: false
