@@ -1,0 +1,150 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 365c023..083637f 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -174,14 +174,14 @@ if(NINTENDO_SWITCH)
+ 	enable_language(ASM)
+ 
+ 	if(LIBRETRO)
+-		add_library(${PROJECT_NAME} STATIC core/emulator.cpp)
++		add_library(${PROJECT_NAME} STATIC core/emulator.cpp core/vmucap.cpp)
+ 		target_compile_definitions(${PROJECT_NAME} PRIVATE LIBRETRO HAVE_LIBNX HAVE_OPENGL HAVE_OIT)
+ 		find_path(GLEXT_H_INCLUDE_DIR NAMES GL/glext.h REQUIRED)
+ 		target_include_directories(${PROJECT_NAME} PRIVATE ${GLEXT_H_INCLUDE_DIR})
+ 		set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "flycast_libretro_libnx")
+ 		set(CMAKE_STATIC_LIBRARY_PREFIX "")
+ 	else()
+-		add_executable(${PROJECT_NAME} core/emulator.cpp)
++		add_executable(${PROJECT_NAME} core/emulator.cpp core/vmucap.cpp)
+ 	endif()
+ 	if(USE_GLES)
+ 		target_compile_definitions(${PROJECT_NAME} PRIVATE GLES)
+@@ -196,7 +196,7 @@ if(NINTENDO_SWITCH)
+ 		IMGUI_DISABLE_DEFAULT_SHELL_FUNCTIONS)
+ 
+ elseif(LIBRETRO)
+-	add_library(${PROJECT_NAME} SHARED core/emulator.cpp)
++	add_library(${PROJECT_NAME} SHARED core/emulator.cpp core/vmucap.cpp)
+ 	if(APPLE)
+ 		if(NOT IOS)
+ 			set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-undefined,error")
+@@ -254,16 +254,16 @@ elseif(LIBRETRO)
+ 		endif()
+ 	endif()
+ elseif(ANDROID)
+-	add_library(${PROJECT_NAME} SHARED core/emulator.cpp)
++	add_library(${PROJECT_NAME} SHARED core/emulator.cpp core/vmucap.cpp)
+ 	set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_RELEASE} -O3")
+ 	set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_RELEASE} -O3")
+ 	target_compile_options(${PROJECT_NAME} PRIVATE -fno-stack-protector)
+ 	set(CMAKE_ANDROID_STL_TYPE "c++_static")
+ elseif(WIN32)
+ 	if(BUILD_TESTING)
+-		add_executable(${PROJECT_NAME} core/emulator.cpp)
++		add_executable(${PROJECT_NAME} core/emulator.cpp core/vmucap.cpp)
+ 	else()
+-		add_executable(${PROJECT_NAME} WIN32 core/emulator.cpp)
++		add_executable(${PROJECT_NAME} WIN32 core/emulator.cpp core/vmucap.cpp)
+ 	endif()
+ 	if(CMAKE_GENERATOR MATCHES "Visual Studio")
+ 		if(NOT CMAKE_VS_GLOBALS MATCHES "(^|;)UseMultiToolTask=")
+@@ -277,7 +277,7 @@ elseif(WIN32)
+ elseif(APPLE)
+ 	add_executable(${PROJECT_NAME} MACOSX_BUNDLE core/emulator.cpp)
+ else()
+-	add_executable(${PROJECT_NAME} core/emulator.cpp)
++	add_executable(${PROJECT_NAME} core/emulator.cpp core/vmucap.cpp)
+ endif()
+ 
+ set_target_properties(${PROJECT_NAME} PROPERTIES
+@@ -1463,7 +1463,7 @@ if(NOT LIBRETRO)
+ 			endif()
+ 			set_target_properties(${PROJECT_NAME} PROPERTIES RESOURCE "${ResourceFiles}")
+ 		else()
+-			if(NOT BUILD_TESTING AND ("x86" IN_LIST ARCHITECTURE OR "x86_64" IN_LIST ARCHITECTURE))
++			if(FALSE)
+ 				target_include_directories(${PROJECT_NAME} PRIVATE core/deps/Spout/SPOUTSDK/SpoutGL)
+ 				target_include_directories(${PROJECT_NAME} PRIVATE core/deps/Spout/SPOUTSDK/SpoutDirectX/SpoutDX)
+ 				SET(SPOUT_BUILD_CMT OFF CACHE BOOL "For Visual Studio - build /MT to link runtime libraries" FORCE)
+diff --git a/core/audio/audiobackend_null.cpp b/core/audio/audiobackend_null.cpp
+index a0329dc..37125da 100644
+--- a/core/audio/audiobackend_null.cpp
++++ b/core/audio/audiobackend_null.cpp
+@@ -2,6 +2,7 @@
+ #include "oslib/i18n.h"
+ #include <chrono>
+ #include <thread>
++bool vmucap_active();
+ 
+ class NullAudioBackend : public AudioBackend
+ {
+@@ -19,6 +20,8 @@ public:
+ 
+ 	u32 push(const void* frame, u32 samples, bool wait) override
+ 	{
++		if (vmucap_active())
++			return 1; // capture mode: run as fast as possible
+ 		if (wait && last_time.time_since_epoch() != the_clock::duration::zero())
+ 		{
+ 			auto fduration = std::chrono::nanoseconds(1'000'000'000LL * samples / 44100);
+diff --git a/core/emulator.cpp b/core/emulator.cpp
+index 25e685b..beccefd 100644
+--- a/core/emulator.cpp
++++ b/core/emulator.cpp
+@@ -50,6 +50,7 @@
+ #include "hw/sh4/sh4_interpreter.h"
+ #include "hw/sh4/dyna/ngen.h"
+ #include "oslib/i18n.h"
++void vmucap_start();
+ 
+ settings_t settings;
+ constexpr char const *BIOS_TITLE = "Dreamcast BIOS";
+@@ -990,6 +991,7 @@ void Emulator::start()
+ 	}
+ 	state = Running;
+ 	SetMemoryHandlers();
++	vmucap_start();
+ 	if (config::GGPOEnable && config::ThreadedRendering)
+ 		// Not supported with GGPO
+ 		config::EmulateFramebuffer.override(false);
+diff --git a/core/hw/maple/maple_devs.cpp b/core/hw/maple/maple_devs.cpp
+index 9402444..1d3f49e 100755
+--- a/core/hw/maple/maple_devs.cpp
++++ b/core/hw/maple/maple_devs.cpp
+@@ -15,6 +15,7 @@
+ #include <ctime>
+ #include <thread>
+ #include <chrono>
++void vmucap_frame(const char *port, const u8 *raw);
+ 
+ const char* maple_sega_controller_name = "Dreamcast Controller";
+ const char* maple_sega_vmu_name        = "Visual Memory";
+@@ -718,6 +719,7 @@ struct maple_sega_vmu: maple_base
+ 						DEBUG_LOG(MAPLE, "VMU %s LCD write", logical_port);
+ 						r32();	// PT, phase, block#
+ 						rptr(lcd_data,192);
++						vmucap_frame(logical_port, lcd_data);
+ 
+ 						u8 white=0xff,black=0x00;
+ 
+diff --git a/core/sdl/sdl.cpp b/core/sdl/sdl.cpp
+index 3568d4b..5bed62f 100644
+--- a/core/sdl/sdl.cpp
++++ b/core/sdl/sdl.cpp
+@@ -38,6 +38,7 @@
+ #include <cmath>
+ #include <cstdlib>
+ #include <cstdio>
++bool vmucap_active();
+ 
+ static SDL_Window* window = NULL;
+ static u32 windowFlags;
+@@ -873,6 +874,8 @@ bool sdl_recreate_window(u32 flags)
+ 	flags |= SDL_WINDOW_FULLSCREEN;
+ #endif
+ 
++	if (vmucap_active())
++		flags = (flags & ~(SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_FULLSCREEN)) | SDL_WINDOW_HIDDEN;
+ 	window = SDL_CreateWindow("Flycast", windowPos.x, windowPos.y,
+ 			windowPos.w * hdpiScaling, windowPos.h * hdpiScaling, flags);
+ 	if (window == nullptr)
