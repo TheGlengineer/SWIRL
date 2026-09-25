@@ -88,7 +88,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
+            # a release made on github.com first: add the files and the notes from CHANGELOG.md
             gh release upload "$TAG" dist/SWIRL-Card-Manager.exe dist/1ST_READ.BIN dist/SHA256SUMS.txt --clobber
+            gh release edit "$TAG" --title "SWIRL $VERSION" --notes-file notes.md
           else
             gh release create "$TAG" dist/SWIRL-Card-Manager.exe dist/1ST_READ.BIN dist/SHA256SUMS.txt \
               --title "SWIRL $VERSION" --notes-file notes.md
