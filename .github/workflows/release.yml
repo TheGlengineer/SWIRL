@@ -100,7 +100,7 @@ jobs:
 
       - name: Cache the Mac build of Flycast
         id: flycast
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v6
         with:
           path: swirl/cardmanager/assets/swirl-vmucap-macos.zip
           key: flycast-macos-${{ hashFiles('swirl/vmucap/**') }}
@@ -109,6 +109,14 @@ jobs:
         if: steps.flycast.outputs.cache-hit != 'true'
         run: swirl/vmucap/build_macos.sh
 
+      # saved straight away, so a later failing step does not throw the 10 minute build away
+      - name: Save the Mac build of Flycast
+        if: steps.flycast.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: swirl/cardmanager/assets/swirl-vmucap-macos.zip
+          key: flycast-macos-${{ hashFiles('swirl/vmucap/**') }}
+
       - uses: actions/setup-go@v7
         with:
           go-version: '1.22'
@@ -116,7 +124,14 @@ jobs:
 
       - name: Test the Mac parts of Card Manager
         working-directory: swirl/cardmanager
-        run: go vet ./... && go test -run 'MacDisk|ZipTree|Update|HeaderLogo|Backup|Titles' ./...
+        run: |
+          go vet ./...
+          # failures are also posted as annotations, which anyone can read on the run's page
+          go test -v -run 'MacDisk|ZipTree|Update|HeaderLogo|Backup|Titles' ./... 2>&1 | tee test.log || true
+          if ! grep -q '^ok' test.log || grep -qE '^(--- )?FAIL' test.log; then
+            grep -E -- '--- FAIL|_test.go:[0-9]+|panic|^FAIL|cannot|undefined' test.log | head -40 | while IFS= read -r l; do echo "::error::$l"; done
+            exit 1
+          fi
 
       - name: Build SWIRL Card Manager.app
         working-directory: swirl/cardmanager

@@ -16,6 +16,7 @@ import (
 func TestHeaderLogo(t *testing.T) {
 	t.Setenv("LOCALAPPDATA", t.TempDir())
 	t.Setenv("XDG_CACHE_HOME", os.Getenv("LOCALAPPDATA"))
+	t.Setenv("HOME", os.Getenv("LOCALAPPDATA")) // macOS keeps its cache under HOME
 	pvr := []byte("GBIX fake theme picture " + strings.Repeat("x", 100))
 	var zb bytes.Buffer
 	zw := zip.NewWriter(&zb)

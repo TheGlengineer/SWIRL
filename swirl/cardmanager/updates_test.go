@@ -23,12 +23,12 @@ func fakeGitHub(t *testing.T, tag string, exe []byte, digest bool) *httptest.Ser
 				d = `"digest":"sha256:` + hexsum + `",`
 			}
 			fmt.Fprintf(w, `{"tag_name":%q,"name":"SWIRL %s","body":"- New things","html_url":"https://github.com/owner/swirl/releases/tag/%s","published_at":"2026-10-01T12:00:00Z","assets":[
-				{"name":"SWIRL-Card-Manager.exe",%s"size":%d,"browser_download_url":"%s/dl/exe"},
-				{"name":"SHA256SUMS.txt","size":90,"browser_download_url":"%s/dl/sums"}]}`, tag, tag, tag, d, len(exe), srv.URL, srv.URL)
+				{"name":%q,%s"size":%d,"browser_download_url":"%s/dl/exe"},
+				{"name":"SHA256SUMS.txt","size":90,"browser_download_url":"%s/dl/sums"}]}`, tag, tag, tag, updateAsset, d, len(exe), srv.URL, srv.URL)
 		case "/dl/exe":
 			w.Write(exe)
 		case "/dl/sums":
-			fmt.Fprintf(w, "%s  SWIRL-Card-Manager.exe\n", hexsum)
+			fmt.Fprintf(w, "%s  %s\n", hexsum, updateAsset)
 		default:
 			http.NotFound(w, r)
 		}
@@ -40,6 +40,7 @@ func fakeGitHub(t *testing.T, tag string, exe []byte, digest bool) *httptest.Ser
 func TestUpdateCheck(t *testing.T) {
 	t.Setenv("LOCALAPPDATA", t.TempDir())
 	t.Setenv("XDG_CACHE_HOME", os.Getenv("LOCALAPPDATA"))
+	t.Setenv("HOME", os.Getenv("LOCALAPPDATA"))
 	oldRepo, oldBase := updateRepo, updateAPIBase
 	defer func() { updateRepo, updateAPIBase, lastUpdate = oldRepo, oldBase, nil }()
 	updateRepo = "owner/swirl"

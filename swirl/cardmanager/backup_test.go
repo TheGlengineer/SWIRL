@@ -21,6 +21,8 @@ func waitJobAny(t *testing.T) jobState {
 
 func TestBackupToPC(t *testing.T) {
 	t.Setenv("LOCALAPPDATA", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", os.Getenv("LOCALAPPDATA"))
+	t.Setenv("HOME", os.Getenv("LOCALAPPDATA"))
 	card := t.TempDir()
 	writeTestCDI(t, filepath.Join(card, "02", "disc.cdi"), "FIRST GAME", "T-00001N")
 	writeTestCDI(t, filepath.Join(card, "03", "disc.cdi"), "SECOND GAME", "T-00002N")
