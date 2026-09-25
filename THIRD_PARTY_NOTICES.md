@@ -38,8 +38,9 @@ Each vendored module keeps its own license file under `swirl/cardmanager/vendor/
 
 ### swirl-vmucap (GPL 2.0)
 
-`swirl/cardmanager/assets/swirl-vmucap.exe.gz` is a build of the [Flycast](https://github.com/flyinghead/flycast)
-Dreamcast emulator (GPL 2.0) with a small patch that records what a game draws on the VMU screen. Card
+`swirl/cardmanager/assets/swirl-vmucap.exe.gz` (Windows), and the Flycast.app that the release workflow builds
+into the Mac app, are builds of the [Flycast](https://github.com/flyinghead/flycast) Dreamcast emulator
+(GPL 2.0) with a small patch that records what a game draws on the VMU screen. Card
 Manager runs it as a separate program for Preview and for Capture VMU screens. Its source changes are in
 [`swirl/vmucap/`](swirl/vmucap/), together with the exact Flycast commit it is built from. This tool, and
 only this tool, is covered by the GPL 2.0.

@@ -71,7 +71,7 @@ GOOS=windows GOARCH=amd64 go build -ldflags "-H windowsgui -s -w" -o SWIRL-Card-
 
 All dependencies are vendored in `vendor/`, so no network is needed. It also builds and runs on Linux and
 macOS (`go build .`) for development: the app serves its UI on a local port and opens it in a browser. Some
-features (formatting cards, installing, updating, VMU capture) are Windows only.
+features (formatting cards, installing, updating, Preview and VMU capture) are built for Windows and macOS only.
 
 Useful environment variables while developing:
 
@@ -91,6 +91,25 @@ cp swirl/build/gdemu/1ST_READ.BIN swirl/cardmanager/assets/1ST_READ.BIN
 The menu and Card Manager share one version number. `ui/swirl/sw_version.h` holds `2.11`, and `const version`
 in `swirl/cardmanager/main.go` holds `2.11.x`. The tests fail if the embedded menu reports a different
 major.minor.
+
+### The Mac app
+
+On a Mac with Xcode and Go:
+
+```sh
+swirl/vmucap/build_macos.sh          # the patched Flycast (universal), once; about 20 minutes
+cd swirl/cardmanager
+macos/make_app.sh 2.13.0             # SWIRL Card Manager.app, plus the .zip and .dmg, in dist/
+```
+
+The app is the Go program built for Apple Silicon and Intel and joined with `lipo`, in a bundle made from
+`macos/Info.plist.in` and `macos/AppIcon.icns`, with an ad hoc signature. It embeds the Flycast zip from
+`assets/swirl-vmucap-macos.zip` (an empty placeholder in the repository, so a build without it simply
+leaves out Preview and VMU capture). The Mac specific code is in the `*_darwin.go` files; the rules for
+which disks may be formatted are in `macdisk.go`, tested on every platform.
+
+Without a Mac, run **Actions > Mac preview build > Run workflow** on GitHub: it builds the same .dmg and
+attaches it to the run.
 
 ### Windows resources
 

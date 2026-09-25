@@ -1,4 +1,4 @@
-//go:build !windows
+//go:build !windows && !darwin
 
 package main
 
@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 )
 
 func vmucapExe() (string, error) {
@@ -16,3 +17,9 @@ func vmucapExe() (string, error) {
 }
 
 func hideWindow(cmd *exec.Cmd) {}
+
+func vmucapDataDir(exe string) string { return filepath.Join(filepath.Dir(exe), "data") }
+
+func vmucapEnv() []string { return nil }
+
+func bringToFront(exe string) {}

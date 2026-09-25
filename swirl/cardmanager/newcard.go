@@ -23,7 +23,9 @@ type DiskInfo struct {
 	Bus       string   `json:"bus"`
 	SizeBytes uint64   `json:"sizeBytes"`
 	Removable bool     `json:"removable"`
-	Letters   []string `json:"letters"` // every drive letter on this card
+	Letters   []string `json:"letters"`        // every drive letter (Windows) or mount point (macOS) on this card
+	Name      string   `json:"name,omitempty"` // the card's volume name
+	Confirm   string   `json:"confirm"`        // what the person types to confirm erasing it
 	OK        bool     `json:"ok"`
 	Reason    string   `json:"reason,omitempty"`
 }
@@ -349,18 +351,34 @@ func runCopy(p *copyPlan, root string, onPct func(float64)) error {
 	return nil
 }
 
+// onDisk reports whether a path is on the card: by drive letter on Windows, by mount point elsewhere.
+func onDisk(p string, info *DiskInfo) bool {
+	p = strings.TrimSpace(p)
+	if l := driveLetter(p); l != "" {
+		for _, x := range info.Letters {
+			if strings.EqualFold(driveLetter(x), l) {
+				return true
+			}
+		}
+		return false
+	}
+	cp := filepath.Clean(p) + string(filepath.Separator)
+	for _, m := range info.Letters {
+		if driveLetter(m) == "" && strings.HasPrefix(cp, filepath.Clean(m)+string(filepath.Separator)) {
+			return true
+		}
+	}
+	return false
+}
+
 // checkNewCard validates a request before anything is erased.
 func checkNewCard(req NewCardRequest) (*DiskInfo, *copyPlan, error) {
-	letter := driveLetter(req.Root)
-	if letter == "" {
-		return nil, nil, errors.New("pick the card by its drive letter, for example G:")
-	}
-	if !strings.EqualFold(strings.TrimSuffix(strings.TrimSpace(req.Confirm), ":"), letter) {
-		return nil, nil, fmt.Errorf("type %s to confirm that the card in %s: should be erased", letter, letter)
-	}
 	info, err := diskInfo(req.Root)
 	if err != nil {
 		return nil, nil, err
+	}
+	if !strings.EqualFold(strings.TrimSuffix(strings.TrimSpace(req.Confirm), ":"), info.Confirm) {
+		return nil, nil, fmt.Errorf("type %s to confirm that the card should be erased", info.Confirm)
 	}
 	if !info.OK {
 		return nil, nil, errors.New(info.Reason)
@@ -368,12 +386,8 @@ func checkNewCard(req NewCardRequest) (*DiskInfo, *copyPlan, error) {
 	if info.Disk != req.Disk {
 		return nil, nil, errors.New("the drive changed since you picked it; pick the card again")
 	}
-	if l := driveLetter(req.Source); l != "" {
-		for _, x := range info.Letters {
-			if strings.EqualFold(driveLetter(x), l) {
-				return nil, nil, errors.New("the games folder is on the card being erased; copy the games to your PC first")
-			}
-		}
+	if req.Source != "" && onDisk(req.Source, info) {
+		return nil, nil, errors.New("the games folder is on the card being erased; copy the games to your computer first")
 	}
 	plan, err := planCopy(strings.TrimSpace(req.Source))
 	if err != nil {
@@ -382,12 +396,8 @@ func checkNewCard(req NewCardRequest) (*DiskInfo, *copyPlan, error) {
 	// games picked one by one: checked and sized now, copied after formatting
 	if len(req.Picks) > 0 {
 		for _, pk := range req.Picks {
-			if l := driveLetter(pk); l != "" {
-				for _, x := range info.Letters {
-					if strings.EqualFold(driveLetter(x), l) {
-						return nil, nil, fmt.Errorf("%s is on the card being erased; copy it to your PC first", filepath.Base(pk))
-					}
-				}
+			if onDisk(pk, info) {
+				return nil, nil, fmt.Errorf("%s is on the card being erased; copy it to your computer first", filepath.Base(pk))
 			}
 		}
 		tmp, err := os.MkdirTemp("", "swirl-newcard")

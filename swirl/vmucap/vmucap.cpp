@@ -17,7 +17,24 @@ static bool capChecked;
 static double capSecs = 40;
 static std::vector<double> startAt;
 static int capSched = -1;
-static bool startDown;
+static bool startDown, aDown;
+static bool capManual;
+static std::vector<double> aAt;
+
+static void parseList(const char *env, const char *def, std::vector<double> &out)
+{
+	std::string st = getenv(env) ? getenv(env) : def;
+	size_t pos = 0;
+	while (pos < st.size())
+	{
+		size_t c = st.find(',', pos);
+		if (c == std::string::npos)
+			c = st.size();
+		if (c > pos)
+			out.push_back(atof(st.substr(pos, c - pos).c_str()));
+		pos = c + 1;
+	}
+}
 
 bool vmucap_active()
 {
@@ -30,17 +47,9 @@ bool vmucap_active()
 			capFile = fopen(p, "wb");
 			if (const char *s = getenv("FLYCAST_VMUCAP_SECS"))
 				capSecs = atof(s);
-			std::string st = getenv("FLYCAST_VMUCAP_START") ? getenv("FLYCAST_VMUCAP_START") : "12,18,24,30";
-			size_t pos = 0;
-			while (pos < st.size())
-			{
-				size_t c = st.find(',', pos);
-				if (c == std::string::npos)
-					c = st.size();
-				if (c > pos)
-					startAt.push_back(atof(st.substr(pos, c - pos).c_str()));
-				pos = c + 1;
-			}
+			parseList("FLYCAST_VMUCAP_START", "12,18,24,30", startAt);
+			parseList("FLYCAST_VMUCAP_A", "", aAt);
+			capManual = getenv("FLYCAST_VMUCAP_MANUAL") != nullptr;
 		}
 	}
 	return capFile != nullptr;
@@ -57,6 +66,17 @@ void vmucap_frame(const char *port, const u8 *raw)
 	fwrite(p, 4, 1, capFile);
 	fwrite(raw, 192, 1, capFile);
 	fflush(capFile);
+}
+
+/* manual mode: the person plays, the window is visible and nothing is automated */
+bool vmucap_hidden()
+{
+	return vmucap_active() && !capManual;
+}
+
+bool vmucap_fast()
+{
+	return vmucap_active() && !capManual;
 }
 
 static int vmucap_tick(int, int, int, void *)
@@ -76,6 +96,20 @@ static int vmucap_tick(int, int, int, void *)
 				startDown = true;
 			}
 	}
+	if (aDown)
+	{
+		kcode[0] |= DC_BTN_A;
+		aDown = false;
+	}
+	else
+	{
+		for (double s : aAt)
+			if (t >= s && t < s + 0.25)
+			{
+				kcode[0] &= ~DC_BTN_A;
+				aDown = true;
+			}
+	}
 	if (t >= capSecs)
 	{
 		fflush(capFile);
@@ -89,7 +123,7 @@ static int vmucap_tick(int, int, int, void *)
 
 void vmucap_start()
 {
-	if (!vmucap_active() || capSched != -1)
+	if (!vmucap_active() || capSched != -1 || capManual)
 		return;
 	capSched = sh4_sched_register(0, &vmucap_tick);
 	sh4_sched_request(capSched, SH4_MAIN_CLOCK / 8);

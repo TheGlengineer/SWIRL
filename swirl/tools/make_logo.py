@@ -15,6 +15,7 @@ Writes:
   swirl/cardmanager/web/favicon.png      32 x 32
   swirl/cardmanager/web/icon-256.png     256 x 256
   swirl/cardmanager/assets/app.ico       Windows icon, 16 to 256 pixels (run winres/make.sh afterwards)
+  swirl/cardmanager/macos/AppIcon.icns   macOS icon
   swirl/cardmanager/assets/default_logo.bin and the default_logo array in ui/swirl/sw_vmu.c: the 48 x 32
                                          VMU logo (rebuild the menu afterwards)
 Card Manager's header draws the same paths (the i-swirl symbol in web/index.html); paste them from
@@ -134,6 +135,9 @@ def main():
     png(tile, 512).save(os.path.join(LOGO, 'swirl-icon-512.png'), optimize=True)
     png(tile, 32).save(os.path.join(CM, 'web', 'favicon.png'), optimize=True)
     png(tile, 256).save(os.path.join(CM, 'web', 'icon-256.png'), optimize=True)
+    # macOS app icon (the macOS build copies it into the app bundle as AppIcon.icns)
+    png(tile, 1024).save(os.path.join(CM, 'macos', 'AppIcon.icns'), sizes=[(16, 16), (32, 32), (64, 64), (128, 128),
+                                                                      (256, 256), (512, 512), (1024, 1024)])
     sizes = [16, 24, 32, 48, 64, 128, 256]
     big = png(tile, 256)
     big.save(os.path.join(CM, 'assets', 'app.ico'), sizes=[(s, s) for s in sizes],

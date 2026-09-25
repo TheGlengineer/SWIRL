@@ -1,0 +1,47 @@
+name: Mac preview build
+
+# Builds SWIRL Card Manager for Mac from any branch without making a release, for testing.
+# Actions tab > Mac preview build > Run workflow. The .dmg is under Artifacts on the run's page.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache the Mac build of Flycast
+        id: flycast
+        uses: actions/cache@v6
+        with:
+          path: swirl/cardmanager/assets/swirl-vmucap-macos.zip
+          key: flycast-macos-${{ hashFiles('swirl/vmucap/**') }}
+
+      - name: Build Flycast for Mac
+        if: steps.flycast.outputs.cache-hit != 'true'
+        run: swirl/vmucap/build_macos.sh
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.22'
+          cache: false
+
+      - name: Test the Mac parts of Card Manager
+        working-directory: swirl/cardmanager
+        run: go vet ./... && go test -run 'MacDisk|ZipTree|Update|HeaderLogo|Backup|Titles' ./...
+
+      - name: Build SWIRL Card Manager.app
+        working-directory: swirl/cardmanager
+        run: |
+          V=$(sed -n 's/^const version = "\(.*\)"/\1/p' main.go)
+          macos/make_app.sh "$V" "${{ github.repository }}" ../../dist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: SWIRL-Card-Manager-macOS-preview
+          path: dist/SWIRL-Card-Manager-macOS.dmg

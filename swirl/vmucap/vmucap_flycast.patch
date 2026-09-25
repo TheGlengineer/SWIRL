@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 365c023..083637f 100644
+index 365c023..38dc11d 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -174,14 +174,14 @@ if(NINTENDO_SWITCH)
@@ -48,9 +48,12 @@ index 365c023..083637f 100644
  	endif()
  	if(CMAKE_GENERATOR MATCHES "Visual Studio")
  		if(NOT CMAKE_VS_GLOBALS MATCHES "(^|;)UseMultiToolTask=")
-@@ -277,7 +277,7 @@ elseif(WIN32)
+@@ -275,9 +275,9 @@ elseif(WIN32)
+ 		set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
+ 	endif()
  elseif(APPLE)
- 	add_executable(${PROJECT_NAME} MACOSX_BUNDLE core/emulator.cpp)
+-	add_executable(${PROJECT_NAME} MACOSX_BUNDLE core/emulator.cpp)
++	add_executable(${PROJECT_NAME} MACOSX_BUNDLE core/emulator.cpp core/vmucap.cpp)
  else()
 -	add_executable(${PROJECT_NAME} core/emulator.cpp)
 +	add_executable(${PROJECT_NAME} core/emulator.cpp core/vmucap.cpp)
@@ -67,22 +70,27 @@ index 365c023..083637f 100644
  				target_include_directories(${PROJECT_NAME} PRIVATE core/deps/Spout/SPOUTSDK/SpoutDirectX/SpoutDX)
  				SET(SPOUT_BUILD_CMT OFF CACHE BOOL "For Visual Studio - build /MT to link runtime libraries" FORCE)
 diff --git a/core/audio/audiobackend_null.cpp b/core/audio/audiobackend_null.cpp
-index a0329dc..37125da 100644
+index a0329dc..283f9ac 100644
 --- a/core/audio/audiobackend_null.cpp
 +++ b/core/audio/audiobackend_null.cpp
-@@ -2,6 +2,7 @@
+@@ -2,6 +2,9 @@
  #include "oslib/i18n.h"
  #include <chrono>
  #include <thread>
-+bool vmucap_active();
++#include <cstdio>
++#include <cstdlib>
++bool vmucap_fast();
  
  class NullAudioBackend : public AudioBackend
  {
-@@ -19,6 +20,8 @@ public:
+@@ -19,6 +22,11 @@ public:
  
  	u32 push(const void* frame, u32 samples, bool wait) override
  	{
-+		if (vmucap_active())
++		static FILE *dump = getenv("FLYCAST_AUDIODUMP") ? fopen(getenv("FLYCAST_AUDIODUMP"), "wb") : nullptr;
++		if (dump)
++			fwrite(frame, 4, samples, dump);
++		if (vmucap_fast())
 +			return 1; // capture mode: run as fast as possible
  		if (wait && last_time.time_since_epoch() != the_clock::duration::zero())
  		{
@@ -128,14 +136,14 @@ index 9402444..1d3f49e 100755
  						u8 white=0xff,black=0x00;
  
 diff --git a/core/sdl/sdl.cpp b/core/sdl/sdl.cpp
-index 3568d4b..5bed62f 100644
+index 3568d4b..cf07b56 100644
 --- a/core/sdl/sdl.cpp
 +++ b/core/sdl/sdl.cpp
 @@ -38,6 +38,7 @@
  #include <cmath>
  #include <cstdlib>
  #include <cstdio>
-+bool vmucap_active();
++bool vmucap_hidden();
  
  static SDL_Window* window = NULL;
  static u32 windowFlags;
@@ -143,7 +151,7 @@ index 3568d4b..5bed62f 100644
  	flags |= SDL_WINDOW_FULLSCREEN;
  #endif
  
-+	if (vmucap_active())
++	if (vmucap_hidden())
 +		flags = (flags & ~(SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_FULLSCREEN)) | SDL_WINDOW_HIDDEN;
  	window = SDL_CreateWindow("Flycast", windowPos.x, windowPos.y,
  			windowPos.w * hdpiScaling, windowPos.h * hdpiScaling, flags);

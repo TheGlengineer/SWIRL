@@ -39,9 +39,11 @@ func StartPreview(root, dats string) error {
 		}
 		cmd := exec.Command(exe, "-config", "config:UseReios=yes", "-config", "window:width=960", "-config", "window:height=720", gdi)
 		cmd.Dir = filepath.Dir(exe)
+		cmd.Env = vmucapBaseEnv()
 		if err := cmd.Start(); err != nil {
 			return err
 		}
+		bringToFront(exe)
 		previewCmd = cmd
 		go cmd.Wait()
 		jobLog("Flycast is open with your menu. Keyboard: arrows move, X is A, C is B, S is X, D is Y, Enter is Start, F and V are the triggers.")

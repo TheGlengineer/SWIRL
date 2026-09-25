@@ -6,8 +6,21 @@
 anyway**. You can check the download against `SHA256SUMS.txt` on the release page first:
 `certutil -hashfile SWIRL-Card-Manager.exe SHA256`.
 
-**The app opens in a browser tab instead of its own window.** It uses Microsoft Edge (or Chrome) in app mode.
-If neither is installed it falls back to your default browser. Everything works the same.
+**macOS says the app cannot be opened or checked.** The app is not signed with an Apple Developer ID.
+Open **System Settings > Privacy & Security** and click **Open Anyway** next to the message about SWIRL
+Card Manager (see [Getting started](GETTING_STARTED.md#on-a-mac)). Updates installed from inside the app do
+not ask again.
+
+**On a Mac, the card or my Downloads folder shows as empty.** macOS asked for permission and it was
+declined. Open **System Settings > Privacy & Security > Files and Folders**, find SWIRL Card Manager and
+turn on **Removable Volumes** (and Downloads or Documents if needed).
+
+**On a Mac, opening the app again does nothing.** An earlier copy is still busy finishing a task in the
+background (it quits by itself when the task ends), or it was closed while the window was open. Wait a
+minute and open it again, or quit it in Activity Monitor.
+
+**The app opens in a browser tab instead of its own window.** It uses Microsoft Edge or Chrome (on a Mac also Brave)
+in app mode. If none is installed it falls back to your default browser. Everything works the same.
 
 **My card is not in the list.** Type its drive letter in the box on the SD card page and click **Scan**. Cards
 must be formatted FAT32 for GDEMU; **New card from scratch** does that for you.
@@ -19,9 +32,9 @@ Edits are saved on the card straight away, but only reach the menu when it is re
 Multi part RAR sets need every part in the same folder; pick the first part.
 
 **Update now is missing and there is a Download button instead.** That release has no verified exe for this
-PC, or you are running on something other than Windows. Download it from the release page.
+computer. Download it from the release page.
 
-**Where are my settings?** In `%LOCALAPPDATA%\SWIRL Card Manager`. **About > Copy details** shows the exact paths.
+**Where are my settings?** In `%LOCALAPPDATA%\SWIRL Card Manager` on Windows and `~/Library/Caches/SWIRL Card Manager` on a Mac. **About > Copy details** shows the exact paths.
 
 ## On the Dreamcast
 

@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -27,8 +28,16 @@ import (
 var (
 	updateRepo    = "TheGlengineer/SWIRL"
 	updateAPIBase = "https://api.github.com"
-	updateAsset   = "SWIRL-Card-Manager.exe"
+	updateAsset   = platformAsset()
 )
+
+// platformAsset is the release file this platform installs from.
+func platformAsset() string {
+	if runtime.GOOS == "darwin" {
+		return "SWIRL-Card-Manager-macOS.zip"
+	}
+	return "SWIRL-Card-Manager.exe"
+}
 
 func init() {
 	if r := os.Getenv("SWIRL_UPDATE_REPO"); r != "" {
@@ -172,7 +181,7 @@ func downloadUpdate(u *UpdateInfo) (string, error) {
 	if err := os.MkdirAll(updatesDir(), 0o755); err != nil {
 		return "", err
 	}
-	dst := filepath.Join(updatesDir(), fmt.Sprintf("SWIRL-Card-Manager-%s.exe", u.Latest))
+	dst := filepath.Join(updatesDir(), fmt.Sprintf("SWIRL-Card-Manager-%s%s", u.Latest, filepath.Ext(updateAsset)))
 	tmp := dst + ".part"
 	req, _ := http.NewRequest("GET", u.assetURL, nil)
 	req.Header.Set("User-Agent", "SWIRL-Card-Manager/"+version)

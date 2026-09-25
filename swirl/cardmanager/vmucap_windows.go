@@ -47,3 +47,9 @@ func vmucapExe() (string, error) {
 func hideWindow(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000} // CREATE_NO_WINDOW
 }
+
+func vmucapDataDir(exe string) string { return filepath.Join(filepath.Dir(exe), "data") }
+
+func vmucapEnv() []string { return nil }
+
+func bringToFront(exe string) {}

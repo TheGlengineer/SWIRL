@@ -162,7 +162,7 @@ func diskInfo(root string) (*DiskInfo, error) {
 	if letter == "" {
 		return nil, errors.New("pick the card by its drive letter, for example G:")
 	}
-	info := &DiskInfo{Root: letter + `:\`}
+	info := &DiskInfo{Root: letter + `:\`, Confirm: letter}
 	disk, err := deviceNumber(`\\.\` + letter + ":")
 	if err != nil {
 		return nil, fmt.Errorf("%s: is not a disk that can be formatted (%v)", letter, err)
@@ -360,25 +360,6 @@ func doFormat(root string, disk int, report func(float64, string)) (string, erro
 		}
 	}
 	return "", errors.New("the card was formatted but Windows did not mount it; unplug the card, plug it back in, then use Install SWIRL")
-}
-
-type fmtStatus struct {
-	Pct   float64 `json:"pct"`
-	Msg   string  `json:"msg"`
-	Done  bool    `json:"done"`
-	Error string  `json:"error"`
-	Root  string  `json:"root"`
-}
-
-func writeStatus(path string, s fmtStatus) {
-	if path == "" {
-		return
-	}
-	b, _ := json.Marshal(s)
-	tmp := path + ".tmp"
-	if os.WriteFile(tmp, b, 0o644) == nil {
-		os.Rename(tmp, path)
-	}
 }
 
 // runFormatHelper is the elevated child process started by formatCard.

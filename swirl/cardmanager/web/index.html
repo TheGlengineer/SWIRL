@@ -523,7 +523,7 @@ kbd{font-family:Barlow,sans-serif;font-size:.78rem;font-weight:600;color:var(--t
     <div class="views" id="views">
 
       <section class="view on" data-view="card">
-        <div class="vhead"><div class="grow"><h2>Your GDEMU SD card</h2><p>Put the card in your PC's reader and pick it below. SWIRL only rebuilds folder 01, the menu. Your game folders are never changed by an update.</p></div></div>
+        <div class="vhead"><div class="grow"><h2>Your GDEMU SD card</h2><p data-pc>Put the card in your PC's reader and pick it below. SWIRL only rebuilds folder 01, the menu. Your game folders are never changed by an update.</p></div></div>
         <div class="panel stack">
           <div class="drives" id="drives"></div>
           <div class="row"><input type="text" id="root" placeholder="Or type the card's drive, for example E:\"><button class="btn" id="scan">Scan</button></div>
@@ -575,7 +575,7 @@ kbd{font-family:Barlow,sans-serif;font-size:.78rem;font-weight:600;color:var(--t
             <p class="hint tight" id="musicInfo">SWIRL plays its own theme unless you pick your own music.</p>
             <div class="row" style="margin-top:.8rem"><button class="btn small" id="musicPick" disabled>Use my own music</button><button class="btn small" id="musicRemove" hidden>Back to the SWIRL theme</button></div></div>
           <div class="panel"><h3>VMU screens from the games</h3>
-            <p class="hint tight">Boots each game for a few seconds in a hidden emulator on this PC and keeps the picture the game puts on the VMU. About 10 seconds per game.</p>
+            <p class="hint tight" data-pc>Boots each game for a few seconds in a hidden emulator on this PC and keeps the picture the game puts on the VMU. About 10 seconds per game.</p>
             <label class="hint check"><input type="checkbox" id="capMissing"> Only games that have no VMU screen yet</label>
             <div class="row" style="margin-top:.8rem"><button class="btn" id="capGo" disabled>Capture VMU screens</button><button class="btn" id="capReview" hidden>Review</button></div></div>
         </div>
@@ -600,9 +600,9 @@ kbd{font-family:Barlow,sans-serif;font-size:.78rem;font-weight:600;color:var(--t
       </section>
 
       <section class="view" data-view="backups">
-        <div class="vhead"><div class="grow"><h2>Backups</h2><p>Copy the whole card to your PC, and manage the old menus and removed games kept on the card.</p></div></div>
+        <div class="vhead"><div class="grow"><h2>Backups</h2><p data-pc>Copy the whole card to your PC, and manage the old menus and removed games kept on the card.</p></div></div>
         <div class="panel" id="pcBackup">
-          <h3>Back up this card to your PC</h3>
+          <h3 data-pc>Back up this card to your PC</h3>
           <p class="hint">Copies every game, the menu, your art and edits and GDEMU.INI into a dated folder. To put a backup onto a card later, use New card from scratch and pick the backup folder.</p>
           <div class="row" style="margin-top:.6rem"><input type="text" id="bkDest" placeholder="Folder on your PC, for example D:\Dreamcast backups"><button class="btn" id="bkBrowse">Browse</button></div>
           <label class="hint check"><input type="checkbox" id="bkUpdate" checked> Update my last backup of this card (only copies what changed)</label>
@@ -646,8 +646,8 @@ kbd{font-family:Barlow,sans-serif;font-size:.78rem;font-weight:600;color:var(--t
     <div>
       <h4>4. Confirm</h4>
       <div class="danger" id="ncWarn">Pick a card first.</div>
-      <div class="row" style="margin-top:.6rem"><input type="text" id="ncConfirm" maxlength="2" placeholder="Type the drive letter to confirm" style="flex:0 1 18rem"></div>
-      <p class="hint">Windows will ask for administrator permission to format the card.</p>
+      <div class="row" style="margin-top:.6rem"><input type="text" id="ncConfirm" maxlength="24" placeholder="Type the drive letter to confirm" style="flex:0 1 18rem"></div>
+      <p class="hint" id="ncAdmin">Windows will ask for administrator permission to format the card.</p>
     </div>
   </div>
   <div class="dbody" id="ncRun" hidden>
@@ -746,7 +746,7 @@ kbd{font-family:Barlow,sans-serif;font-size:.78rem;font-weight:600;color:var(--t
     <div class="abgrid">
       <section class="abcard"><h4><svg><use href="#i-card"/></svg>Supported files</h4><dl>
         <dt>Disc images</dt><dd>GDI, CDI, MDS, CCD</dd>
-        <dt>Archives</dt><dd>ZIP, 7Z, RAR (including multi part RAR). Unpacked straight onto the card, no temporary copy on your PC</dd>
+        <dt>Archives</dt><dd data-pc>ZIP, 7Z, RAR (including multi part RAR). Unpacked straight onto the card, no temporary copy on your PC</dd>
         <dt>Pictures</dt><dd>PNG, JPG, GIF for box art, VMU screens, screenshots and the menu logo</dd>
         <dt>Music</dt><dd>MP3 or WAV, converted for the Dreamcast</dd>
       </dl></section>
@@ -1018,7 +1018,7 @@ function renderGames() {
       </div>
       <input type="text" class="search" id="gFilter" placeholder="Find a game" value="${esc(gFilter)}"></div>`;
   if (!c.games.length) {
-    $("games").innerHTML = tools + `<div class="panel emptycard"><h3>No games on this card yet</h3><p class="hint tight">Add game folders, disc images or .zip, .7z and .rar archives from your PC. They are copied onto the card and SWIRL is updated.</p><div class="row" style="margin-top:.9rem"><button class="btn primary big" id="addGames2">Add games</button></div></div>`;
+    $("games").innerHTML = tools + `<div class="panel emptycard"><h3>No games on this card yet</h3><p class="hint tight">Add game folders, disc images or .zip, .7z and .rar archives from your ${IS_MAC ? "Mac" : "PC"}. They are copied onto the card and SWIRL is updated.</p><div class="row" style="margin-top:.9rem"><button class="btn primary big" id="addGames2">Add games</button></div></div>`;
     wireTools();
     $("addGames2").onclick = () => $("addGames").onclick();
     $("games").querySelector(".seg").hidden = $("gSize").hidden = true;
@@ -1248,12 +1248,12 @@ function brSide(r) {
   }).join("");
   const pl = (r.places || []).map(p => `<button data-go="${esc(p.path)}" title="${esc(p.path)}">${ico("place")}<span class="dv"><b>${esc(p.name)}</b></span></button>`).join("");
   const rc = (r.recent || []).map(p => `<button data-go="${esc(p)}" title="${esc(p)}">${ico("recent")}<span class="dv"><b>${esc(p.split(/[\\/]/).filter(Boolean).pop() || p)}</b><small>${esc(p)}</small></span></button>`).join("");
-  $("brSide").innerHTML = (rc ? `<h5>Recent</h5>${rc}` : "") + `<h5>This PC</h5><button data-go="">${ico("pc")}<span class="dv"><b>All drives</b></span></button>${drv}` + (pl ? `<h5>Folders</h5>${pl}` : "");
+  $("brSide").innerHTML = (rc ? `<h5>Recent</h5>${rc}` : "") + `<h5>${IS_MAC ? "This Mac" : "This PC"}</h5><button data-go="">${ico("pc")}<span class="dv"><b>All drives</b></span></button>${drv}` + (pl ? `<h5>Folders</h5>${pl}` : "");
   $("brSide").querySelectorAll("button[data-go]").forEach(b => { b.classList.toggle("on", b.dataset.go.toLowerCase() === (r.path || "").toLowerCase()); b.onclick = () => brLoad(b.dataset.go); });
 }
 function brCrumbs(r) {
   const c = r.crumbs || [];
-  $("brCrumbs").innerHTML = `<button data-go="">This PC</button>` + c.map(x => `<span class="sl">›</span><button data-go="${esc(x.path)}" title="${esc(x.path)}">${esc(x.name)}</button>`).join("");
+  $("brCrumbs").innerHTML = `<button data-go="">${IS_MAC ? "This Mac" : "This PC"}</button>` + c.map(x => `<span class="sl">›</span><button data-go="${esc(x.path)}" title="${esc(x.path)}">${esc(x.name)}</button>`).join("");
   $("brCrumbs").querySelectorAll("button").forEach(b => b.onclick = () => brLoad(b.dataset.go));
 }
 function brItems() {
@@ -1618,11 +1618,11 @@ function initPCBackup() {
   loadPCBackups();
 }
 $("bkDest").onchange = loadPCBackups;
-$("bkBrowse").onclick = () => browse({ title: "Pick a folder for backups", kind: "folder", noCard: true, start: $("bkDest").value.trim(), hint: "Open or make the folder on your PC that should hold the card backups, then click Use this folder. A new dated folder is made inside it." }, p => { $("bkDest").value = p; loadPCBackups(); });
+$("bkBrowse").onclick = () => browse({ title: "Pick a folder for backups", kind: "folder", noCard: true, start: $("bkDest").value.trim(), hint: `Open or make the folder on your ${IS_MAC ? "Mac" : "PC"} that should hold the card backups, then click Use this folder. A new dated folder is made inside it.` }, p => { $("bkDest").value = p; loadPCBackups(); });
 $("bkGo").onclick = () => {
   if (!card) return;
   const dest = $("bkDest").value.trim();
-  if (!dest) { $("bkMsg").textContent = "Pick a folder on your PC first."; return; }
+  if (!dest) { $("bkMsg").textContent = `Pick a folder on your ${IS_MAC ? "Mac" : "PC"} first.`; return; }
   $("bkMsg").textContent = "";
   uip.backupDir = dest; uip.backupOld = $("bkOld").checked;
   startJob("Backing up the card", "/api/backup", { root: card.root, dest, includeOld: $("bkOld").checked, update: $("bkUpdate").checked });
@@ -1790,7 +1790,7 @@ async function ncPick(path) {
     const d = await api("/api/diskinfo?root=" + encodeURIComponent(path));
     const gb = (d.sizeBytes / 1e9).toFixed(1);
     $("ncDisk").innerHTML = `<div class="diskcard" style="margin-top:.5rem"><b>${esc(d.model)}</b>, ${gb} GB${d.bus ? ", " + esc(d.bus) : ""}<br>
-      <span class="hint">Drive letters on this card: ${esc((d.letters || [d.root]).join(" "))}</span></div>
+      <span class="hint">${IS_MAC ? "On this card" : "Drive letters on this card"}: ${esc((d.letters || [d.root]).join(" "))}</span></div>
       ${d.ok ? "" : `<div class="warn">${esc(d.reason)}</div>`}`;
     if (d.ok) nc.disk = d;
   } catch (e) { $("ncDisk").innerHTML = `<div class="warn">${esc(e.message)}</div>`; }
@@ -1799,9 +1799,9 @@ async function ncPick(path) {
 function ncUpdate() {
   const d = nc.disk;
   if (!d) { $("ncWarn").textContent = "Pick a card first."; $("ncGo").disabled = true; return; }
-  const L = d.root[0];
-  $("ncWarn").innerHTML = `Everything on <b>${esc((d.letters || [d.root]).join(" "))}</b> (${esc(d.model)}, ${(d.sizeBytes / 1e9).toFixed(1)} GB) will be erased. Type <b>${L}</b> below to confirm.`;
-  $("ncGo").disabled = $("ncConfirm").value.trim().replace(":", "").toUpperCase() !== L;
+  const L = (d.confirm || d.root[0]).toUpperCase();
+  $("ncWarn").innerHTML = `Everything on <b>${esc((d.letters || [d.root]).join(" "))}</b> (${esc(d.model)}, ${(d.sizeBytes / 1e9).toFixed(1)} GB) will be erased. Type <b>${esc(L)}</b> below to confirm.`;
+  $("ncGo").disabled = $("ncConfirm").value.trim().replace(/:$/, "").toUpperCase() !== L;
 }
 $("ncConfirm").oninput = ncUpdate;
 $("ncCheck").onclick = async () => {
@@ -1856,9 +1856,11 @@ $("ncGo").onclick = async () => {
 };
 // ---------- this app on the PC ----------
 let appInfo = null;
+const IS_MAC = /Mac/.test(navigator.platform || navigator.userAgent || "");
 async function loadApp() {
   try { appInfo = await api("/api/app"); } catch (e) { return; }
   const a = appInfo, P = $("appPanel");
+  if (a.platform === "darwin") { applyMac(); return loadAppMac(a, P); }
   if (a.platform !== "windows") { P.hidden = true; return; }
   P.hidden = false;
   $("appSwitch").hidden = $("appUninstall").hidden = true; $("appInstall").hidden = false; $("appDeskRow").hidden = false;
@@ -1881,14 +1883,51 @@ async function loadApp() {
     $("appInstall").textContent = "Install on this PC";
   }
 }
+// macOS: the app lives in Applications; there is no Start menu or desktop shortcut
+function loadAppMac(a, P) {
+  if (!a.canInstall) { P.hidden = true; return; }
+  P.hidden = false;
+  $("appDeskRow").hidden = true;
+  $("appSwitch").hidden = $("appUninstall").hidden = true; $("appInstall").hidden = false;
+  if (a.runningInstalled) {
+    $("appHead").textContent = `SWIRL Card Manager ${a.version} is in your Applications folder`;
+    $("appText").textContent = "Open it from Applications or Launchpad. To remove it, use Uninstall here.";
+    $("appInstall").hidden = true; $("appUninstall").hidden = false;
+  } else if (a.installed && a.installedVersion === a.version) {
+    $("appHead").textContent = `This version (${a.version}) is in your Applications folder`;
+    $("appText").textContent = "You are running a copy from somewhere else, such as the disk image. Switch to the copy in Applications; you can then eject the disk image.";
+    $("appInstall").hidden = true; $("appSwitch").hidden = false;
+  } else if (a.installed) {
+    const newer = a.installedVersion.localeCompare(a.version, undefined, { numeric: true }) < 0;
+    $("appHead").textContent = newer ? `Update the copy in Applications from ${a.installedVersion} to ${a.version}` : `Version ${a.installedVersion} is in your Applications folder`;
+    $("appText").textContent = newer ? "Replaces the copy in Applications with this one. Your settings, art database and cards are kept." : `This copy is version ${a.version}, which is older than the one in Applications.`;
+    $("appInstall").textContent = newer ? "Update Applications copy" : "Install this older version";
+    $("appSwitch").hidden = false;
+  } else {
+    $("appHead").textContent = "Move SWIRL Card Manager to Applications";
+    $("appText").textContent = "Copies the app into your Applications folder so you can open it from Launchpad and it can update itself. Nothing else on your Mac is changed.";
+    $("appInstall").textContent = "Move to Applications";
+  }
+}
+// macOS wording for the rest of the page
+function applyMac() {
+  $("root").placeholder = "Or type the card's path, for example /Volumes/GDEMU";
+  $("bkDest").placeholder = "Folder on your Mac, for example ~/Documents/Dreamcast backups";
+  $("ncSrc").placeholder = "Folder on your Mac, or a backup of your old card";
+  $("brPath").placeholder = "Type or paste a folder, for example ~/Downloads/Dreamcast, then press Enter";
+  $("ncConfirm").placeholder = "Type the card's name to confirm";
+  $("ncAdmin").textContent = "macOS will ask for your password to format the card.";
+  document.querySelectorAll("#aboutDlg kbd").forEach(k => { if (k.textContent === "Ctrl") k.textContent = "\u2318"; if (k.textContent === "F5") k.textContent = "\u2318 R"; });
+  document.querySelectorAll("[data-pc]").forEach(el => el.innerHTML = el.innerHTML.replace(/this PC/g, "this Mac").replace(/your PC's/g, "your Mac's").replace(/your PC/g, "your Mac"));
+}
 $("appInstall").onclick = async () => {
   const b = $("appInstall"); b.disabled = true; const t = b.textContent; b.innerHTML = `<span class="spin"></span>Installing...`;
   try {
     await api("/api/app/install", { desktop: $("appDesk").checked });
-    log("Installed. SWIRL Card Manager is now in your Start menu" + ($("appDesk").checked ? " and on your desktop." : "."), "ok");
+    log(IS_MAC ? "Copied to your Applications folder." : "Installed. SWIRL Card Manager is now in your Start menu" + ($("appDesk").checked ? " and on your desktop." : "."), "ok");
     await loadApp();
     $("appHead").textContent = "Installed";
-    $("appText").textContent = "Switch to the installed copy now? This window closes and reopens from the Start menu copy. You can delete the file you downloaded afterwards.";
+    $("appText").textContent = IS_MAC ? "Switch to the copy in Applications now? This window closes and reopens from there. You can then eject the disk image or delete the download." : "Switch to the installed copy now? This window closes and reopens from the Start menu copy. You can delete the file you downloaded afterwards.";
     $("appInstall").hidden = true; $("appDeskRow").hidden = true; $("appSwitch").hidden = false;
   } catch (e) { log("Could not install: " + e.message, "err"); b.textContent = t; }
   b.disabled = false;
@@ -1897,7 +1936,7 @@ $("appSwitch").onclick = async () => {
   try { await api("/api/app/switch", {}); document.body.style.overflow = "auto"; document.body.innerHTML = `<p style="padding:2.5rem;font-family:Sora,sans-serif">Opening the installed copy...</p>`; setTimeout(() => window.close(), 800); }
   catch (e) { log("Error: " + e.message, "err"); }
 };
-$("appUninstall").onclick = async () => { try { await api("/api/app/uninstall", {}); log("Follow the questions in the Windows dialog to finish removing the app."); } catch (e) { log("Error: " + e.message, "err"); } };
+$("appUninstall").onclick = async () => { try { await api("/api/app/uninstall", {}); log("Answer the questions in the dialog to finish removing the app."); } catch (e) { log("Error: " + e.message, "err"); } };
 // tell the app when this window or tab closes, so it can quit (a reload comes straight back and cancels it)
 addEventListener("pagehide", () => { try { navigator.sendBeacon("/api/bye?t=" + TOKEN); } catch (e) {} });
 loadApp();
@@ -1929,7 +1968,7 @@ async function openAbout() {
     rows.push(["Running from", a.runningInstalled ? "Installed copy" : a.installed ? "A downloaded copy (version " + a.installedVersion + " is installed)" : "A downloaded copy, not installed"]);
     if (a.installDir) rows.push(["Installed in", a.installDir]);
     if (a.dataDir) rows.push(["App data", a.dataDir]);
-    rows.push(["System", a.platform === "windows" ? "Windows" : a.platform]);
+    rows.push(["System", a.platform === "windows" ? "Windows" : a.platform === "darwin" ? "macOS" : a.platform]);
   }
   $("abDetails").innerHTML = rows.map(r => `<dt>${esc(r[0])}</dt><dd>${esc(r[1])}</dd>`).join("");
 }
@@ -1943,12 +1982,12 @@ $("abCopy").onclick = async () => {
 };
 document.addEventListener("keydown", e => {
   if (e.key === "F1") { e.preventDefault(); openAbout(); return; }
-  if (e.key === "F5" || (e.ctrlKey && (e.key === "r" || e.key === "R"))) {
+  if (e.key === "F5" || ((e.ctrlKey || e.metaKey) && (e.key === "r" || e.key === "R"))) {
     e.preventDefault(); // a reload would drop the page; read the card instead
     if (card && !document.querySelector("dialog[open]")) scan();
     return;
   }
-  if (e.ctrlKey && (e.key === "f" || e.key === "F") && !document.querySelector("dialog[open]")) {
+  if ((e.ctrlKey || e.metaKey) && (e.key === "f" || e.key === "F") && !document.querySelector("dialog[open]")) {
     if (!card) return;
     e.preventDefault();
     if (view !== "games") show("games");
@@ -1992,7 +2031,7 @@ function showUpdateNotes() {
   const u = upd || {};
   $("updTitle").textContent = `SWIRL Card Manager ${u.latest}`;
   $("updWhen").textContent = u.published ? "Released " + fmtDay(u.published) : "";
-  $("updIntro").textContent = `You have ${u.current}. ${u.canApply ? "Update now downloads it from GitHub, checks it, installs it on this PC and reopens the app." : "Download it from its GitHub page."}`;
+  $("updIntro").textContent = `You have ${u.current}. ${u.canApply ? `Update now downloads it from GitHub, checks it, installs it on ${IS_MAC ? "this Mac" : "this PC"} and reopens the app.` : "Download it from its GitHub page."}`;
   $("updNotes").textContent = (u.notes || "No release notes.").replace(/\r/g, "").replace(/^#+\s*/gm, "").replace(/^[-*]\s+/gm, "\u2022 ").replace(/\*\*/g, "");
   $("updPage").href = u.page || "#";
   $("updGo").hidden = !u.canApply;

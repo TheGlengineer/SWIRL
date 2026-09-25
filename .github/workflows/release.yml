@@ -1,7 +1,11 @@
 name: Release
 
-# Push a tag like v2.11.0 to build and publish a release. The tag must match `const version` in
+# Push a tag like v2.13.0 to build and publish a release. The tag must match `const version` in
 # swirl/cardmanager/main.go, and its major.minor must match ui/swirl/sw_version.h.
+#
+# windows: builds the SWIRL menu from source, tests Card Manager, builds SWIRL-Card-Manager.exe
+# macos:   builds the patched Flycast for Mac (cached), then SWIRL Card Manager.app (.zip and .dmg)
+# publish: checksums, release notes from CHANGELOG.md, and the GitHub release
 
 on:
   push:
@@ -9,23 +13,27 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing tag to (re)build, for example v2.11.0'
+        description: 'Existing tag to (re)build, for example v2.13.0'
         required: true
 
 permissions:
   contents: write
 
+env:
+  TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
 jobs:
-  release:
+  windows:
     runs-on: ubuntu-22.04
-    env:
-      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
 
       - name: Check the version numbers
+        id: ver
         run: |
           V="${TAG#v}"
           APP=$(sed -n 's/^const version = "\(.*\)"/\1/p' swirl/cardmanager/main.go)
@@ -34,6 +42,7 @@ jobs:
           [ "$V" = "$APP" ] || { echo "::error::Tag $TAG does not match const version \"$APP\" in main.go"; exit 1; }
           case "$V" in "$MENU"|"$MENU".*) ;; *) echo "::error::Menu version $MENU does not match $V"; exit 1;; esac
           echo "VERSION=$V" >> "$GITHUB_ENV"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
 
       - name: Cache the Dreamcast toolchain
         uses: actions/cache@v6
@@ -54,9 +63,9 @@ jobs:
 
       - name: Test Card Manager
         working-directory: swirl/cardmanager
-        run: go test ./...
+        run: go test ./... && GOOS=darwin go vet ./...
 
-      - name: Build Card Manager
+      - name: Build Card Manager for Windows
         working-directory: swirl/cardmanager
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq binutils-mingw-w64-x86-64 gcc-mingw-w64-x86-64
@@ -64,12 +73,81 @@ jobs:
           GOOS=windows GOARCH=amd64 go build -trimpath \
             -ldflags "-H windowsgui -s -w -X main.updateRepo=${{ github.repository }}" \
             -o ../../dist/SWIRL-Card-Manager.exe .
+          cp ../build/gdemu/1ST_READ.BIN ../../dist/1ST_READ.BIN
 
-      - name: Package
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-windows
+          path: dist/
+
+  macos:
+    needs: windows
+    runs-on: macos-14
+    env:
+      VERSION: ${{ needs.windows.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist-windows
+          path: dist-windows
+
+      - name: Use the menu built from source
+        run: cp dist-windows/1ST_READ.BIN swirl/cardmanager/assets/1ST_READ.BIN
+
+      - name: Cache the Mac build of Flycast
+        id: flycast
+        uses: actions/cache@v6
+        with:
+          path: swirl/cardmanager/assets/swirl-vmucap-macos.zip
+          key: flycast-macos-${{ hashFiles('swirl/vmucap/**') }}
+
+      - name: Build Flycast for Mac
+        if: steps.flycast.outputs.cache-hit != 'true'
+        run: swirl/vmucap/build_macos.sh
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.22'
+          cache: false
+
+      - name: Test the Mac parts of Card Manager
+        working-directory: swirl/cardmanager
+        run: go vet ./... && go test -run 'MacDisk|ZipTree|Update|HeaderLogo|Backup|Titles' ./...
+
+      - name: Build SWIRL Card Manager.app
+        working-directory: swirl/cardmanager
+        run: macos/make_app.sh "$VERSION" "${{ github.repository }}" ../../dist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-macos
+          path: |
+            dist/SWIRL-Card-Manager-macOS.zip
+            dist/SWIRL-Card-Manager-macOS.dmg
+
+  publish:
+    needs: [windows, macos]
+    runs-on: ubuntu-22.04
+    env:
+      VERSION: ${{ needs.windows.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
         run: |
-          cp swirl/build/gdemu/1ST_READ.BIN dist/1ST_READ.BIN
           cd dist
-          sha256sum SWIRL-Card-Manager.exe 1ST_READ.BIN > SHA256SUMS.txt
+          sha256sum SWIRL-Card-Manager.exe SWIRL-Card-Manager-macOS.dmg SWIRL-Card-Manager-macOS.zip 1ST_READ.BIN > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Release notes
@@ -80,18 +158,25 @@ jobs:
             on && /^## / {exit}
             on {print}' CHANGELOG.md > notes.md
           [ -s notes.md ] || echo "SWIRL $VERSION" > notes.md
-          printf '\n---\n**Install or update:** download `SWIRL-Card-Manager.exe` and run it, or click **Update now** in Card Manager. Then click **Update SWIRL** to put the new menu on your card.\n' >> notes.md
+          cat >> notes.md <<'NOTES'
+
+          ---
+          **Install or update**
+          - **Windows:** download `SWIRL-Card-Manager.exe` and run it.
+          - **Mac:** download `SWIRL-Card-Manager-macOS.dmg`, open it and drag the app to Applications. The first time, macOS asks you to allow it: see [Getting started](https://github.com/${{ github.repository }}/blob/master/docs/GETTING_STARTED.md#on-a-mac).
+          - Already installed? Click **Update now** in Card Manager. Then click **Update SWIRL** to put the new menu on your card.
+          NOTES
           cat notes.md
 
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          FILES="dist/SWIRL-Card-Manager.exe dist/SWIRL-Card-Manager-macOS.dmg dist/SWIRL-Card-Manager-macOS.zip dist/1ST_READ.BIN dist/SHA256SUMS.txt"
           if gh release view "$TAG" >/dev/null 2>&1; then
             # a release made on github.com first: add the files and the notes from CHANGELOG.md
-            gh release upload "$TAG" dist/SWIRL-Card-Manager.exe dist/1ST_READ.BIN dist/SHA256SUMS.txt --clobber
+            gh release upload "$TAG" $FILES --clobber
             gh release edit "$TAG" --title "SWIRL $VERSION" --notes-file notes.md
           else
-            gh release create "$TAG" dist/SWIRL-Card-Manager.exe dist/1ST_READ.BIN dist/SHA256SUMS.txt \
-              --title "SWIRL $VERSION" --notes-file notes.md
+            gh release create "$TAG" $FILES --title "SWIRL $VERSION" --notes-file notes.md
           fi

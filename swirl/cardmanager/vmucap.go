@@ -138,6 +138,9 @@ func findDisc(dir string) string {
 	return ""
 }
 
+// vmucapBaseEnv is this program's environment plus what the emulator needs on this platform.
+func vmucapBaseEnv() []string { return append(os.Environ(), vmucapEnv()...) }
+
 // captureCommand is replaced in tests (Linux build of the same patched emulator).
 var captureCommand = func(ctx context.Context, disc, logFile string) (*exec.Cmd, error) {
 	exe, err := vmucapExe()
@@ -147,7 +150,7 @@ var captureCommand = func(ctx context.Context, disc, logFile string) (*exec.Cmd,
 	cmd := exec.CommandContext(ctx, exe, "-config", "config:UseReios=yes", "-config", "audio:backend=null", disc)
 	cmd.Dir = filepath.Dir(exe)
 	// start every game with an empty VMU, as on a fresh console
-	old, _ := filepath.Glob(filepath.Join(filepath.Dir(exe), "data", "vmu_save_*"))
+	old, _ := filepath.Glob(filepath.Join(vmucapDataDir(exe), "vmu_save_*"))
 	for _, f := range old {
 		os.Remove(f)
 	}
@@ -191,8 +194,9 @@ func capturePassRun(disc string, p capturePass) ([]VMUShot, error) {
 	if err != nil {
 		return nil, err
 	}
-	cmd.Env = append(os.Environ(),
+	cmd.Env = append(vmucapBaseEnv(),
 		"FLYCAST_VMUCAP="+logFile,
+		"SDL_MAC_BACKGROUND_APP=1", // macOS: do not take the focus from Card Manager
 		fmt.Sprintf("FLYCAST_VMUCAP_SECS=%g", p.secs),
 		"FLYCAST_VMUCAP_START="+p.start,
 		"FLYCAST_VMUCAP_A="+p.a)
@@ -220,7 +224,7 @@ var manualCommand = func(disc string) (*exec.Cmd, error) {
 	}
 	cmd := exec.Command(exe, "-config", "config:UseReios=yes", "-config", "config:rend.FloatVMUs=yes", disc)
 	cmd.Dir = filepath.Dir(exe)
-	old, _ := filepath.Glob(filepath.Join(filepath.Dir(exe), "data", "vmu_save_*"))
+	old, _ := filepath.Glob(filepath.Join(vmucapDataDir(exe), "vmu_save_*"))
 	for _, f := range old {
 		os.Remove(f)
 	}
@@ -254,12 +258,18 @@ func StartManualCapture(root, folder string) error {
 		if err != nil {
 			return err
 		}
-		cmd.Env = append(os.Environ(), "FLYCAST_VMUCAP="+logFile, "FLYCAST_VMUCAP_MANUAL=1")
+		cmd.Env = append(vmucapBaseEnv(), "FLYCAST_VMUCAP="+logFile, "FLYCAST_VMUCAP_MANUAL=1")
 		jobLog("Flycast is open. Play until the game's picture shows on the VMU (it floats in the corner of the Flycast window), then close the window.")
-		jobLog("Keyboard: arrows move, X is A, C is B, S is X, D is Y, Enter is Start. A controller plugged into the PC works too.")
+		jobLog("Keyboard: arrows move, X is A, C is B, S is X, D is Y, Enter is Start. A controller plugged into the computer works too.")
 		jobUpdate(func(j *jobState) { j.Stage, j.Pct = "Waiting for you to close Flycast", 0.5 })
-		if err := cmd.Run(); err != nil {
-			jobLog("Flycast closed (%v)", err)
+		if err := cmd.Start(); err == nil {
+			bringToFront(cmd.Path)
+			err = cmd.Wait()
+			if err != nil {
+				jobLog("Flycast closed (%v)", err)
+			}
+		} else {
+			jobLog("Flycast could not start (%v)", err)
 		}
 		b, _ := os.ReadFile(logFile)
 		total := 0.0

@@ -1,7 +1,7 @@
 # SWIRL Card Manager
 
-SWIRL Card Manager is the Windows app that puts SWIRL on a GDEMU SD card and looks after it. It is a single
-exe. Press **F1** in the app for a summary of everything below, the keyboard shortcuts and the credits.
+SWIRL Card Manager is the app for Windows and macOS that puts SWIRL on a GDEMU SD card and looks after it. It
+is a single exe on Windows and a single app on the Mac, with the same features on both. Press **F1** in the app for a summary of everything below, the keyboard shortcuts and the credits.
 
 Changes you make (names, art, collections, music, order) are saved on the card in a `SWIRL` folder straight
 away. They reach the Dreamcast when you click **Update SWIRL**, which rebuilds the menu in folder `01`.
@@ -116,7 +116,7 @@ folder on your PC.
 
 Formats a card to FAT32 with the settings GDEMU likes, installs SWIRL and copies your games in one go. Pick
 games one by one, copy everything from one folder (such as a backup of an old card), or neither for a card
-with just SWIRL. Windows asks for administrator permission to format.
+with just SWIRL. Windows asks for administrator permission, and macOS for your password, to format. On a Mac you confirm by typing the card's name instead of its drive letter.
 
 ## About and updates
 

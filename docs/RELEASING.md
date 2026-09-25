@@ -31,13 +31,16 @@ the minor version (`2.12` / `2.12.0`).
    In GitHub Desktop: **History**, right click the commit, **Create Tag...**, then **Push origin**.
 
 The workflow then checks the version numbers, builds the menu from source, runs the tests, builds
-`SWIRL-Card-Manager.exe` with its version info, and publishes a release with:
+`SWIRL-Card-Manager.exe` with its version info, builds the Mac app on a GitHub Mac (the patched Flycast is
+cached after its first build, which takes about 20 minutes), and publishes a release with:
 
 | Asset | What |
 |---|---|
-| `SWIRL-Card-Manager.exe` | The app, with the menu inside |
+| `SWIRL-Card-Manager.exe` | The Windows app, with the menu inside |
+| `SWIRL-Card-Manager-macOS.dmg` | The Mac app (Apple Silicon and Intel), to drag into Applications |
+| `SWIRL-Card-Manager-macOS.zip` | The same Mac app, for the in-app updater |
 | `1ST_READ.BIN` | The menu on its own, for people who build menu discs with other tools |
-| `SHA256SUMS.txt` | Checksums of both |
+| `SHA256SUMS.txt` | Checksums of all of them |
 
 If something goes wrong, fix it, move the tag and run the workflow again from the **Actions** tab (**Run
 workflow**, give the tag); it replaces the assets of an existing release.
@@ -47,8 +50,8 @@ workflow**, give the tag); it replaces the assets of an existing release.
 1. Once a day (or when you click **Check for updates**), Card Manager reads
    `https://api.github.com/repos/<owner>/<repo>/releases/latest`. Drafts and pre releases are ignored by that endpoint.
 2. If the release's version is newer, it shows a bar with **What's new** (the release notes) and **Update now**.
-3. **Update now** downloads `SWIRL-Card-Manager.exe` and checks its SHA-256 against the value GitHub publishes for the asset, or against `SHA256SUMS.txt`. A mismatch stops the update.
-4. The downloaded exe waits for the running copy to close, installs itself over the installed copy (keeping the desktop shortcut choice) and starts.
+3. **Update now** downloads `SWIRL-Card-Manager.exe` (on a Mac, `SWIRL-Card-Manager-macOS.zip`) and checks its SHA-256 against the value GitHub publishes for the asset, or against `SHA256SUMS.txt`. A mismatch stops the update.
+4. The new version waits for the running copy to close, installs itself over the installed copy (on Windows keeping the desktop shortcut choice; on a Mac replacing the app in Applications) and starts.
 
 Checks are anonymous; GitHub allows 60 per hour per internet connection, far more than a daily check needs.
 

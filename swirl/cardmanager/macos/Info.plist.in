@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key>
+	<string>SWIRL Card Manager</string>
+	<key>CFBundleDisplayName</key>
+	<string>SWIRL Card Manager</string>
+	<key>CFBundleIdentifier</key>
+	<string>io.github.theglengineer.swirl-card-manager</string>
+	<key>CFBundleExecutable</key>
+	<string>SWIRL Card Manager</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>@VERSION@</string>
+	<key>CFBundleVersion</key>
+	<string>@VERSION@</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>10.15</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
+	<!-- the app's window is a browser window in app mode; the app itself needs no Dock icon -->
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>Glen Huszar. Built on openMenu. BSD 3-Clause.</string>
+	<key>NSRemovableVolumesUsageDescription</key>
+	<string>SWIRL Card Manager reads and writes your GDEMU SD card.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>SWIRL Card Manager looks for games you downloaded so you can add them to your SD card.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>SWIRL Card Manager looks for games and backups in your Documents folder when you browse there.</string>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>SWIRL Card Manager looks for games on your Desktop when you browse there.</string>
+	<key>NSNetworkVolumesUsageDescription</key>
+	<string>SWIRL Card Manager can add games stored on a network drive.</string>
+</dict>
+</plist>
