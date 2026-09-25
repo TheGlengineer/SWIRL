@@ -98,16 +98,21 @@ jobs:
       - name: Use the menu built from source
         run: cp dist-windows/1ST_READ.BIN swirl/cardmanager/assets/1ST_READ.BIN
 
+      # the key comes from the files that decide the build, worked out before building
+      - name: Flycast cache key
+        id: fckey
+        run: echo "key=flycast-macos-$(cat swirl/vmucap/build_macos.sh swirl/vmucap/vmucap_flycast.patch swirl/vmucap/vmucap.cpp | shasum -a 256 | cut -c1-20)" >> "$GITHUB_OUTPUT"
+
       - name: Cache the Mac build of Flycast
         id: flycast
         uses: actions/cache/restore@v6
         with:
           path: swirl/cardmanager/assets/swirl-vmucap-macos.zip
-          key: flycast-macos-${{ hashFiles('swirl/vmucap/**') }}
+          key: ${{ steps.fckey.outputs.key }}
 
       - name: Build Flycast for Mac
         if: steps.flycast.outputs.cache-hit != 'true'
-        run: swirl/vmucap/build_macos.sh
+        run: WORK="$RUNNER_TEMP/flycast-build" swirl/vmucap/build_macos.sh
 
       # saved straight away, so a later failing step does not throw the 10 minute build away
       - name: Save the Mac build of Flycast
@@ -115,7 +120,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: swirl/cardmanager/assets/swirl-vmucap-macos.zip
-          key: flycast-macos-${{ hashFiles('swirl/vmucap/**') }}
+          key: ${{ steps.fckey.outputs.key }}
 
       - uses: actions/setup-go@v7
         with:

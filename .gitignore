@@ -32,3 +32,6 @@ desktop.ini
 
 # Python
 __pycache__/
+
+# Flycast build folder from swirl/vmucap/build_macos.sh
+swirl/vmucap/build-macos/
