@@ -22,4 +22,9 @@ macOS build: `build_macos.sh` on a Mac with Xcode (the release workflow does thi
 runners). It builds a universal Flycast.app (Apple Silicon and Intel, macOS 10.15 or newer) with OpenGL
 only, and zips it to cardmanager/assets/swirl-vmucap-macos.zip, which the macOS Card Manager embeds.
 
+Linux build: `build_linux.sh` on an Ubuntu/Debian x86-64 box (the build deps are listed at the top of the
+script). It builds Flycast with OpenGL only, SDL2 and libzip from Flycast's own copies (USE_HOST_SDL=OFF,
+USE_HOST_LIBZIP=OFF), null audio, and gzips the binary to cardmanager/assets/swirl-vmucap-linux.gz, which
+the Linux Card Manager embeds.
+
 This tool is GPL 2.0, like Flycast. Its source is this folder plus the Flycast commit named above.

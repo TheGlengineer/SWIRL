@@ -5,7 +5,7 @@ SWIRL has two parts that build separately:
 | Part | Language | Toolchain | Output |
 |---|---|---|---|
 | The SWIRL menu | C | GCC 15.1 for SH4 + KallistiOS 2.2.1 | `1ST_READ.BIN` |
-| SWIRL Card Manager | Go, with an HTML/JS UI | Go 1.21 or newer | `SWIRL-Card-Manager.exe` |
+| SWIRL Card Manager | Go, with an HTML/JS UI | Go 1.21 or newer | `SWIRL-Card-Manager.exe` (Windows), `SWIRL-Card-Manager` (Linux), `.app` (macOS) |
 
 The menu binary is embedded in Card Manager (`swirl/cardmanager/assets/1ST_READ.BIN`). A current build is
 committed, so you can work on Card Manager without the Dreamcast toolchain.
@@ -67,11 +67,13 @@ Card Manager's **Health and preview > Open preview** does the same with your rea
 cd swirl/cardmanager
 go test ./...
 GOOS=windows GOARCH=amd64 go build -ldflags "-H windowsgui -s -w" -o SWIRL-Card-Manager.exe .
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o SWIRL-Card-Manager .
 ```
 
 All dependencies are vendored in `vendor/`, so no network is needed. It also builds and runs on Linux and
-macOS (`go build .`) for development: the app serves its UI on a local port and opens it in a browser. Some
-features (formatting cards, installing, updating, Preview and VMU capture) are built for Windows and macOS only.
+macOS (`go build .`) for development: the app serves its UI on a local port and opens it in a browser. On
+Linux the same features work as on Windows and macOS. Formatting a card needs root, so the app re-runs itself
+through `pkexec` (or `sudo`) and asks for your password.
 
 Useful environment variables while developing:
 
@@ -111,6 +113,22 @@ which disks may be formatted are in `macdisk.go`, tested on every platform.
 Without a Mac, run **Actions > Mac preview build > Run workflow** on GitHub: it builds the same .dmg and
 attaches it to the run.
 
+### The Linux build
+
+```sh
+swirl/vmucap/build_linux.sh          # the patched Flycast (Linux), once; needs the build deps listed in the script
+cd swirl/cardmanager
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o SWIRL-Card-Manager .
+```
+
+The Linux build is a single static binary (no CGo, no dynamic libraries beyond the system libc and OpenGL).
+It embeds the Flycast binary from `assets/swirl-vmucap-linux.gz` (an empty placeholder in the repository, so a
+build without it leaves out Preview and VMU capture). Installing copies the binary into
+`~/.local/share/swirl-card-manager` and adds a `.desktop` entry. The Linux specific code is in the
+`*_linux.go` files; the rules for which disks may be formatted are in `linuxdisk.go`, tested on every
+platform. Formatting an SD card needs root, so the app re-runs itself through `pkexec` (with a `sudo`
+fallback).
+
 ### Windows resources
 
 `rsrc_windows_amd64.syso` holds the icon, the version info and the manifest. After changing the version run:
@@ -148,4 +166,4 @@ The README there has the exact commit and build flags. It is GPL 2.0.
 
 `.github/workflows/ci.yml` runs on every push and pull request: it builds the menu with the same toolchain,
 warns if the committed `1ST_READ.BIN` differs from a fresh build, runs the Card Manager tests and builds the
-Windows exe. See [Releasing](RELEASING.md) for the release workflow.
+Windows exe and the Linux binary. See [Releasing](RELEASING.md) for the release workflow.
