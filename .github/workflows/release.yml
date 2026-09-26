@@ -199,6 +199,18 @@ jobs:
           go-version: '1.22'
           cache: false
 
+      - name: Install AppImage packaging tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq desktop-file-utils libfuse2 wget file
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+          ./appimagetool-x86_64.AppImage --appimage-extract >/dev/null
+          # the bare binary needs its bundled libraries, so wrap it
+          printf '#!/bin/sh\nLD_LIBRARY_PATH=%s/squashfs-root/usr/lib exec %s/squashfs-root/usr/bin/appimagetool "\$@"\n' "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE" | sudo tee /usr/local/bin/appimagetool >/dev/null
+          sudo chmod +x /usr/local/bin/appimagetool
+          appimagetool --version
+
       - name: Test Card Manager for Linux
         working-directory: swirl/cardmanager
         run: GOOS=linux go vet ./... && go test ./...
@@ -211,11 +223,16 @@ jobs:
           mv ../../dist/SWIRL-Card-Manager.gz ../../dist/SWIRL-Card-Manager-linux-amd64.gz
           rm ../../dist/SWIRL-Card-Manager
 
+      - name: Package the AppImage
+        working-directory: swirl/cardmanager
+        run: linux/make_appimage.sh "$VERSION" "${{ github.repository }}" ../../dist
+
       - uses: actions/upload-artifact@v7
         with:
           name: dist-linux
           path: |
             dist/SWIRL-Card-Manager-linux-amd64.gz
+            dist/SWIRL-Card-Manager-linux-x86_64.AppImage
 
   # publishes the Windows files even if the Mac beta build fails; the Mac files are added when they exist
   publish:
@@ -238,7 +255,7 @@ jobs:
         run: |
           cd dist
           ls -la
-          sha256sum $(ls SWIRL-Card-Manager.exe SWIRL-Card-Manager-macOS.dmg SWIRL-Card-Manager-macOS.zip SWIRL-Card-Manager-linux-amd64.gz 1ST_READ.BIN 2>/dev/null) > SHA256SUMS.txt
+          sha256sum $(ls SWIRL-Card-Manager.exe SWIRL-Card-Manager-macOS.dmg SWIRL-Card-Manager-macOS.zip SWIRL-Card-Manager-linux-amd64.gz SWIRL-Card-Manager-linux-x86_64.AppImage 1ST_READ.BIN 2>/dev/null) > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Release notes
@@ -266,7 +283,7 @@ jobs:
           ---
           **Install or update**
           - **Windows:** download `SWIRL-Card-Manager.exe` and run it.
-          - **Linux:** download `SWIRL-Card-Manager-linux-amd64.gz`, gunzip it and run it (formatting a card asks for your password).
+          - **Linux:** download `SWIRL-Card-Manager-linux-x86_64.AppImage`, make it executable and run it (or the plain `SWIRL-Card-Manager-linux-amd64.gz`; formatting a card asks for your password).
           - **Mac (beta):** download `SWIRL-Card-Manager-macOS.dmg`, open it and drag the app to Applications. The first time, macOS asks you to allow it: see [Getting started](https://github.com/${{ github.repository }}/blob/master/docs/GETTING_STARTED.md#on-a-mac). The Mac version is new, so please [report anything that does not work](https://github.com/${{ github.repository }}/issues/new/choose).
           - Already installed? Click **Update now** in Card Manager. Then click **Update SWIRL** to put the new menu on your card.
           NOTES
@@ -284,7 +301,7 @@ jobs:
           # "2.14.0-preview.1" is published as a pre-release named "SWIRL 2.14.0 preview 1"
           TITLE="SWIRL $VERSION"; PRE=""
           case "$VERSION" in *-preview.*) TITLE="SWIRL ${VERSION%%-*} preview ${VERSION##*.}"; PRE="--prerelease";; *-*) PRE="--prerelease";; esac
-          FILES=$(ls dist/SWIRL-Card-Manager.exe dist/SWIRL-Card-Manager-macOS.dmg dist/SWIRL-Card-Manager-macOS.zip dist/SWIRL-Card-Manager-linux-amd64.gz dist/1ST_READ.BIN dist/SHA256SUMS.txt 2>/dev/null)
+          FILES=$(ls dist/SWIRL-Card-Manager.exe dist/SWIRL-Card-Manager-macOS.dmg dist/SWIRL-Card-Manager-macOS.zip dist/SWIRL-Card-Manager-linux-amd64.gz dist/SWIRL-Card-Manager-linux-x86_64.AppImage dist/1ST_READ.BIN dist/SHA256SUMS.txt 2>/dev/null)
           if gh release view "$TAG" >/dev/null 2>&1; then
             # a release made on github.com first: add the files and the notes from CHANGELOG.md
             gh release upload "$TAG" $FILES --clobber

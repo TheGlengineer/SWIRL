@@ -106,7 +106,7 @@ More screens are in the [Card Manager guide](docs/CARD_MANAGER.md).
 You need a Dreamcast with a GDEMU (original or clone), its SD card, and a Windows 10 or 11 PC, a Mac
 (macOS 10.15 Catalina or newer, Apple Silicon or Intel) or a Linux desktop.
 
-1. From the [latest release](https://github.com/TheGlengineer/SWIRL/releases/latest), download **SWIRL-Card-Manager.exe** for Windows, **SWIRL-Card-Manager-macOS.dmg** for a Mac (beta), or **SWIRL-Card-Manager-linux-amd64.gz** for Linux (gunzip it and run it).
+1. From the [latest release](https://github.com/TheGlengineer/SWIRL/releases/latest), download **SWIRL-Card-Manager.exe** for Windows, **SWIRL-Card-Manager-macOS.dmg** for a Mac (beta), or **SWIRL-Card-Manager-linux-x86_64.AppImage** for Linux (make it executable and run it; a plain gzipped binary is also attached).
 2. Run it. The app is not code signed, so the first time:
    - **Windows** may say "Windows protected your PC". Click **More info**, then **Run anyway**.
    - **macOS** says it cannot check the app. Open the disk image, drag the app to Applications and open it, then go to **System Settings > Privacy & Security** and click **Open Anyway**. See [Getting started](docs/GETTING_STARTED.md#on-a-mac).
@@ -179,6 +179,7 @@ cp ../build/gdemu/1ST_READ.BIN assets/1ST_READ.BIN
 go test ./...
 GOOS=windows GOARCH=amd64 go build -ldflags "-H windowsgui -s -w" -o SWIRL-Card-Manager.exe .
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o SWIRL-Card-Manager .
+linux/make_appimage.sh 2.13.0       # on Linux: builds the .AppImage (needs appimagetool)
 macos/make_app.sh 2.13.0            # on a Mac: builds SWIRL Card Manager.app and the .dmg
 ```
 

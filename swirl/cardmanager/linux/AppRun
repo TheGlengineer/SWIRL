@@ -1,0 +1,5 @@
+#!/bin/sh
+# AppRun for SWIRL Card Manager: run the bundled static binary.
+SELF="$(readlink -f "$0")"
+HERE="$(dirname "$SELF")"
+exec "$HERE/usr/bin/SWIRL-Card-Manager" "$@"

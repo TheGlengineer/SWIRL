@@ -119,14 +119,16 @@ attaches it to the run.
 swirl/vmucap/build_linux.sh          # the patched Flycast (Linux), once; needs the build deps listed in the script
 cd swirl/cardmanager
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o SWIRL-Card-Manager .
+linux/make_appimage.sh 2.13.0        # the .AppImage (needs appimagetool on PATH)
 ```
 
 The Linux build is a single static binary (no CGo, no dynamic libraries beyond the system libc and OpenGL).
 It embeds the Flycast binary from `assets/swirl-vmucap-linux.gz` (an empty placeholder in the repository, so a
 build without it leaves out Preview and VMU capture). Installing copies the binary into
-`~/.local/share/swirl-card-manager` and adds a `.desktop` entry. The Linux specific code is in the
-`*_linux.go` files; the rules for which disks may be formatted are in `linuxdisk.go`, tested on every
-platform. Formatting an SD card needs root, so the app re-runs itself through `pkexec` (with a `sudo`
+`~/.local/share/swirl-card-manager` and adds a `.desktop` entry; `linux/make_appimage.sh` wraps the same
+binary in a double-clickable `SWIRL-Card-Manager-linux-x86_64.AppImage` for the release. The Linux specific
+code is in the `*_linux.go` files; the rules for which disks may be formatted are in `linuxdisk.go`, tested on
+every platform. Formatting an SD card needs root, so the app re-runs itself through `pkexec` (with a `sudo`
 fallback).
 
 ### Windows resources
