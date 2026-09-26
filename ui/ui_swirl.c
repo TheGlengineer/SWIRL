@@ -1229,7 +1229,8 @@ static void open_options(void) {
   if (have_cb < 0) have_cb = codebreaker_available();
   opt_count = 0;
   opt_items[opt_count++] = OPT_PLAY;
-  if (have_cb && !is_psx_disc(detail_discs[detail_disc])) opt_items[opt_count++] = OPT_CB;
+  /* shown even without PELICAN.BIN, greyed out, so people can find out how to add it */
+  if (!is_psx_disc(detail_discs[detail_disc])) opt_items[opt_count++] = OPT_CB;
   if (!is_psx_disc(detail_discs[detail_disc])) {
     opt_items[opt_count++] = OPT_REGION;
     opt_items[opt_count++] = OPT_VIDEO;
@@ -1261,14 +1262,20 @@ static void draw_options(void) {
     const char *label = "", *val = "";
     switch (opt_items[i]) {
       case OPT_PLAY: label = "Play"; break;
-      case OPT_CB: label = "Play with CodeBreaker cheats"; break;
+      case OPT_CB:
+        label = "Play with CodeBreaker cheats";
+        if (!have_cb) val = "Add it in Card Manager";
+        break;
       case OPT_REGION: label = "Region"; val = region_names[l.region & 3]; break;
       case OPT_VIDEO: label = "Video"; val = l.vga ? "Force VGA" : "Game default"; break;
       case OPT_BOOT: label = "Start with"; val = boot_names[l.boot & 3]; break;
       case OPT_RESET: label = "Reset to defaults"; break;
     }
-    sw_text(SWF_UI, x + 24, ry + 9, 14, on ? C_WHITE : SW_ALPHA(C_TEXT, 0xD0), label);
-    if (val[0]) {
+    const int off = opt_items[i] == OPT_CB && !have_cb; /* not available on this card */
+    sw_text(SWF_UI, x + 24, ry + 9, 14, off ? C_FAINT : on ? C_WHITE : SW_ALPHA(C_TEXT, 0xD0), label);
+    if (off) {
+      sw_text_right(SWF_SMALL, x + w - 24, ry + 11, 12, C_FAINT, val);
+    } else if (val[0]) {
       float vw = sw_text_width(SWF_SMALL, 12, val);
       if (on) {
         sw_text(SWF_SMALL, x + w - 24 - vw - 14, ry + 11, 12, C_ORANGE, "<");
@@ -1294,7 +1301,14 @@ static void input_options(unsigned int btn, int pressed) {
   sw_launch l = sw_lib_launch_get(g);
   switch (opt_items[opt_sel]) {
     case OPT_PLAY: if (btn == A) begin_launch(g, detail_discs[detail_disc]); return;
-    case OPT_CB: if (btn == A) begin_launch_kind(g, detail_discs[detail_disc], KIND_CB); return;
+    case OPT_CB:
+      if (btn != A) return;
+      if (!have_cb) {
+        show_toast("Add CodeBreaker in Card Manager first");
+        return;
+      }
+      begin_launch_kind(g, detail_discs[detail_disc], KIND_CB);
+      return;
     case OPT_REGION: l.region = (l.region + d + 4) % 4; break;
     case OPT_VIDEO: l.vga = !l.vga; break;
     case OPT_BOOT: l.boot = (l.boot + d + 4) % 4; break;

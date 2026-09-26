@@ -66,7 +66,7 @@ func crumbs(p string) []Crumb {
 	return out
 }
 
-// Browse lists one folder. kind is "games" (default), "music" or "dats".
+// Browse lists one folder. kind is "games" (default), "music", "dats" or "codebreaker".
 func Browse(p, kind string) (*BrowseResult, error) {
 	r := &BrowseResult{Path: p, Drives: listDrives(), Places: places(), Recent: recentFolders(kind)}
 	if p == "" {
@@ -128,6 +128,10 @@ func Browse(p, kind string) (*BrowseResult, error) {
 		case "dats":
 			if ext == ".dat" {
 				be.Kind = "dat"
+			}
+		case "codebreaker":
+			if ext == ".bin" {
+				be.Kind, be.Game = "file", true
 			}
 		default:
 			switch {

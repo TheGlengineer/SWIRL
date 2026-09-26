@@ -575,6 +575,9 @@ kbd{font-family:Barlow,sans-serif;font-size:.78rem;font-weight:600;color:var(--t
           <div class="panel"><h3>Menu music</h3>
             <p class="hint tight" id="musicInfo">SWIRL plays its own theme unless you pick your own music.</p>
             <div class="row" style="margin-top:.8rem"><button class="btn small" id="musicPick" disabled>Use my own music</button><button class="btn small" id="musicRemove" hidden>Back to the SWIRL theme</button></div></div>
+          <div class="panel"><h3>CodeBreaker</h3>
+            <p class="hint tight" id="cbInfo">SWIRL can start games with CodeBreaker cheats. Pick your own CodeBreaker PELICAN.BIN file once.</p>
+            <div class="row" style="margin-top:.8rem"><button class="btn small" id="cbPick" disabled>Add CodeBreaker</button><button class="btn small" id="cbRemove" hidden>Remove CodeBreaker</button></div></div>
           <div class="panel"><h3>VMU screens from the games</h3>
             <p class="hint tight" data-pc>Boots each game for a few seconds in a hidden emulator on this PC and keeps the picture the game puts on the VMU. About 10 seconds per game.</p>
             <label class="hint check"><input type="checkbox" id="capMissing"> Only games that have no VMU screen yet</label>
@@ -1223,7 +1226,7 @@ const IC = {
   recent: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   pc: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
 };
-const ico = k => `<svg viewBox="0 0 24 24" aria-hidden="true">${IC[k] || IC.dir}</svg>`;
+const ico = k => `<svg viewBox="0 0 24 24" aria-hidden="true">${IC[k === "file" ? "dat" : k] || IC.dir}</svg>`;
 const fmtSize = b => !b ? "" : b >= 1e12 ? (b / 1e12).toFixed(1) + " TB" : b >= 1e9 ? (b / 1e9).toFixed(1) + " GB" : b >= 1e6 ? (b / 1e6).toFixed(0) + " MB" : Math.max(1, Math.round(b / 1e3)) + " KB";
 const fmtDate = t => { if (!t) return ""; const d = new Date(t * 1000); return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }); };
 const DTYPE = { removable: "Removable drive", fixed: "Local disk", network: "Network drive", cd: "CD/DVD drive", ram: "RAM disk" };
@@ -1294,13 +1297,13 @@ function brRender() {
       ${ico(e.kind === "drive" ? e.dtype : e.kind)}
       <span class="nm"><b title="${esc(e.name)}">${esc(e.name)}</b><small>${brInfo(e)}</small></span>
       <span class="brc-size">${size}</span><span class="brc-date">${e.kind === "drive" ? "" : fmtDate(e.modified)}</span></div>`;
-  }).join("") : `<div class="brempty">${br.res.path ? (br.res.hidden ? `No ${br.kind === "music" ? "music files" : br.kind === "dats" ? "DAT files" : "games"} in this folder (${br.res.hidden} other files hidden)` : "This folder is empty") : "No drives found"}</div>`;
+  }).join("") : `<div class="brempty">${br.res.path ? (br.res.hidden ? `No ${br.kind === "music" ? "music files" : br.kind === "dats" ? "DAT files" : br.kind === "codebreaker" ? ".BIN files" : "games"} in this folder (${br.res.hidden} other files hidden)` : "This folder is empty") : "No drives found"}</div>`;
   $("brList").querySelectorAll(".brrow").forEach(d => {
     const cb = d.querySelector("input");
     if (cb) { cb.onclick = ev => ev.stopPropagation(); cb.onchange = () => brPick(cb.value, cb.checked); }
     d.onclick = () => {
       if (d.dataset.dir) { brLoad(d.dataset.p); return; }
-      if (br.pickFile) { if (d.dataset.kind === "music") brDone(d.dataset.p); return; }
+      if (br.pickFile) { if (d.dataset.kind === "music" || d.dataset.kind === "file") brDone(d.dataset.p); return; }
       if (cb && !cb.disabled) { cb.checked = !cb.checked; brPick(cb.value, cb.checked); }
     };
   });
@@ -1416,7 +1419,7 @@ $("dbGet").onclick = () => card && startJob("Box art and info", "/api/dbdownload
 let colls = [], colEdit = -1, colPick = new Set();
 async function loadExtras() {
   if (!card) return;
-  ["healthGo", "previewGo", "colNew", "musicPick", "shotGo"].forEach(id => $(id).disabled = false);
+  ["healthGo", "previewGo", "colNew", "musicPick", "cbPick", "shotGo"].forEach(id => $(id).disabled = false);
   try { colls = await api("/api/collections?root=" + encodeURIComponent(card.root)) || []; } catch (e) { colls = []; }
   $("colList").className = "";
   $("colList").innerHTML = colls.length ? colls.map((c, i) => `<div class="colrow"><span>${esc(c.name)} <span class="count">${(c.products || []).length} games</span></span><button class="btn small" data-ce="${i}">Edit</button><button class="btn small" data-cd="${i}">Delete</button></div>`).join("")
@@ -1436,6 +1439,14 @@ async function loadExtras() {
       ? `<span class="yes">Your own music is set: ${mmss(m.seconds)} (${(m.bytes / 1048576).toFixed(1)} MB).</span> Click Update SWIRL to put it on the card. Going back brings the SWIRL theme back.`
       : `SWIRL plays its theme, <b>${esc(m.defaultName)}</b> (${mmss(m.defaultSeconds)}). Pick a WAV or MP3 file to use your own music instead. Music can be turned off on the Dreamcast in SWIRL's System tab.`;
     $("musicRemove").hidden = !m.present;
+  } catch (e) {}
+  try {
+    const cb = await api("/api/codebreaker?root=" + encodeURIComponent(card.root));
+    $("cbInfo").innerHTML = cb.present
+      ? `<span class="yes">CodeBreaker is set${cb.cheats ? `, with ${cb.cheats} cheat file${cb.cheats === 1 ? "" : "s"}` : ""}.</span> Click Update SWIRL to put it on the card. On the Dreamcast, open a game, press X for launch options and choose Play with CodeBreaker cheats.`
+      : `SWIRL can start games with CodeBreaker cheats, but can't include CodeBreaker itself. Pick your own <b>PELICAN.BIN</b> (from your CodeBreaker disc) once. A <b>CHEATS</b> folder or <b>FCDCHEATS.BIN</b> next to it is added too.`;
+    $("cbRemove").hidden = !cb.present;
+    $("cbPick").textContent = cb.present ? "Replace CodeBreaker" : "Add CodeBreaker";
   } catch (e) {}
   const withShots = card.games.filter(g => g.shots).length;
   $("shotInfo").textContent = `${withShots} of ${card.games.length} games have screenshots. They show on each game's detail screen in SWIRL.`;
@@ -1474,6 +1485,15 @@ $("musicPick").onclick = () => browse({ title: "Pick menu music", kind: "music",
   try { await api("/api/music", { root: card.root, file: p }); } catch (e) { alert(e.message); }
   loadExtras();
 });
+$("cbPick").onclick = () => browse({ title: "Pick CodeBreaker's PELICAN.BIN", kind: "codebreaker", pickFile: true, hint: "Click PELICAN.BIN from your CodeBreaker disc. Cheat files next to it are added too." }, async p => {
+  try { await api("/api/codebreaker", { root: card.root, file: p }); log("CodeBreaker added. Click Update SWIRL to put it on the card.", "ok"); } catch (e) { alert(e.message); }
+  loadExtras();
+});
+$("cbRemove").onclick = async () => {
+  if (!confirm("Remove CodeBreaker from this card's settings? It is taken off the menu disc at the next Update SWIRL.")) return;
+  try { await api("/api/codebreaker", { root: card.root, remove: true }); } catch (e) {}
+  loadExtras();
+};
 $("musicRemove").onclick = async () => { try { await api("/api/music", { root: card.root, remove: true }); } catch (e) {} loadExtras(); };
 $("shotGo").onclick = () => startJob("Getting screenshots", "/api/shots/online", { root: card.root });
 $("previewGo").onclick = () => startJob("Preview in Flycast", "/api/preview", { root: card.root, dats: $("dats").value.trim() });

@@ -1095,6 +1095,9 @@ func addExtras(root string, c *Card, data string, log Logger) error {
 	if err := buildShotDat(root, c, data, log); err != nil {
 		return err
 	}
+	if err := addCodeBreaker(root, data, log); err != nil {
+		return err
+	}
 	// menu music: the owner's own, else the SWIRL theme. Music another tool put on the old menu disc is
 	// kept as the owner's own the first time.
 	if old := findDataFile(data, "BGM.ADP"); old != "" && !fileExists(musicPath(root)) && !fileExists(filepath.Join(root, editsDir, "BGM.NONE")) && !fileExists(themeMarker(root)) {

@@ -167,6 +167,12 @@ void dreamcast_launch_cb(gd_item *disc) {
   snprintf(cheat_name, sizeof(cheat_name), "/cd/cheats/%s.bin", disc->product);
   uint32_t csize = 0;
   uint8_t *cheat_buf = load_file(cheat_name, &csize);
+  if (!cheat_buf) {
+    /* SWIRL Card Manager's disc writer turns "-" into "_" (T-8101N.BIN is stored as T_8101N.BIN) */
+    for (char *c = cheat_name + 11; *c; c++)
+      if (*c == '-') *c = '_';
+    cheat_buf = load_file(cheat_name, &csize);
+  }
   if (!cheat_buf)
     cheat_buf = load_file("/cd/cheats/FCDCHEATS.BIN", &csize);
   if (cheat_buf && csize > 640 && !strncmp((const char *)cheat_buf, "XploderDC Cheats", 16)) {

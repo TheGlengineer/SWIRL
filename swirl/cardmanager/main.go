@@ -559,6 +559,32 @@ func serve() {
 		}
 		writeJSON(w, GetMusicInfo(root))
 	}))
+	mux.HandleFunc("/api/codebreaker", guard(func(w http.ResponseWriter, r *http.Request) {
+		root := r.URL.Query().Get("root")
+		if r.Method == http.MethodPost {
+			var req struct {
+				Root, File string
+				Remove     bool
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				fail(w, err)
+				return
+			}
+			root = req.Root
+			l := &logBuf{lines: []string{}}
+			var err error
+			if req.Remove {
+				err = RemoveCodeBreaker(root)
+			} else {
+				err = SetCodeBreaker(root, req.File, l.log)
+			}
+			if err != nil {
+				fail(w, err)
+				return
+			}
+		}
+		writeJSON(w, GetCodeBreakerInfo(root))
+	}))
 	mux.HandleFunc("/api/shots/game", guard(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Root, Product string
