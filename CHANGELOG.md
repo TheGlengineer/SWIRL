@@ -5,8 +5,9 @@ may ship without menu changes; the menu then keeps its major.minor version (2.11
 
 ## [2.13.0]
 
-### SWIRL Card Manager for macOS
+### SWIRL Card Manager for macOS (beta)
 
+- The Mac version is a beta. Please report anything that does not work, and pick "SWIRL Card Manager on a Mac (beta)" in the bug report
 - SWIRL Card Manager now runs on Macs (macOS 10.15 or newer, Apple Silicon and Intel) with every feature of the Windows app: adding games and archives, names, art, screenshots, collections, music, backups, the health check, New card from scratch, Preview in Flycast and VMU screen capture
 - Download the .dmg and drag the app to Applications, or use Move to Applications from inside the app; it updates itself like the Windows version
 - Formatting uses the same FAT32 writer as on Windows, asks for your Mac password, and refuses the startup disk, internal drives and disk images; you confirm by typing the card's name

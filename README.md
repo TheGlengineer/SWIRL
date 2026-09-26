@@ -5,7 +5,7 @@
   <img src="docs/images/logo/swirl-logo-light.png" alt="SWIRL" width="320">
 </picture>
 
-**A modern dashboard menu for the Sega Dreamcast and GDEMU, and a Windows and Mac app that sets up your SD card for it.**
+**A modern dashboard menu for the Sega Dreamcast and GDEMU, and a Windows app (with a Mac beta) that sets up your SD card for it.**
 
 [![Latest release](https://img.shields.io/github/v/release/TheGlengineer/SWIRL?label=release&color=f28c28)](https://github.com/TheGlengineer/SWIRL/releases/latest)
 [![Build](https://img.shields.io/github/actions/workflow/status/TheGlengineer/SWIRL/ci.yml?branch=master&label=build)](https://github.com/TheGlengineer/SWIRL/actions/workflows/ci.yml)
@@ -24,7 +24,7 @@ smooth 60 fps motion, collections, play history, screenshots, menu music, a live
 built on [openMenu](https://github.com/mrneo240/openMenu), so it keeps the same SD card layout and the same art
 databases. Nothing about your games has to change.
 
-**SWIRL Card Manager** is the companion app for Windows and macOS. It puts SWIRL on the card, adds games (including straight
+**SWIRL Card Manager** is the companion app for Windows, now also in beta for macOS. It puts SWIRL on the card, adds games (including straight
 from .zip, .7z and .rar), fixes their names, fetches art, backs the card up and keeps everything up to date.
 
 > [!NOTE]
@@ -56,7 +56,7 @@ from .zip, .7z and .rar), fixes their names, fetches art, backs the card up and 
 - Favorites, history and settings saved to your VMU
 - Classic openMenu list, grid and GDMENU styles still one setting away
 
-**In SWIRL Card Manager (Windows and macOS)**
+**In SWIRL Card Manager (Windows, and macOS in beta)**
 
 - One exe on Windows, one app on the Mac (Apple Silicon and Intel), with nothing else to install; it installs itself and removes itself cleanly
 - Add games from folders, disc images or archives (.zip, .7z, .rar, including multi part), unpacked straight onto the card
@@ -100,7 +100,7 @@ More screens are in the [Card Manager guide](docs/CARD_MANAGER.md).
 You need a Dreamcast with a GDEMU (original or clone), its SD card, and a Windows 10 or 11 PC or a Mac
 (macOS 10.15 Catalina or newer, Apple Silicon or Intel).
 
-1. From the [latest release](https://github.com/TheGlengineer/SWIRL/releases/latest), download **SWIRL-Card-Manager.exe** for Windows or **SWIRL-Card-Manager-macOS.dmg** for a Mac.
+1. From the [latest release](https://github.com/TheGlengineer/SWIRL/releases/latest), download **SWIRL-Card-Manager.exe** for Windows or **SWIRL-Card-Manager-macOS.dmg** for a Mac (beta).
 2. Run it. The app is not code signed, so the first time:
    - **Windows** may say "Windows protected your PC". Click **More info**, then **Run anyway**.
    - **macOS** says it cannot check the app. Open the disk image, drag the app to Applications and open it, then go to **System Settings > Privacy & Security** and click **Open Anyway**. See [Getting started](docs/GETTING_STARTED.md#on-a-mac).

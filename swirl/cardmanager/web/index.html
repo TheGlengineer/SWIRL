@@ -104,6 +104,7 @@ input[type=checkbox]{accent-color:var(--orange);width:1rem;height:1rem;margin:0}
 .stat span{color:var(--dim);font-size:.78rem;display:block}
 .stat b{display:block;font-family:Sora,sans-serif;font-size:1.15rem;margin-top:.15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .stat b.sm{font-size:.95rem;margin-top:.3rem}
+.brand .beta{text-decoration:none;margin-left:.5rem;padding:.08rem .45rem;border-radius:999px;border:1px solid var(--orange);color:var(--orange);font-family:Barlow,sans-serif;font-size:.7rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
 .badge{display:inline-block;border-radius:999px;padding:.12rem .55rem;font-size:.78rem;font-weight:600;background:#243049;color:var(--text);font-family:Barlow,sans-serif}
 .badge.swirl{background:#3a2410;color:#ffc58e}
 .badge.ok{background:#153222;color:#8fe3ad}
@@ -1919,6 +1920,9 @@ function applyMac() {
   $("ncAdmin").textContent = "macOS will ask for your password to format the card.";
   document.querySelectorAll("#aboutDlg kbd").forEach(k => { if (k.textContent === "Ctrl") k.textContent = "\u2318"; if (k.textContent === "F5") k.textContent = "\u2318 R"; });
   document.querySelectorAll("[data-pc]").forEach(el => el.innerHTML = el.innerHTML.replace(/this PC/g, "this Mac").replace(/your PC's/g, "your Mac's").replace(/your PC/g, "your Mac"));
+  // the Mac version is a beta: say so next to the version number
+  const v = document.querySelector(".brand .ver");
+  if (v && !document.querySelector(".brand .beta")) v.insertAdjacentHTML("afterend", `<a class="beta" href="https://github.com/TheGlengineer/SWIRL/issues/new/choose" target="_blank" rel="noopener" title="The Mac version is new. Click to report something that does not work.">Mac beta</a>`);
 }
 $("appInstall").onclick = async () => {
   const b = $("appInstall"); b.disabled = true; const t = b.textContent; b.innerHTML = `<span class="spin"></span>Installing...`;
@@ -1968,7 +1972,7 @@ async function openAbout() {
     rows.push(["Running from", a.runningInstalled ? "Installed copy" : a.installed ? "A downloaded copy (version " + a.installedVersion + " is installed)" : "A downloaded copy, not installed"]);
     if (a.installDir) rows.push(["Installed in", a.installDir]);
     if (a.dataDir) rows.push(["App data", a.dataDir]);
-    rows.push(["System", a.platform === "windows" ? "Windows" : a.platform === "darwin" ? "macOS" : a.platform]);
+    rows.push(["System", a.platform === "windows" ? "Windows" : a.platform === "darwin" ? "macOS (beta)" : a.platform]);
   }
   $("abDetails").innerHTML = rows.map(r => `<dt>${esc(r[0])}</dt><dd>${esc(r[1])}</dd>`).join("");
 }

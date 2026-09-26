@@ -8,7 +8,8 @@ body:
       label: Where is the problem?
       options:
         - SWIRL menu on the Dreamcast
-        - SWIRL Card Manager on the PC
+        - SWIRL Card Manager on Windows
+        - SWIRL Card Manager on a Mac (beta)
         - Both, or not sure
     validations:
       required: true

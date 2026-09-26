@@ -30,6 +30,8 @@ You can also keep running the downloaded exe. Installing just makes it easier to
 
 ### On a Mac
 
+The Mac version is a **beta**: it has every feature of the Windows app and has been tested on real Macs, but it is new. If something does not work, please [report it](https://github.com/TheGlengineer/SWIRL/issues/new/choose) and pick "SWIRL Card Manager on a Mac (beta)".
+
 1. From the [latest release](https://github.com/TheGlengineer/SWIRL/releases/latest), download **SWIRL-Card-Manager-macOS.dmg** and open it.
 2. Drag **SWIRL Card Manager** onto **Applications**, then eject the disk image.
 3. Open SWIRL Card Manager from Applications or Launchpad. Because the app is not signed with an Apple Developer ID, macOS says it cannot check it for malicious software. Click **Done** (or **OK**).

@@ -149,8 +149,10 @@ jobs:
             dist/SWIRL-Card-Manager-macOS.zip
             dist/SWIRL-Card-Manager-macOS.dmg
 
+  # publishes the Windows files even if the Mac beta build fails; the Mac files are added when they exist
   publish:
     needs: [windows, macos]
+    if: ${{ !cancelled() && needs.windows.result == 'success' }}
     runs-on: ubuntu-22.04
     env:
       VERSION: ${{ needs.windows.outputs.version }}
@@ -167,7 +169,8 @@ jobs:
       - name: Checksums
         run: |
           cd dist
-          sha256sum SWIRL-Card-Manager.exe SWIRL-Card-Manager-macOS.dmg SWIRL-Card-Manager-macOS.zip 1ST_READ.BIN > SHA256SUMS.txt
+          ls -la
+          sha256sum $(ls SWIRL-Card-Manager.exe SWIRL-Card-Manager-macOS.dmg SWIRL-Card-Manager-macOS.zip 1ST_READ.BIN 2>/dev/null) > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Release notes
@@ -183,16 +186,19 @@ jobs:
           ---
           **Install or update**
           - **Windows:** download `SWIRL-Card-Manager.exe` and run it.
-          - **Mac:** download `SWIRL-Card-Manager-macOS.dmg`, open it and drag the app to Applications. The first time, macOS asks you to allow it: see [Getting started](https://github.com/${{ github.repository }}/blob/master/docs/GETTING_STARTED.md#on-a-mac).
+          - **Mac (beta):** download `SWIRL-Card-Manager-macOS.dmg`, open it and drag the app to Applications. The first time, macOS asks you to allow it: see [Getting started](https://github.com/${{ github.repository }}/blob/master/docs/GETTING_STARTED.md#on-a-mac). The Mac version is new, so please [report anything that does not work](https://github.com/${{ github.repository }}/issues/new/choose).
           - Already installed? Click **Update now** in Card Manager. Then click **Update SWIRL** to put the new menu on your card.
           NOTES
+          if [ ! -f dist/SWIRL-Card-Manager-macOS.dmg ]; then
+            printf '\n_The Mac beta was not built for this release; Mac users can keep using the previous version._\n' >> notes.md
+          fi
           cat notes.md
 
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          FILES="dist/SWIRL-Card-Manager.exe dist/SWIRL-Card-Manager-macOS.dmg dist/SWIRL-Card-Manager-macOS.zip dist/1ST_READ.BIN dist/SHA256SUMS.txt"
+          FILES=$(ls dist/SWIRL-Card-Manager.exe dist/SWIRL-Card-Manager-macOS.dmg dist/SWIRL-Card-Manager-macOS.zip dist/1ST_READ.BIN dist/SHA256SUMS.txt 2>/dev/null)
           if gh release view "$TAG" >/dev/null 2>&1; then
             # a release made on github.com first: add the files and the notes from CHANGELOG.md
             gh release upload "$TAG" $FILES --clobber

@@ -1,6 +1,6 @@
 # SWIRL Card Manager
 
-SWIRL Card Manager is the app for Windows and macOS that puts SWIRL on a GDEMU SD card and looks after it. It
+SWIRL Card Manager is the app for Windows (and macOS, in beta) that puts SWIRL on a GDEMU SD card and looks after it. It
 is a single exe on Windows and a single app on the Mac, with the same features on both. Press **F1** in the app for a summary of everything below, the keyboard shortcuts and the credits.
 
 Changes you make (names, art, collections, music, order) are saved on the card in a `SWIRL` folder straight
