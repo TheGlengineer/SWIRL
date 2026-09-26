@@ -259,17 +259,25 @@ static int y_held(void) {
 }
 
 static int boot_y;
+static int boot_reset; /* Y switched a saved Classic style back to SWIRL; still to be saved */
 
 int settings_boot_y(void) { return boot_y; }
+
+int settings_boot_reset_take(void) {
+  const int r = boot_reset;
+  boot_reset = 0;
+  return r;
+}
 
 void settings_boot_guard(void) {
   boot_y = y_held();
   if (savedata.ui == UI_SWIRL)
     return;
-  /* only the running style changes; the memory card is written at the next save as usual */
+  /* only the running style changes here; the memory card is written once the menu is up */
   if (boot_y) {
     printf("SWIRL: Y held at start, using the SWIRL style\n");
     savedata.ui = UI_SWIRL;
+    boot_reset = 1; /* the owner asked for SWIRL: keep it (a style that only can't run now is not saved over) */
   } else if (!settings_style_ready(savedata.ui)) {
     printf("SWIRL: the saved style needs openMenu's theme files, using the SWIRL style\n");
     savedata.ui = UI_SWIRL;

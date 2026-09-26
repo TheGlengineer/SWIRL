@@ -1849,6 +1849,10 @@ FUNCTION(UI_NAME, init) {
     have_shot_dat = (DAT_load_parse(&shot_dat, "SHOT.DAT") == 0 && shot_dat.chunk_size == SHOT_CHUNK);
   }
   sw_lib_init();
+  if (settings_boot_reset_take()) {
+    sw_lib_settings_dirty(); /* Y at start up: save the SWIRL style, or the Classic style comes back next time */
+    save_countdown = 180;
+  }
   lib_sort = sw_lib_prefs()->sort % SW_SORT_COUNT;
   srand((unsigned)rtc_unix_secs());
   sw_audio_init(); /* no-op when already running */

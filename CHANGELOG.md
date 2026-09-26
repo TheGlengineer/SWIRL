@@ -13,6 +13,7 @@ may ship without menu changes; the menu then keeps its major.minor version (2.11
 - A memory card that stops answering can no longer freeze the Dreamcast when a game starts or the style changes: saving gives up after 3 seconds
 - "VMU beep on save" is now saved like the other settings (it was lost at power off unless a game was started)
 - A damaged SWIRL save file is replaced at the next save instead of being ignored
+- Holding Y at power on to go back to the SWIRL style now sticks: the style is saved to the VMU straight away. Before, the Classic style came back at the next power on unless a game was started
 
 ### CodeBreaker
 

@@ -138,3 +138,5 @@ int settings_style_ready(int ui);
 void settings_boot_guard(void);
 /* SWIRL: Y was held at start up (that press must not also count as Favorite) */
 int settings_boot_y(void);
+/* SWIRL: 1 once if Y at start up switched the saved style to SWIRL, so the menu saves that choice */
+int settings_boot_reset_take(void);
