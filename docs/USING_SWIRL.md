@@ -85,7 +85,7 @@ Left and right change a setting; **A** runs an action.
 
 | Setting | Choices |
 |---|---|
-| Menu style | SWIRL, Classic list, Classic grid, GDMENU |
+| Menu style | SWIRL, Classic list, Classic grid, GDMENU. The Classic styles use openMenu's theme files, which **Update SWIRL** adds; without them the setting says "needs Update SWIRL". Hold **Y** while the Dreamcast starts to go back to SWIRL |
 | Accent colour | Orange, Blue, Green, Pink, Purple, Red, Gold, Teal |
 | Backdrop | Cover colour, Night, Seasonal |
 | Picture quality | High, Standard |

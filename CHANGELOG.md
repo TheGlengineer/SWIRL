@@ -3,6 +3,14 @@
 SWIRL (the menu) and SWIRL Card Manager share one version number. Card Manager patch releases (2.11.1)
 may ship without menu changes; the menu then keeps its major.minor version (2.11).
 
+## [2.13.1]
+
+### Fixes
+
+- Choosing Classic list, Classic grid or GDMENU no longer freezes the Dreamcast on cards set up from GDMENU or from scratch. Update SWIRL now adds the openMenu theme files and fonts those styles need (from openMenu's official release, checked by its SHA-256; files already on the card are kept)
+- A card whose Classic style can't run starts in SWIRL instead of freezing, so cards affected by this start again after the update. The Style setting shows "needs Update SWIRL" until the files are there
+- Hold Y while the Dreamcast starts to go back to the SWIRL style from any style
+
 ## [2.13.0]
 
 ### SWIRL Card Manager for macOS (beta)
