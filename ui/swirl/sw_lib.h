@@ -43,9 +43,13 @@ sw_stat *sw_stat_get(const sw_game *g, int create);
 int sw_lib_is_fav(const sw_game *g);
 void sw_lib_toggle_fav(const sw_game *g);
 void sw_lib_mark_played(const sw_game *g);
-int sw_lib_save(void); /* write SWIRL.DAT to the first VMU with space; 0 on success */
-int sw_lib_save_async(void);     /* same, on a worker thread; -1 if one is already running */
-int sw_lib_save_result(int *rv); /* 1 once when an async save finished, with its result */
+int sw_lib_save(void);               /* save now and wait up to 3 s; 0 on success */
+int sw_lib_save_wait(int max_ms);    /* save now and wait up to max_ms; -5 if the memory card didn't finish */
+int sw_lib_save_async(void);         /* save on a worker thread; 0 started, -1 busy, -7 card not answering */
+int sw_lib_save_result(int *rv);     /* 1 once when a save finished, with its result */
+int sw_lib_busy(void);               /* a save is running */
+void sw_lib_settings_dirty(void);    /* openMenu's settings (style, beep) changed and need saving too */
+const char *sw_lib_save_status(char *buf, int len); /* one line for System > Save */
 int sw_lib_dirty(void);
 void sw_lib_mark_dirty(void);
 int sw_lib_stats_loaded(void);

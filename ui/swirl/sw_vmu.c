@@ -2,6 +2,7 @@
  * SWIRL: VMU screen output (48x32, 1 bit) plus an on-screen preview texture.
  */
 #include "sw_vmu.h"
+#include "sw_lib.h"
 
 #include <dc/maple.h>
 #include <dc/maple/vmu.h>
@@ -124,7 +125,8 @@ static void push(void) {
 }
 
 void sw_vmu_tick(void) {
-  if (pending > 0 && --pending == 0)
+  /* the VMU screen waits while a save talks to the memory card (they share the card's channel) */
+  if (pending > 0 && !sw_lib_busy() && --pending == 0)
     push();
   if (preview_dirty && preview.texture) {
     for (int y = 0; y < 32; y++)

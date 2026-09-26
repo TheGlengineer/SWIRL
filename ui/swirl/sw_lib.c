@@ -22,6 +22,7 @@
 #include "../../backend/db_list.h"
 #include "../../backend/gd_item.h"
 #include "../../backend/gd_list.h"
+#include "../global_settings.h"
 
 #if __has_include("../openmenu_vmu.h") && __has_include("../openmenu_pal.h")
 #include "../openmenu_pal.h"
@@ -77,7 +78,27 @@ uint32_t sw_now(void) {
   return (uint32_t)rtc_unix_secs();
 }
 
-/* ---------- VMU persistence ---------- */
+/* ---------- VMU persistence ----------
+   SWIRL.DAT (favourites, history, SWIRL's settings) is written by a worker thread so the menu never waits on a
+   memory card. The rules that keep a user's data safe:
+   - if SWIRL started without reading SWIRL.DAT (no card yet, a slow card, a VM2 switching cards), the file is
+     read and merged before the first write, so a save never replaces it with defaults;
+   - if the card holding SWIRL.DAT doesn't answer, nothing is written (the save is tried again later);
+   - every write is read back and compared; a failed save is reported and tried again by the caller. */
+
+enum { LOAD_NONE = 0, LOAD_OK, LOAD_NO_FILE, LOAD_DAMAGED, LOAD_NO_ANSWER };
+static int load_state;     /* how the last attempt to read SWIRL.DAT went */
+static int prefs_touched;  /* settings changed in this session (they win over a file merged in later) */
+static int settings_dirty; /* openMenu's settings file (OPENMENU.CFG) also needs writing */
+static char saved_on[4];   /* "A1" once a save worked */
+static int last_rv;        /* result of the last save */
+
+static void dev_name(maple_device_t *dev, char *out) {
+  out[0] = 'A' + dev->port;
+  out[1] = '0' + dev->unit;
+  out[2] = 0;
+}
+
 static maple_device_t *find_vmu(int need_blocks, int *has_file) {
   maple_device_t *dev, *first_free = NULL;
   char path[32];
@@ -96,53 +117,127 @@ static maple_device_t *find_vmu(int need_blocks, int *has_file) {
   return first_free;
 }
 
-static void load_stats(void) {
-  int has_file = 0;
-  maple_device_t *dev = find_vmu(0, &has_file);
-  if (!dev || !has_file)
-    return;
+/* reads SWIRL.DAT from dev into a fresh buffer; 0 on success */
+static int read_file(maple_device_t *dev, uint8_t **out, int *out_size) {
   char path[32];
   snprintf(path, sizeof(path), "/vmu/%c%d/%s", 'a' + dev->port, dev->unit, SAVE_NAME);
   file_t f = fs_open(path, O_RDONLY | O_META);
   if (f == FILEHND_INVALID)
-    return;
+    return -1;
   int size = fs_total(f);
-  uint8_t *buf = malloc(size);
-  if (!buf) {
-    fs_close(f);
-    return;
-  }
-  fs_read(f, buf, size);
+  uint8_t *buf = size > 0 && size <= 64 * 1024 ? malloc(size) : NULL;
+  int ok = buf && fs_read(f, buf, size) == size;
   fs_close(f);
-  vmu_pkg_t pkg;
-  if (vmu_pkg_parse(buf, size, &pkg) == 0 && pkg.data_len >= (int)(sizeof(save_blob_v1) - sizeof(sw_stat) * MAX_STATS)) {
-    const int room_v2 = (pkg.data_len - (int)(sizeof(save_blob) - sizeof(sw_stat) * MAX_STATS)) / (int)sizeof(sw_stat);
-    const int room_v1 = (pkg.data_len - (int)(sizeof(save_blob_v1) - sizeof(sw_stat) * MAX_STATS)) / (int)sizeof(sw_stat);
-    const save_blob *b = (const save_blob *)pkg.data;
-    if (!memcmp(b->magic, "SWL2", 4)) {
-      prefs = b->prefs;
-      /* saves from before the screen saver settings have zeros there */
-      if (prefs.saver_min < 1 || prefs.saver_min > 30) prefs.saver_min = 5;
-      num_stats = b->count > MAX_STATS ? MAX_STATS : b->count;
-      if (num_stats > room_v2) num_stats = room_v2 < 0 ? 0 : room_v2;
-      memcpy(stats, b->stats, num_stats * sizeof(sw_stat));
-      loaded = 1;
-    } else if (!memcmp(b->magic, "SWL1", 4)) {
-      /* older SWIRL: keep favourites, history and the four original settings */
-      const save_blob_v1 *o = (const save_blob_v1 *)pkg.data;
-      prefs.clock24 = o->prefs[0];
-      prefs.rumble = o->prefs[1];
-      prefs.sort = o->prefs[2];
-      prefs.attract = o->prefs[3];
-      num_stats = o->count > MAX_STATS ? MAX_STATS : o->count;
-      if (num_stats > room_v1) num_stats = room_v1 < 0 ? 0 : room_v1;
-      memcpy(stats, o->stats, num_stats * sizeof(sw_stat));
-      for (int i = 0; i < num_stats; i++) stats[i].flags = 0;
-      loaded = 1;
-      dirty = 1;
-    }
+  if (!ok) {
+    free(buf);
+    return -1;
   }
+  *out = buf;
+  *out_size = size;
+  return 0;
+}
+
+/* decodes a SWIRL.DAT package into p/st/n; 0 on success */
+static int parse_save(const uint8_t *buf, int size, sw_prefs *p, sw_stat *st, int *n, int *upgraded) {
+  vmu_pkg_t pkg;
+  *upgraded = 0;
+  if (vmu_pkg_parse((uint8_t *)buf, size, &pkg) != 0 ||
+      pkg.data_len < (int)(sizeof(save_blob_v1) - sizeof(sw_stat) * MAX_STATS))
+    return -1;
+  const int room_v2 = (pkg.data_len - (int)(sizeof(save_blob) - sizeof(sw_stat) * MAX_STATS)) / (int)sizeof(sw_stat);
+  const int room_v1 = (pkg.data_len - (int)(sizeof(save_blob_v1) - sizeof(sw_stat) * MAX_STATS)) / (int)sizeof(sw_stat);
+  const save_blob *b = (const save_blob *)pkg.data;
+  if (!memcmp(b->magic, "SWL2", 4)) {
+    *p = b->prefs;
+    /* saves from before the screen saver settings have zeros there */
+    if (p->saver_min < 1 || p->saver_min > 30) p->saver_min = 5;
+    *n = b->count > MAX_STATS ? MAX_STATS : b->count;
+    if (*n > room_v2) *n = room_v2 < 0 ? 0 : room_v2;
+    memcpy(st, b->stats, *n * sizeof(sw_stat));
+    return 0;
+  }
+  if (!memcmp(b->magic, "SWL1", 4)) {
+    /* older SWIRL: keep favourites, history and the four original settings */
+    const save_blob_v1 *o = (const save_blob_v1 *)pkg.data;
+    p->clock24 = o->prefs[0];
+    p->rumble = o->prefs[1];
+    p->sort = o->prefs[2];
+    p->attract = o->prefs[3];
+    *n = o->count > MAX_STATS ? MAX_STATS : o->count;
+    if (*n > room_v1) *n = room_v1 < 0 ? 0 : room_v1;
+    memcpy(st, o->stats, *n * sizeof(sw_stat));
+    for (int i = 0; i < *n; i++) st[i].flags = 0;
+    *upgraded = 1;
+    return 0;
+  }
+  return -1;
+}
+
+/* Reads SWIRL.DAT and takes it in. At start up (merge 0) it simply replaces the defaults. Later (merge 1) it is
+   combined with what changed since: play counts add up, a favourite on either side stays a favourite, and
+   settings changed in this session are kept. Sets load_state; returns it. */
+static int take_in_file(int merge) {
+  int has_file = 0;
+  maple_device_t *dev = find_vmu(0, &has_file);
+  if (!dev) {
+    load_state = LOAD_NO_FILE; /* no memory card at all */
+    return load_state;
+  }
+  if (!has_file) {
+    load_state = LOAD_NO_FILE;
+    return load_state;
+  }
+  uint8_t *buf = NULL;
+  int size = 0;
+  if (read_file(dev, &buf, &size) != 0) {
+    printf("SWIRL: SWIRL.DAT on %c%d did not answer\n", 'A' + dev->port, dev->unit);
+    load_state = LOAD_NO_ANSWER;
+    return load_state;
+  }
+  static sw_stat fstats[MAX_STATS];
+  sw_prefs fprefs = prefs;
+  int fn = 0, upgraded = 0;
+  int rc = parse_save(buf, size, &fprefs, fstats, &fn, &upgraded);
   free(buf);
+  if (rc != 0) {
+    printf("SWIRL: SWIRL.DAT on %c%d is damaged\n", 'A' + dev->port, dev->unit);
+    load_state = LOAD_DAMAGED;
+    return load_state;
+  }
+  if (!merge) {
+    prefs = fprefs;
+    num_stats = fn;
+    memcpy(stats, fstats, fn * sizeof(sw_stat));
+  } else {
+    if (!prefs_touched)
+      prefs = fprefs;
+    for (int i = 0; i < fn; i++) {
+      sw_stat *m = NULL;
+      for (int j = 0; j < num_stats; j++)
+        if (stats[j].key == fstats[i].key) {
+          m = &stats[j];
+          break;
+        }
+      if (m) {
+        uint32_t plays = (uint32_t)m->plays + fstats[i].plays;
+        m->plays = plays > 65535 ? 65535 : (uint16_t)plays;
+        m->fav = m->fav || fstats[i].fav;
+        if (!m->flags) m->flags = fstats[i].flags;
+        if (fstats[i].last > m->last) m->last = fstats[i].last;
+      } else if (num_stats < MAX_STATS) {
+        stats[num_stats++] = fstats[i];
+      }
+    }
+    printf("SWIRL: merged SWIRL.DAT from %c%d (%d entries)\n", 'A' + dev->port, dev->unit, fn);
+  }
+  if (upgraded) dirty = 1;
+  loaded = 1;
+  load_state = LOAD_OK;
+  return load_state;
+}
+
+static void load_stats(void) {
+  take_in_file(0);
 }
 
 /* builds the VMU file for the current stats; caller frees *out */
@@ -173,7 +268,8 @@ static int build_save(uint8_t **out, int *out_size) {
   return vmu_pkg_build(&pkg, out, out_size) < 0 ? -1 : 0;
 }
 
-static int write_save(uint8_t *out, int out_size) {
+/* runs on the worker: write, then read back and compare */
+static int write_save(uint8_t *out, int out_size, char *where) {
   int has_file = 0;
   maple_device_t *dev = find_vmu((out_size + 511) / 512, &has_file);
   if (!dev)
@@ -181,74 +277,152 @@ static int write_save(uint8_t *out, int out_size) {
   char path[32];
   snprintf(path, sizeof(path), "/vmu/%c%d/%s", 'a' + dev->port, dev->unit, SAVE_NAME);
   file_t f = fs_open(path, O_WRONLY | O_META);
-  int rv = -3;
-  if (f != FILEHND_INVALID) {
-    rv = (fs_write(f, out, out_size) == out_size) ? 0 : -4;
-    fs_close(f);
+  if (f == FILEHND_INVALID)
+    return -3;
+  int rv = (fs_write(f, out, out_size) == out_size) ? 0 : -4;
+  fs_close(f);
+  if (rv == 0) {
+    uint8_t *back = NULL;
+    int back_size = 0;
+    if (read_file(dev, &back, &back_size) != 0 || back_size < out_size || memcmp(back, out, out_size) != 0) {
+      printf("SWIRL: SWIRL.DAT on %c%d did not read back the same\n", 'A' + dev->port, dev->unit);
+      rv = -6;
+    }
+    free(back);
   }
+  if (rv == 0)
+    dev_name(dev, where);
   return rv;
 }
 
 static volatile int async_busy, async_done, async_rv;
+static char async_where[4];
 
-int sw_lib_save(void) {
-  while (async_busy) thd_sleep(10);
-  uint8_t *out = NULL;
-  int out_size = 0;
-  if (build_save(&out, &out_size) < 0)
-    return -1;
-  int rv = write_save(out, out_size);
-  free(out);
-  if (rv == 0)
-    dirty = 0;
-  return rv;
-}
+typedef struct save_job {
+  int size;
+  int settings; /* also write openMenu's settings file */
+  uint8_t *data;
+} save_job;
 
 static void *save_thread(void *arg) {
-  uint8_t *out = arg;
-  int size = *(int *)out;
-  async_rv = write_save(out + 32, size);
-  free(out);
+  save_job *job = arg;
+  int rv = job->data ? write_save(job->data, job->size, async_where) : 0;
+  if (job->settings)
+    settings_save();
+  free(job->data);
+  free(job);
+  async_rv = rv;
   async_done = 1;
   async_busy = 0;
   return NULL;
 }
 
-int sw_lib_save_async(void) {
+/* Starts a save on the worker. Returns 0 when started, -1 if one is running, -7 if SWIRL.DAT couldn't be read
+   first (then nothing is written: the file is left as it is). */
+static int start_save(void) {
   if (async_busy)
     return -1;
-  uint8_t *pkt = NULL;
-  int size = 0;
-  if (build_save(&pkt, &size) < 0)
-    return -1;
-  /* hand the thread one buffer: size, then the file 32 bytes in (keeps it aligned) */
-  uint8_t *buf = malloc(size + 32);
-  if (!buf) {
-    free(pkt);
-    return -1;
+  if (!loaded) {
+    /* SWIRL started without its file: take it in before writing over it */
+    int st = take_in_file(1);
+    if (st == LOAD_NO_ANSWER)
+      return -7;
+    if (st == LOAD_DAMAGED)
+      printf("SWIRL: replacing a damaged SWIRL.DAT\n");
+    loaded = 1; /* from now on this session's data is the whole story */
   }
-  *(int *)buf = size;
-  memcpy(buf + 32, pkt, size);
-  free(pkt);
-  dirty = 0; /* set again below if the write fails */
+  save_job *job = calloc(1, sizeof(*job));
+  if (!job)
+    return -1;
+  uint8_t *pkt = NULL;
+  if (dirty) {
+    if (build_save(&pkt, &job->size) < 0) {
+      free(job);
+      return -1;
+    }
+    job->data = pkt;
+  }
+  job->settings = settings_dirty;
+  dirty = 0;          /* set again if the write fails */
+  settings_dirty = 0; /* likewise */
   async_busy = 1;
   async_done = 0;
-  if (!thd_create(1, save_thread, buf)) {
+  if (!thd_create(1, save_thread, job)) {
     async_busy = 0;
-    free(buf);
-    return sw_lib_save();
+    free(job->data);
+    free(job);
+    dirty = 1;
+    return -1;
   }
   return 0;
 }
 
+int sw_lib_save_async(void) {
+  return start_save();
+}
+
+/* A save that finished (or failed) and was not reported yet. */
 int sw_lib_save_result(int *rv) {
   if (!async_done)
     return 0;
   async_done = 0;
-  *rv = async_rv;
-  if (async_rv != 0)
+  *rv = last_rv = async_rv;
+  if (async_rv != 0) {
     dirty = 1;
+  } else {
+    memcpy(saved_on, async_where, sizeof(saved_on));
+  }
   return 1;
+}
+
+/* Saves now and waits, but never longer than max_ms: used before leaving SWIRL (a game, the BIOS, another
+   style). A memory card that doesn't answer can't hold the Dreamcast. 0 on success. */
+int sw_lib_save(void) {
+  return sw_lib_save_wait(3000);
+}
+
+int sw_lib_save_wait(int max_ms) {
+  int rv;
+  sw_lib_save_result(&rv); /* drop an older result */
+  for (int t = 0; async_busy && t < max_ms; t += 10) thd_sleep(10);
+  if (async_busy)
+    return -5;
+  if (!dirty && !settings_dirty)
+    return 0;
+  rv = start_save();
+  if (rv != 0)
+    return rv;
+  for (int t = 0; async_busy && t < max_ms; t += 10) thd_sleep(10);
+  if (async_busy) {
+    printf("SWIRL: the memory card did not finish saving in %d ms\n", max_ms);
+    return -5;
+  }
+  sw_lib_save_result(&rv);
+  return rv;
+}
+
+int sw_lib_busy(void) { return async_busy; }
+
+void sw_lib_settings_dirty(void) { settings_dirty = 1; }
+
+/* one line for System > Save: where the data is, or why it isn't saved */
+const char *sw_lib_save_status(char *buf, int len) {
+  if (async_busy)
+    return "Saving...";
+  if (dirty || settings_dirty) {
+    if (last_rv == -2) return "No VMU with space";
+    if (last_rv == -7) return "VMU busy, retrying";
+    if (last_rv) return "Not saved, retrying";
+    return "Unsaved changes";
+  }
+  if (saved_on[0]) {
+    snprintf(buf, len, "Saved on VMU %s", saved_on);
+    return buf;
+  }
+  if (load_state == LOAD_OK) return "Saved";
+  if (load_state == LOAD_DAMAGED) return "Damaged, will fix";
+  if (load_state == LOAD_NO_ANSWER) return "VMU not answering";
+  return "Not saved yet";
 }
 
 int sw_lib_early_quality(void) {
@@ -256,8 +430,11 @@ int sw_lib_early_quality(void) {
   return prefs.quality == 0;
 }
 
-int sw_lib_dirty(void) { return dirty; }
-void sw_lib_mark_dirty(void) { dirty = 1; }
+int sw_lib_dirty(void) { return dirty || settings_dirty; }
+void sw_lib_mark_dirty(void) {
+  dirty = 1;
+  prefs_touched = 1;
+}
 int sw_lib_stats_loaded(void) { return loaded; }
 sw_prefs *sw_lib_prefs(void) { return &prefs; }
 

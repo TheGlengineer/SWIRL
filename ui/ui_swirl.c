@@ -144,6 +144,7 @@ static int toast_frames;
 
 /* save debounce */
 static int save_countdown;
+static int save_tries; /* failed saves in a row (they are tried again a few times) */
 
 /* optional per game VMU screens made by SWIRL Card Manager */
 static dat_file vmu_dat;
@@ -907,7 +908,7 @@ static const char *sys_value(int i, char *buf, int len) {
     case SYS_SAVER_STYLE: return saver_names[p->saver_style % SAVER_COUNT];
     case SYS_SAVER_TIME: snprintf(buf, len, "After %d min", p->saver_min); return buf;
     case SYS_SAVER_TEST: return "Press A";
-    case SYS_SAVE: return sw_lib_dirty() ? "Unsaved changes" : "Saved";
+    case SYS_SAVE: return sw_lib_save_status(buf, len);
     default: return "";
   }
 }
@@ -1146,8 +1147,7 @@ static void tick_launch(void) {
     return;
   if (!saved_at) {
     sw_audio_shutdown();
-    sw_lib_save();
-    settings_save();
+    sw_lib_save_wait(3000); /* SWIRL.DAT and openMenu's settings, never longer than 3 s */
     saved_at = launch_frames;
     return;
   }
@@ -1710,9 +1710,9 @@ static void input_tabs(unsigned int btn, int pressed) {
                 show_toast("Update SWIRL in Card Manager first");
               } else if (style_values[sys_style] != UI_SWIRL) {
                 s->ui = style_values[sys_style];
-                sw_audio_shutdown(); /* before the blocking VMU writes */
-                if (sw_lib_dirty()) sw_lib_save();
-                settings_save();
+                sw_audio_shutdown(); /* before the VMU writes */
+                sw_lib_settings_dirty();
+                sw_lib_save_wait(3000); /* one save for both files, never longer than 3 s */
                 reload_ui();
                 return;
               }
@@ -1738,7 +1738,12 @@ static void input_tabs(unsigned int btn, int pressed) {
           case SYS_RESUME: p->resume = !p->resume; break;
           case SYS_CLOCK: p->clock24 = !p->clock24; break;
           case SYS_RUMBLE: p->rumble = !p->rumble; if (p->rumble) rumble(); break;
-          case SYS_BEEP: s->beep = s->beep == BEEP_ON ? BEEP_OFF : BEEP_ON; changed_pref = 0; break;
+          case SYS_BEEP:
+            s->beep = s->beep == BEEP_ON ? BEEP_OFF : BEEP_ON;
+            changed_pref = 0;
+            sw_lib_settings_dirty(); /* kept in openMenu's settings file; saved with the rest */
+            save_countdown = 180;
+            break;
           case SYS_ATTRACT: p->attract = !p->attract; break;
           case SYS_SAVER_STYLE: p->saver_style = (uint8_t)((p->saver_style + d + SAVER_COUNT) % SAVER_COUNT); break;
           case SYS_SAVER_TIME: p->saver_min = (uint8_t)((p->saver_min - 1 + d + 30) % 30 + 1); break;
@@ -1753,8 +1758,10 @@ static void input_tabs(unsigned int btn, int pressed) {
           case SYS_SAVE:
             changed_pref = 0;
             if (btn == A) {
+              sw_lib_mark_dirty();
+              sw_lib_settings_dirty();
+              save_tries = 0;
               if (sw_lib_save_async() == 0) show_toast("Saving to VMU");
-              settings_save();
             }
             break;
           case SYS_PADTEST:
@@ -1765,7 +1772,7 @@ static void input_tabs(unsigned int btn, int pressed) {
             changed_pref = 0;
             if (btn == A) {
               sw_audio_shutdown();
-              if (sw_lib_dirty()) sw_lib_save();
+              sw_lib_save_wait(3000);
               arch_menu();
             }
             break;
@@ -2284,12 +2291,25 @@ FUNCTION(UI_NAME, drawTR) {
   prefetch_tick();
   if (toast_frames > 0) toast_frames--;
   /* VMU writes run on a worker thread so the music keeps streaming while they happen */
-  if (save_countdown > 0 && --save_countdown == 0 && sw_lib_dirty())
-    sw_lib_save_async();
+  if (save_countdown > 0 && --save_countdown == 0 && sw_lib_dirty()) {
+    int r = sw_lib_save_async();
+    if (r == -7 || r == -1) /* card not answering, or a save still running: try again shortly */
+      save_countdown = 120 * (save_tries < 5 ? ++save_tries : 5);
+  }
   {
     int r;
-    if (sw_lib_save_result(&r))
-      show_toast(r == 0 ? "Saved to VMU" : "Could not save: no VMU with space");
+    if (sw_lib_save_result(&r)) {
+      if (r == 0) {
+        show_toast("Saved to VMU");
+        save_tries = 0;
+      } else if (save_tries < 5) {
+        /* a busy or slow card: try again after 2, 4, 6, 8 and 10 seconds */
+        save_countdown = 120 * ++save_tries;
+        if (save_tries == 1) show_toast(r == -2 ? "No VMU with space to save" : "VMU busy, saving again shortly");
+      } else {
+        show_toast(r == -2 ? "Not saved: no VMU with space" : "Not saved: check the VMU");
+      }
+    }
   }
 
   sw_vmu_tick();
