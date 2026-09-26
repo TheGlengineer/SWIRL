@@ -881,7 +881,12 @@ static const char *sys_value(int i, char *buf, int len) {
   sw_prefs *p = sw_lib_prefs();
   openmenu_settings *s = settings_get();
   switch (i) {
-    case SYS_STYLE: return style_names[sys_style];
+    case SYS_STYLE:
+      if (style_values[sys_style] != UI_SWIRL && !settings_style_ready(style_values[sys_style])) {
+        snprintf(buf, len, "%s (needs Update SWIRL)", style_names[sys_style]);
+        return buf;
+      }
+      return style_names[sys_style];
     case SYS_ACCENT: return p->backdrop == BACKDROP_SEASONAL ? "Set by season" : accents[p->accent % NUM_ACCENTS].name;
     case SYS_BACKDROP:
       if (p->backdrop == BACKDROP_SEASONAL && cur_season) {
@@ -1700,7 +1705,10 @@ static void input_tabs(unsigned int btn, int pressed) {
           case SYS_STYLE:
             changed_pref = 0;
             if (btn == A) {
-              if (style_values[sys_style] != UI_SWIRL) {
+              if (style_values[sys_style] != UI_SWIRL && !settings_style_ready(style_values[sys_style])) {
+                /* the Classic styles need openMenu's theme files; starting one without them stops the console */
+                show_toast("Update SWIRL in Card Manager first");
+              } else if (style_values[sys_style] != UI_SWIRL) {
                 s->ui = style_values[sys_style];
                 sw_audio_shutdown(); /* before the blocking VMU writes */
                 if (sw_lib_dirty()) sw_lib_save();
@@ -1861,6 +1869,18 @@ FUNCTION_INPUT(UI_NAME, handle_input) {
     hold_frames++;
   else
     hold_frames = 0;
+
+  /* Y held while SWIRL started resets the style; ignore it until it is let go so it does not also favourite */
+  static int y_from_start = -1;
+  if (y_from_start < 0)
+    y_from_start = settings_boot_y();
+  if (y_from_start) {
+    if (btn == Y) {
+      prev_btn = btn;
+      return;
+    }
+    y_from_start = 0;
+  }
 
   if (saver_input(btn, pressed)) {
     prev_btn = btn;

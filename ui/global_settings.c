@@ -10,8 +10,12 @@
 
 #include "global_settings.h"
 
+#include <dc/maple.h>
+#include <dc/maple/controller.h>
 #include <external/libcrayonvmu/savefile.h>
 #include <external/libcrayonvmu/setup.h>
+
+#include "theme_manager.h"
 
 /* Images and such */
 #include "swirl/sw_vmu.h"
@@ -177,4 +181,97 @@ void settings_save(void) {
 
 openmenu_settings *settings_get(void) {
   return &savedata;
+}
+/* ---------- SWIRL: styles that can actually run on this menu disc ---------- */
+
+static int disc_has(const char *rel) {
+  char path[96];
+  snprintf(path, sizeof(path), "/cd/%s", rel);
+  file_t f = fs_open(path, O_RDONLY);
+  if (f == FILEHND_INVALID)
+    return 0;
+  fs_close(f);
+  return 1;
+}
+
+static int all_on_disc(const char *const *files) {
+  for (; *files; files++)
+    if (!disc_has(*files)) {
+      printf("SWIRL: %s is not on the menu disc\n", *files);
+      return 0;
+    }
+  return 1;
+}
+
+/* the background pictures the Classic list and grid use for the chosen region or custom theme */
+static int theme_pictures_on_disc(void) {
+  int n = 0;
+  if (savedata.custom_theme) {
+    theme_custom *ct = theme_get_custom(&n);
+    int i = savedata.custom_theme_num;
+    return ct && i >= 0 && i < n && disc_has(ct[i].bg_left) && disc_has(ct[i].bg_right);
+  }
+  theme_region *rt = theme_get_default(savedata.aspect, &n);
+  int r = savedata.region;
+  return rt && r >= 0 && r < n && disc_has(rt[r].bg_left) && disc_has(rt[r].bg_right);
+}
+
+static int style_ready_uncached(int ui);
+
+/* The answer is kept: the menu disc cannot change while SWIRL runs, and this is asked every frame while the
+   System tab shows the Style setting. It is worked out again only if the region or theme settings change. */
+int settings_style_ready(int ui) {
+  static int known[UI_END + 1], ready[UI_END + 1];
+  static int key[UI_END + 1];
+  if (ui < UI_START || ui > UI_END)
+    return 0;
+  const int k = 1 + savedata.region + 16 * savedata.aspect + 256 * savedata.custom_theme + 4096 * savedata.custom_theme_num;
+  if (!known[ui] || key[ui] != k) {
+    ready[ui] = style_ready_uncached(ui);
+    key[ui] = k;
+    known[ui] = 1;
+  }
+  return ready[ui];
+}
+
+static int style_ready_uncached(int ui) {
+  static const char *const list_files[] = {"EMPTY.PVR", "THEME/SHARED/HIGHLIGHT.PVR", "THEME/SHARED/ICON_WHITE.PVR",
+                                           "THEME/SHARED/ICON_BLACK.PVR", "FONT/BASILEA.FNT", "FONT/BASILEA_W.PVR", NULL};
+  static const char *const grid_files[] = {"EMPTY.PVR", "THEME/SHARED/HIGHLIGHT.PVR", "FONT/BASILEA.FNT", "FONT/BASILEA_W.PVR",
+                                           NULL};
+  static const char *const gdmenu_files[] = {"THEME/GDMENU/BG_L.PVR", "THEME/GDMENU/BG_R.PVR", "FONT/GDMNUFNT.PVR", NULL};
+  switch (ui) {
+    case UI_SWIRL: return 1;
+    case UI_GDMENU: return all_on_disc(gdmenu_files);
+    case UI_GRID3: return all_on_disc(grid_files) && theme_pictures_on_disc();
+    default: return all_on_disc(list_files) && theme_pictures_on_disc();
+  }
+}
+
+static int y_held(void) {
+  maple_device_t *dev;
+  for (int i = 0; (dev = maple_enum_type(i, MAPLE_FUNC_CONTROLLER)); i++) {
+    cont_state_t *st = (cont_state_t *)maple_dev_status(dev);
+    if (st && (st->buttons & CONT_Y))
+      return 1;
+  }
+  return 0;
+}
+
+static int boot_y;
+
+int settings_boot_y(void) { return boot_y; }
+
+void settings_boot_guard(void) {
+  boot_y = y_held();
+  if (savedata.ui == UI_SWIRL)
+    return;
+  /* only the running style changes; the memory card is written at the next save as usual */
+  if (boot_y) {
+    printf("SWIRL: Y held at start, using the SWIRL style\n");
+    savedata.ui = UI_SWIRL;
+  } else if (!settings_style_ready(savedata.ui)) {
+    printf("SWIRL: the saved style needs openMenu's theme files, using the SWIRL style\n");
+    savedata.ui = UI_SWIRL;
+  }
 }

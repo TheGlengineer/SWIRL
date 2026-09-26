@@ -132,3 +132,9 @@ void settings_load(void);
 void settings_save(void);
 void settings_validate(void);
 openmenu_settings* settings_get(void);
+/* SWIRL: whether the menu disc has the files a style needs (the Classic styles use openMenu's theme) */
+int settings_style_ready(int ui);
+/* SWIRL: at start up, fall back to SWIRL when the saved style cannot run, or when Y is held */
+void settings_boot_guard(void);
+/* SWIRL: Y was held at start up (that press must not also count as Favorite) */
+int settings_boot_y(void);

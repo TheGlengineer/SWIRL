@@ -114,6 +114,9 @@ static int init(void) {
   /* setup internal memory zones */
   draw_init();
 
+  /* SWIRL: never start a style this disc cannot run (hold Y at start up to force SWIRL) */
+  settings_boot_guard();
+
   /* Load UI */
   reload_ui();
 
