@@ -1,4 +1,7 @@
-# $${\color{red}\KNOWN ISSUES WITH THE VM2 AND VMU PRO (logged 09/26/2026 - currently investigating solution, see repo issues list for more details){⚠️ WARNING}}$$
+> [!CAUTION]
+> # ⚠️ Known Issue Impacting Specific Users
+> KNOWN ISSUES WITH THE VM2 AND VMU PRO (logged 09/26/2026 - currently investigating solution, see repo issues list for more details)
+
 
 <div align="center">
 
