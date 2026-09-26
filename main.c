@@ -10,7 +10,9 @@
 
 #include <dc/cdrom.h>
 #include <dc/flashrom.h>
+#include <arch/timer.h>
 #include <dc/maple.h>
+#include <kos/thread.h>
 #include <dc/maple/controller.h>
 #include <dc/pvr.h>
 #include <dc/video.h>
@@ -280,6 +282,25 @@ static void init_gfx_pvr(void) {
     sw_fix_fsaa_clip();
   }
   draw_set_list(PVR_LIST_OP_POLY);
+}
+
+/* SWIRL: KallistiOS waits at start up until every device on every controller port has answered. A memory
+   card that the controller reports but that never answers (a VM2 or VMU Pro busy switching cards, or a faulty
+   VMU) makes that wait endless: a black screen with the VMU logo showing. This replaces KallistiOS's wait with
+   one that gives up after a while (the linker's --wrap sends KallistiOS's call here). A device that turns up
+   later is picked up by KallistiOS's normal hot plug scan. */
+#define SWIRL_SCAN_WAIT_MS 1500
+void __wrap_maple_wait_scan(void); /* linked in place of KallistiOS's maple_wait_scan (see Makefile) */
+void __wrap_maple_wait_scan(void) {
+  const uint64_t start = timer_ms_gettime64();
+  while (maple_state.scan_ready_mask != 0xf) {
+    if (timer_ms_gettime64() - start > SWIRL_SCAN_WAIT_MS) {
+      printf("SWIRL: controller port scan incomplete after %d ms (ports %x), carrying on\n", SWIRL_SCAN_WAIT_MS,
+             maple_state.scan_ready_mask);
+      return;
+    }
+    thd_pass();
+  }
 }
 
 int main(int argc, char *argv[]) {

@@ -17,7 +17,7 @@ OBJCOPY := $(KOS_OBJCOPY)
 RM := rm
 
 CFLAGS := -I. -Dpvr_prim=om_prim -ffunction-sections -fdata-sections -std=c11 -O2 -g -Wno-unknown-pragmas -Wall -Wextra $(OPTIONS)
-LDFLAGS := -Wl,--gc-sections -Wl,-Map,output.map -Wl,--wrap=spu_init,--wrap=spu_shutdown,--wrap=spu_enable,--wrap=spu_disable
+LDFLAGS := -Wl,--gc-sections -Wl,-Map,output.map -Wl,--wrap=spu_init,--wrap=spu_shutdown,--wrap=spu_enable,--wrap=spu_disable,--wrap=maple_wait_scan
 LIBS := -lm
 
 all: clean-elf $(TARGET)
