@@ -17,8 +17,12 @@ may ship without menu changes; the menu then keeps its major.minor version (2.11
 ### CodeBreaker
 
 - "Play with CodeBreaker cheats" is always listed in a game's launch options; without CodeBreaker on the card it is greyed out and says how to add it
-- SWIRL Card Manager: Look and sound > CodeBreaker adds your own PELICAN.BIN (and a CHEATS folder or FCDCHEATS.BIN next to it) to the menu disc
+- SWIRL Card Manager: Art and info > CodeBreaker adds your own PELICAN.BIN (and a CHEATS folder or FCDCHEATS.BIN next to it) to the menu disc
 - Cheats for games whose serial has a dash (for example T-8101N) are found
+
+### SWIRL Card Manager
+
+- VMU screens from the games moved from Look and sound to Art and info, next to the new CodeBreaker panel
 
 ## [2.13.1]
 

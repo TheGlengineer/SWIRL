@@ -75,7 +75,7 @@ game that misbehaves or that you want to start differently:
 Choices are saved per game on your VMU, and the game page then shows **Options (custom)**.
 
 **Play with CodeBreaker cheats** starts the game through CodeBreaker. SWIRL can't include CodeBreaker, so
-add your own `PELICAN.BIN` once in SWIRL Card Manager (**Look and sound > CodeBreaker**) and run **Update
+add your own `PELICAN.BIN` once in SWIRL Card Manager (**Art and info > CodeBreaker**) and run **Update
 SWIRL**; until then the option is greyed out. PlayStation discs are started through Bleem when `BLEEM.BIN` is on the menu disc.
 
 ## System

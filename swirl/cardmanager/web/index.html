@@ -548,7 +548,7 @@ kbd{font-family:Barlow,sans-serif;font-size:.78rem;font-weight:600;color:var(--t
       </section>
 
       <section class="view" data-view="art">
-        <div class="vhead"><div class="grow"><h2>Art and info</h2><p>Box art, descriptions and screenshots shown in SWIRL. Your own edits from a game's Edit window always win over anything filled in here.</p></div></div>
+        <div class="vhead"><div class="grow"><h2>Art and info</h2><p>Box art, descriptions, screenshots, VMU screens and CodeBreaker for SWIRL. Your own edits from a game's Edit window always win over anything filled in here.</p></div></div>
         <div class="grid">
           <div class="panel"><h3>Online art and info</h3>
             <p class="hint tight" id="dbInfo">Downloads the community openMenu art and info databases (about 115 MB, once) and fills in games that have none. Art already on your card and your own edits are never replaced.</p>
@@ -563,11 +563,18 @@ kbd{font-family:Barlow,sans-serif;font-size:.78rem;font-weight:600;color:var(--t
           <div class="panel"><h3>Import DAT files</h3>
             <p class="hint tight">Optional. Point this at GDMENUCardManager's <span class="mono">tools\openMenu\menu_data</span> folder, or wherever you keep BOX.DAT, ICON.DAT and META.DAT. It is used at the next Update SWIRL. Leave it empty to keep the art already on the card.</p>
             <div class="row" style="margin-top:.8rem"><input type="text" id="dats" placeholder="Folder with BOX.DAT, ICON.DAT, META.DAT"><button class="btn" data-browse="dats">Browse</button></div></div>
+          <div class="panel"><h3>VMU screens from the games</h3>
+            <p class="hint tight" data-pc>Boots each game for a few seconds in a hidden emulator on this PC and keeps the picture the game puts on the VMU. About 10 seconds per game.</p>
+            <label class="hint check"><input type="checkbox" id="capMissing"> Only games that have no VMU screen yet</label>
+            <div class="row" style="margin-top:.8rem"><button class="btn" id="capGo" disabled>Capture VMU screens</button><button class="btn" id="capReview" hidden>Review</button></div></div>
+          <div class="panel"><h3>CodeBreaker</h3>
+            <p class="hint tight" id="cbInfo">SWIRL can start games with CodeBreaker cheats. Pick your own CodeBreaker PELICAN.BIN file once.</p>
+            <div class="row" style="margin-top:.8rem"><button class="btn" id="cbPick" disabled>Add CodeBreaker</button><button class="btn" id="cbRemove" hidden>Remove CodeBreaker</button></div></div>
         </div>
       </section>
 
       <section class="view" data-view="look">
-        <div class="vhead"><div class="grow"><h2>Look and sound</h2><p>The VMU pictures and menu music SWIRL uses. Changes go onto the Dreamcast at the next Update SWIRL.</p></div></div>
+        <div class="vhead"><div class="grow"><h2>Look and sound</h2><p>The VMU logo and menu music SWIRL uses. Changes go onto the Dreamcast at the next Update SWIRL.</p></div></div>
         <div class="grid">
           <div class="panel"><h3>VMU logo</h3>
             <div class="media"><div class="vmu sm" id="logoNow">SWIRL logo</div><p class="hint tight" id="logoInfo">Shown on the VMU when SWIRL starts and on its System screens.</p></div>
@@ -575,13 +582,6 @@ kbd{font-family:Barlow,sans-serif;font-size:.78rem;font-weight:600;color:var(--t
           <div class="panel"><h3>Menu music</h3>
             <p class="hint tight" id="musicInfo">SWIRL plays its own theme unless you pick your own music.</p>
             <div class="row" style="margin-top:.8rem"><button class="btn small" id="musicPick" disabled>Use my own music</button><button class="btn small" id="musicRemove" hidden>Back to the SWIRL theme</button></div></div>
-          <div class="panel"><h3>CodeBreaker</h3>
-            <p class="hint tight" id="cbInfo">SWIRL can start games with CodeBreaker cheats. Pick your own CodeBreaker PELICAN.BIN file once.</p>
-            <div class="row" style="margin-top:.8rem"><button class="btn small" id="cbPick" disabled>Add CodeBreaker</button><button class="btn small" id="cbRemove" hidden>Remove CodeBreaker</button></div></div>
-          <div class="panel"><h3>VMU screens from the games</h3>
-            <p class="hint tight" data-pc>Boots each game for a few seconds in a hidden emulator on this PC and keeps the picture the game puts on the VMU. About 10 seconds per game.</p>
-            <label class="hint check"><input type="checkbox" id="capMissing"> Only games that have no VMU screen yet</label>
-            <div class="row" style="margin-top:.8rem"><button class="btn" id="capGo" disabled>Capture VMU screens</button><button class="btn" id="capReview" hidden>Review</button></div></div>
         </div>
       </section>
 

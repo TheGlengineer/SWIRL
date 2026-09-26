@@ -63,6 +63,8 @@ launch options (see [Using SWIRL](USING_SWIRL.md#launch-options)).
 - **Art from the game discs**: uses the artwork inside each disc for games with no box art.
 - **Screenshots**: fetches two screenshots per game from libretro thumbnails.
 - **Import DAT files**: brings in `BOX.DAT`, `ICON.DAT` and `META.DAT` from a GDMENUCardManager or openMenu setup.
+- **VMU screens from the games**: boots each game for a few seconds in a hidden emulator and keeps the picture it draws on the VMU. About 10 seconds per game.
+- **CodeBreaker**: pick your own CodeBreaker `PELICAN.BIN` once (a `CHEATS` folder or `FCDCHEATS.BIN` next to it is added too). **Update SWIRL** puts it on the menu disc, and SWIRL's launch options then offer **Play with CodeBreaker cheats**. SWIRL can't include CodeBreaker itself.
 
 Your own edits from a game's Edit window always win over downloaded art.
 
@@ -71,9 +73,7 @@ Your own edits from a game's Edit window always win over downloaded art.
 ![Look and sound](images/cm-look.png)
 
 - **VMU logo**: shown on the VMU when SWIRL starts. Use your own picture, or go back to the SWIRL logo.
-- **CodeBreaker**: pick your own CodeBreaker `PELICAN.BIN` once (a `CHEATS` folder or `FCDCHEATS.BIN` next to it is added too). **Update SWIRL** puts it on the menu disc, and SWIRL's launch options then offer **Play with CodeBreaker cheats**. SWIRL can't include CodeBreaker itself.
 - **Menu music**: SWIRL plays its theme unless you pick your own WAV or MP3. The theme cannot be deleted, only replaced by your own music, and **Back to the SWIRL theme** restores it.
-- **VMU screens from the games**: boots each game for a few seconds in a hidden emulator and keeps the picture it draws on the VMU. About 10 seconds per game.
 
 ## Collections
 
