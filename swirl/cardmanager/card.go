@@ -476,7 +476,7 @@ func buildMenuImageInto(root, datDir string, allowEmpty bool, log Logger) (strin
 	if err := addExtras(root, c, data, log); err != nil {
 		return work, "", nil, err
 	}
-	addHeaderLogo(data, log)
+	addOpenMenuFiles(data, log) // header logo, plus what the Classic styles need
 	bin := swirlBinary
 	if p := os.Getenv("SWIRL_1ST_READ"); p != "" { // development: test a new menu build
 		// only builds that keep the author credit may be installed
