@@ -74,8 +74,9 @@ game that misbehaves or that you want to start differently:
 
 Choices are saved per game on your VMU, and the game page then shows **Options (custom)**.
 
-If the menu disc has `PELICAN.BIN` (a CodeBreaker image), the sheet also offers **Play with CodeBreaker
-cheats**. PlayStation discs are started through Bleem when `BLEEM.BIN` is on the menu disc.
+**Play with CodeBreaker cheats** starts the game through CodeBreaker. SWIRL can't include CodeBreaker, so
+add your own `PELICAN.BIN` once in SWIRL Card Manager (**Look and sound > CodeBreaker**) and run **Update
+SWIRL**; until then the option is greyed out. PlayStation discs are started through Bleem when `BLEEM.BIN` is on the menu disc.
 
 ## System
 
@@ -100,7 +101,7 @@ Left and right change a setting; **A** runs an action.
 | Start screen saver | After 1 to 30 minutes (5 by default) |
 | Preview screen saver | Shows the chosen style now |
 | VMU saves | Lists the saves on each memory card and can delete them |
-| Save settings to VMU | Saves now (SWIRL also saves on its own) |
+| Save settings to VMU | Saves now (SWIRL also saves on its own). Shows where your settings are saved, for example "Saved on VMU A1", or why they aren't yet |
 | Controller test | Shows every button and stick |
 | Exit to Dreamcast BIOS | Leaves SWIRL |
 

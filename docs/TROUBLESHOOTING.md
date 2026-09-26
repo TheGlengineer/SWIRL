@@ -57,8 +57,14 @@ If a game has never worked, test the image itself in an emulator.
 **No music.** Check **System > Menu music** and **Music volume**. Music comes from `BGM.ADP` on the menu disc;
 **Update SWIRL** puts it there.
 
-**Settings are not kept after power off.** SWIRL saves to the first VMU with a few free blocks. Check
-**System > VMU saves** for space.
+**Settings are not kept after power off.** SWIRL saves a few seconds after a change, to the memory card that
+already has its save or else the first one with 2 free blocks, and shows "Saved to VMU". **System > Save
+settings to VMU** shows where it saved, or why it couldn't (no space, or the card not answering). Check
+**System > VMU saves** for space. With a VM2 or VMU Pro, the card that is active when SWIRL starts is used.
+
+**Black screen at power on, but the VMU shows the logo.** Fixed in 2.13.2: SWIRL no longer waits forever for
+a memory card that doesn't answer. Update SWIRL with Card Manager 2.13.2 or newer. Until then, start with the
+memory card removed, or switch a VM2 or VMU Pro to another card.
 
 **Getting back to SWIRL from a game.** Hold **A + B + X + Y** and press **Start**.
 

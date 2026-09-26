@@ -3,6 +3,23 @@
 SWIRL (the menu) and SWIRL Card Manager share one version number. Card Manager patch releases (2.11.1)
 may ship without menu changes; the menu then keeps its major.minor version (2.11).
 
+## [2.13.2]
+
+### Fixes
+
+- SWIRL no longer stops on a black screen when a memory card doesn't answer at power on (a VM2 or VMU Pro switching cards, or a faulty VMU). It waits up to 1.5 seconds, then starts; the card is picked up when it answers
+- Settings and favorites are kept when a memory card is busy or slow: a failed save is tried again after a few seconds, every save is read back to check it, and the result shows in System > Save settings to VMU
+- If SWIRL started before the memory card was ready, it reads the card's save and merges it before writing, instead of replacing it with default settings
+- A memory card that stops answering can no longer freeze the Dreamcast when a game starts or the style changes: saving gives up after 3 seconds
+- "VMU beep on save" is now saved like the other settings (it was lost at power off unless a game was started)
+- A damaged SWIRL save file is replaced at the next save instead of being ignored
+
+### CodeBreaker
+
+- "Play with CodeBreaker cheats" is always listed in a game's launch options; without CodeBreaker on the card it is greyed out and says how to add it
+- SWIRL Card Manager: Look and sound > CodeBreaker adds your own PELICAN.BIN (and a CHEATS folder or FCDCHEATS.BIN next to it) to the menu disc
+- Cheats for games whose serial has a dash (for example T-8101N) are found
+
 ## [2.13.1]
 
 ### Fixes
