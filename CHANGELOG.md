@@ -10,7 +10,7 @@ may ship without menu changes; the menu then keeps its major.minor version (2.11
 - SWIRL no longer stops on a black screen when a memory card doesn't answer at power on (a VM2 or VMU Pro switching cards, or a faulty VMU). It waits up to 1.5 seconds, then starts; the card is picked up when it answers
 - Settings and favorites are kept when a memory card is busy or slow: a failed save is tried again after a few seconds, every save is read back to check it, and the result shows in System > Save settings to VMU
 - If SWIRL started before the memory card was ready, it reads the card's save and merges it before writing, instead of replacing it with default settings
-- Saves always finish before SWIRL starts a game, changes style or opens the BIOS: the screen shows "Saving to VMU" and keeps moving meanwhile. Only one part of SWIRL uses the memory card at a time. A card that stops answering still ends the save with an error instead of holding the Dreamcast
+- Saves always finish before SWIRL starts a game, changes style or opens the BIOS: the screen shows "Saving... please wait" and keeps moving meanwhile. Only one part of SWIRL uses the memory card at a time. A card that stops answering still ends the save with an error instead of holding the Dreamcast
 - "VMU beep on save" is now saved like the other settings (it was lost at power off unless a game was started)
 - A damaged SWIRL save file is replaced at the next save instead of being ignored
 - Holding Y at power on to go back to the SWIRL style now sticks: the style is saved to the VMU straight away. Before, the Classic style came back at the next power on unless a game was started
