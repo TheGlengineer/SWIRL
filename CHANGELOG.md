@@ -22,6 +22,8 @@ may ship without menu changes; the menu then keeps its major.minor version (2.11
 - A banner shows where every change is: "Unsaved changes. Saving in 3", then "Saving... please wait" (kept up 2 seconds after the save is done), then "Saved to VMU" or why it couldn't save. It shows on every screen, so favourites and launch options are covered too
 - Menu style: picking a style now says "Press A to switch to ... It saves right away." Pressing A saves at once, shows the result, then switches. A style picked but not switched to is dropped when you leave the row
 - No VMU, or no space: the banner says so once instead of trying again
+- Switching style from a Classic style's settings (Save or Apply) no longer starts the first game in SWIRL: the button that made the switch is ignored until it is let go
+- A style change made with Apply in the Classic settings is now saved too, like SWIRL's own Menu style, so the old style doesn't come back at the next power on
 
 ### CodeBreaker
 
