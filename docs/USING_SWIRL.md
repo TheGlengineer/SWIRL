@@ -84,9 +84,14 @@ SWIRL**; until then the option is greyed out. PlayStation discs are started thro
 
 Left and right change a setting; **A** runs an action.
 
+Changes save to the VMU by themselves. A banner at the bottom shows where that is: "Unsaved changes. Saving in
+3", then "Saving... please wait", then "Saved to VMU" (or why it couldn't save). Wait for "Saved to VMU" before
+switching off. **Menu style** is the exception: pick a style with left and right, then press **A** to switch.
+It saves straight away.
+
 | Setting | Choices |
 |---|---|
-| Menu style | SWIRL, Classic list, Classic grid, GDMENU. The Classic styles use openMenu's theme files, which **Update SWIRL** adds; without them the setting says "needs Update SWIRL". Hold **Y** while the Dreamcast starts, until SWIRL appears, to go back to SWIRL |
+| Menu style | SWIRL, Classic list, Classic grid, GDMENU. Press **A** to switch (it saves at once); a style picked but not switched to is dropped when you leave the row. The Classic styles use openMenu's theme files, which **Update SWIRL** adds; without them the setting says "needs Update SWIRL". Hold **Y** while the Dreamcast starts, until SWIRL appears, to go back to SWIRL |
 | Accent colour | Orange, Blue, Green, Pink, Purple, Red, Gold, Teal |
 | Backdrop | Cover colour, Night, Seasonal |
 | Picture quality | High, Standard |

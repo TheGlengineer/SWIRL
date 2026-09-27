@@ -146,6 +146,15 @@ static int toast_frames;
 /* save debounce */
 static int save_countdown;
 static int save_tries; /* failed saves in a row (they are tried again a few times) */
+/* The save banner, so nobody switches off with changes not yet on the VMU:
+   "Unsaved changes. Saving in 3", then "Saving... please wait" until 2 s after the save is really done, then
+   the outcome ("Saved to VMU", or why not). */
+static int save_hold;          /* frames "Saving..." stays up after the save finished */
+static int save_outcome = 1;   /* result waiting to be shown once save_hold runs out (1 = none) */
+static char save_msg[64];      /* the outcome, shown for save_msg_frames */
+static int save_msg_frames;
+static int saving_now;         /* a save that SWIRL waits for (style change, BIOS) is running */
+static void idle_frame(void);
 
 /* optional per game VMU screens made by SWIRL Card Manager */
 static dat_file vmu_dat;
@@ -285,6 +294,22 @@ static void draw_particles(void) {
     else
       sw_circle(parts[i].x, parts[i].y, parts[i].r, c);
   }
+}
+
+static const char *save_banner(char *buf, int len) {
+  if (saving_now || sw_lib_busy() || save_hold > 0)
+    return "Saving... please wait";
+  if (save_msg_frames > 0)
+    return save_msg;
+  if (save_countdown > 0 && sw_lib_dirty()) {
+    const int secs = (save_countdown + 59) / 60;
+    if (save_tries > 0)
+      snprintf(buf, len, "VMU busy. Trying again in %d", secs);
+    else
+      snprintf(buf, len, "Unsaved changes. Saving in %d", secs);
+    return buf;
+  }
+  return NULL;
 }
 
 static void show_toast(const char *msg) {
@@ -1712,8 +1737,14 @@ static void input_tabs(unsigned int btn, int pressed) {
     case TAB_SYSTEM: {
       sw_prefs *p = sw_lib_prefs();
       openmenu_settings *s = settings_get();
+      const int was_sel = sys_sel;
       if (btn == UP && dir_pressed(btn) && sys_sel > 0) sys_sel--;
       if (btn == DOWN && dir_pressed(btn) && sys_sel < SYS_COUNT - 1) sys_sel++;
+      if (was_sel == SYS_STYLE && sys_sel != SYS_STYLE) {
+        /* a style picked but not switched to with A is dropped: the row shows the style in use again */
+        for (int i = 0; i < 4; i++)
+          if (style_values[i] == (int)s->ui) sys_style = i;
+      }
       int d = 0;
       if (btn == LEFT && dir_pressed(btn)) d = -1;
       if ((btn == RIGHT && dir_pressed(btn)) || (btn == A && pressed)) d = 1;
@@ -1730,8 +1761,16 @@ static void input_tabs(unsigned int btn, int pressed) {
                 s->ui = style_values[sys_style];
                 sw_audio_shutdown(); /* before the VMU writes */
                 sw_lib_settings_dirty();
-                show_toast("Saving to VMU");
-                sw_lib_save(); /* one save for both files, finished before the new style touches the VMU */
+                save_countdown = 0;
+                saving_now = 1;
+                const int r = sw_lib_save(); /* one save for both files, finished before the new style touches the VMU */
+                /* keep "Saving..." up for 2 s more, then show the outcome for a moment before the new style starts */
+                save_hold = 120;
+                while (save_hold > 0) { idle_frame(); save_hold--; }
+                saving_now = 0;
+                snprintf(save_msg, sizeof(save_msg), "%s", r == 0 ? "Saved to VMU" : r == -2 ? "Not saved: no VMU with space" : "Not saved: check the VMU");
+                save_msg_frames = 60;
+                while (save_msg_frames > 0) { idle_frame(); save_msg_frames--; }
                 reload_ui();
                 return;
               }
@@ -1780,7 +1819,8 @@ static void input_tabs(unsigned int btn, int pressed) {
               sw_lib_mark_dirty();
               sw_lib_settings_dirty();
               save_tries = 0;
-              if (sw_lib_save_async() == 0) show_toast("Saving to VMU");
+              save_countdown = 0;
+              sw_lib_save_async(); /* the banner shows its progress */
             }
             break;
           case SYS_PADTEST:
@@ -1791,8 +1831,11 @@ static void input_tabs(unsigned int btn, int pressed) {
             changed_pref = 0;
             if (btn == A) {
               sw_audio_shutdown();
-              show_toast("Saving to VMU");
+              save_countdown = 0;
+              saving_now = 1;
               sw_lib_save();
+              save_hold = 120;
+              while (save_hold > 0) { idle_frame(); save_hold--; }
               arch_menu();
             }
             break;
@@ -2346,17 +2389,30 @@ FUNCTION(UI_NAME, drawTR) {
   {
     int r;
     if (sw_lib_save_result(&r)) {
-      if (r == 0) {
-        show_toast("Saved to VMU");
+      save_outcome = r;
+      save_hold = 120; /* "Saving..." stays up 2 s longer, so it is never switched off too soon */
+    }
+    if (save_hold > 0 && --save_hold == 0 && save_outcome != 1) {
+      const int r2 = save_outcome;
+      save_outcome = 1;
+      save_msg_frames = 150;
+      if (r2 == 0) {
+        snprintf(save_msg, sizeof(save_msg), "Saved to VMU");
+        save_tries = 0;
+      } else if (r2 == -2) {
+        /* no memory card, or no room: trying again won't help; the next change tries again */
+        snprintf(save_msg, sizeof(save_msg), "No VMU with space. Changes not saved");
         save_tries = 0;
       } else if (save_tries < 5) {
         /* a busy or slow card: try again after 2, 4, 6, 8 and 10 seconds */
         save_countdown = 120 * ++save_tries;
-        if (save_tries == 1) show_toast(r == -2 ? "No VMU with space to save" : "VMU busy, saving again shortly");
+        save_msg_frames = 0; /* the banner counts down to the next try */
       } else {
-        show_toast(r == -2 ? "Not saved: no VMU with space" : "Not saved: check the VMU");
+        snprintf(save_msg, sizeof(save_msg), "Not saved: check the VMU");
+        save_tries = 0;
       }
     }
+    if (save_msg_frames > 0 && !save_hold) save_msg_frames--;
   }
 
   sw_vmu_tick();
@@ -2394,12 +2450,26 @@ FUNCTION(UI_NAME, drawTR) {
   if (mode == MODE_RESUME) draw_resume();
   if (mode == MODE_LAUNCH) draw_launch();
 
+  char bbuf[64];
+  const char *banner = saver_on ? NULL : save_banner(bbuf, sizeof(bbuf));
+  if (!banner && !saver_on && mode == MODE_TABS && tab == TAB_SYSTEM && sys_sel == SYS_STYLE &&
+      style_values[sys_style] != (int)settings_get()->ui) {
+    /* the style is the one setting that isn't saved by itself: it takes effect (and saves) when A is pressed */
+    snprintf(bbuf, sizeof(bbuf), "Press A to switch to %s. It saves right away.", style_names[sys_style]);
+    banner = bbuf;
+  }
+  if (banner) {
+    const float w = sw_text_width(SWF_SMALL, 12, banner) + 28;
+    sw_rrect(320 - w / 2, 404, w, 28, 14, 0xF0161E33);
+    sw_text_center(SWF_SMALL, 320, 411, 12, C_WHITE, banner);
+  }
   if (toast_frames > 0) {
     float a = toast_frames > 20 ? 1.f : toast_frames / 20.f;
     sw_set_fade(a);
+    const float ty = banner ? 368.f : 404.f; /* above the save banner when both show */
     float w = sw_text_width(SWF_SMALL, 12, toast) + 28;
-    sw_rrect(320 - w / 2, 404, w, 28, 14, 0xF0161E33);
-    sw_text_center(SWF_SMALL, 320, 411, 12, C_WHITE, toast);
+    sw_rrect(320 - w / 2, ty, w, 28, 14, 0xF0161E33);
+    sw_text_center(SWF_SMALL, 320, ty + 7, 12, C_WHITE, toast);
     sw_set_fade(1.f);
   }
 #ifdef SW_SAVER_DEMO

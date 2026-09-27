@@ -17,6 +17,12 @@ may ship without menu changes; the menu then keeps its major.minor version (2.11
 - Holding Y at power on is read several times, and holding it for about a second after a Classic style appears also switches back to SWIRL. A Y held from power on is never passed on to a Classic style (where Y leaves to the BIOS, which could then stop on the Dreamcast logo)
 - Start up is recorded step by step, so a problem report can say exactly where a start stopped
 
+### Saving
+
+- A banner shows where every change is: "Unsaved changes. Saving in 3", then "Saving... please wait" (kept up 2 seconds after the save is done), then "Saved to VMU" or why it couldn't save. It shows on every screen, so favourites and launch options are covered too
+- Menu style: picking a style now says "Press A to switch to ... It saves right away." Pressing A saves at once, shows the result, then switches. A style picked but not switched to is dropped when you leave the row
+- No VMU, or no space: the banner says so once instead of trying again
+
 ### CodeBreaker
 
 - "Play with CodeBreaker cheats" is always listed in a game's launch options; without CodeBreaker on the card it is greyed out and says how to add it

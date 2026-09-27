@@ -65,7 +65,8 @@ If a game has never worked, test the image itself in an emulator.
 **Update SWIRL** puts it there.
 
 **Settings are not kept after power off.** SWIRL saves a few seconds after a change, to the memory card that
-already has its save or else the first one with 2 free blocks, and shows "Saved to VMU". **System > Save
+already has its save or else the first one with 2 free blocks. The banner at the bottom counts down to the
+save, shows "Saving... please wait" while it runs, then "Saved to VMU". **System > Save
 settings to VMU** shows where it saved, or why it couldn't (no space, or the card not answering). Check
 **System > VMU saves** for space. With a VM2 or VMU Pro, the card that is active when SWIRL starts is used.
 
