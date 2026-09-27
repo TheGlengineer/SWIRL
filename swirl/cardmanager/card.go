@@ -134,6 +134,9 @@ func listBackups(root string) []string {
 }
 
 func ScanCard(root string) (*Card, error) {
+	if msg := cardRootErr(root); msg != "" {
+		return nil, errors.New(msg)
+	}
 	st, err := os.Stat(root)
 	if err != nil || !st.IsDir() {
 		return nil, fmt.Errorf("%s is not a folder", root)
