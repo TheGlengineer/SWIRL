@@ -15,6 +15,7 @@
 #include "../backend/db_item.h"
 #include "../backend/gd_item.h"
 #include "../backend/gd_list.h"
+#include "common.h"
 #include "draw_kos.h"
 #include "draw_prototypes.h"
 #include "font_prototypes.h"
@@ -385,17 +386,6 @@ void draw_menu_op(void) {
   /* might be useless */
 }
 
-static void string_outer_concat(char* out, const char* left, const char* right, int len) {
-  const size_t left_len = strlen(left);
-  const size_t right_len = strlen(right);
-  const size_t input_len = left_len + right_len;
-  const size_t padding = input_len < (size_t)len ? (size_t)len - input_len : 0;
-
-  memcpy(out, left, left_len);
-  memset(out + left_len, ' ', padding);
-  memcpy(out + left_len + padding, right, right_len + 1);
-}
-
 static void draw_popup_menu(int x, int y, int width, int height) {
   const int border_width = 2;
   draw_draw_quad(x - border_width, y - border_width, width + (2 * border_width), height + (2 * border_width), menu_bkg_border_color);
@@ -439,9 +429,9 @@ void draw_menu_tr(void) {
         font_bmp_set_color(text_color);
       }
       if (i == CHOICE_REGION && ((unsigned int)choices[i] >= REGION_CHOICES)) {
-        string_outer_concat(line_buf, menu_choice_text[i], custom_theme_text[(int)choices[i] - REGION_CHOICES], 39);
+        ui_string_pad_concat(line_buf, menu_choice_text[i], custom_theme_text[(int)choices[i] - REGION_CHOICES], 39);
       } else {
-        string_outer_concat(line_buf, menu_choice_text[i], menu_choice_array[i][(int)choices[i]], 39);
+        ui_string_pad_concat(line_buf, menu_choice_text[i], menu_choice_array[i][(int)choices[i]], 39);
       }
       font_bmp_draw_main(x_item, cur_y, line_buf);
     }
@@ -545,7 +535,7 @@ void draw_credits_tr(void) {
     cur_y += line_height / 2;
     for (int i = 0; i < num_credits; i++) {
       cur_y += line_height;
-      string_outer_concat(line_buf, credits[i].contributor, credits[i].role, 39);
+      ui_string_pad_concat(line_buf, credits[i].contributor, credits[i].role, 39);
       font_bmp_draw_main(x_item, cur_y, line_buf);
     }
 
@@ -621,7 +611,7 @@ void draw_multidisc_tr(void) {
       strncpy(temp_game_name, list_multidisc[i]->name, sizeof(temp_game_name) - 1);
       temp_game_name[sizeof(temp_game_name) - 1] = '\0';
       snprintf(temp_game_num, sizeof(temp_game_name), "%d", disc_num);
-      string_outer_concat(line_buf, temp_game_name, temp_game_num, 39);
+      ui_string_pad_concat(line_buf, temp_game_name, temp_game_num, 39);
       font_bmp_draw_main(x_item, cur_y, line_buf);
     }
   } else {
