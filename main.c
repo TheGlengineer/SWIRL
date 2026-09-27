@@ -27,6 +27,7 @@
 #include "ui/draw_prototypes.h"
 #include "ui/global_settings.h"
 #include "ui/swirl/sw_trace.h"
+#include "ui/swirl/sw_vmu.h"
 
 /* UI Collection */
 #include "ui/ui_grid.h"
@@ -137,6 +138,13 @@ static int init(void) {
 
   /* SWIRL: never start a style this disc cannot run (hold Y at start up to force SWIRL) */
   settings_boot_guard();
+
+  /* SWIRL: the VMU logo intro plays while the style loads its pictures. The settings file has been read by now,
+     and the intro stops before SWIRL.DAT is touched; the Classic styles draw their own VMU screen. */
+  if (settings_get()->ui == UI_SWIRL) {
+    sw_trace("VMU logo intro");
+    sw_vmu_boot_start();
+  }
 
   /* Load UI */
   sw_trace("style %d: loading", settings_get()->ui);

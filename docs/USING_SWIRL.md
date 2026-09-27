@@ -120,6 +120,13 @@ The panel on the right shows how many games, favorites and launches you have, an
 After the chosen number of minutes without a button press, SWIRL starts the screen saver. Any button brings
 the menu back, and that press does nothing else.
 
+## The VMU screen
+
+The VMU shows the picture for the game you're on. At power on and on the System tab it plays an animated SWIRL
+logo (or animates your own logo, if you added one with Card Manager). When settings are saved it follows the
+banner on the TV: a 3, 2, 1 countdown, "saving", then a tick and SAVED, or a cross with the reason if the save
+didn't work.
+
 ## VM2 and VMU Pro
 
 A VM2, VMU Pro, USB4MAPLE or Pico2Maple can keep a separate memory card for each game. When you start a game,

@@ -312,6 +312,30 @@ static const char *save_banner(char *buf, int len) {
   return NULL;
 }
 
+/* the VMU shows the same save status as the banner, animated */
+static void vmu_status(void) {
+  int kind = SW_VMU_NONE, arg = 0;
+  if (mode == MODE_LAUNCH) {
+    kind = SW_VMU_NONE;
+  } else if (saving_now || sw_lib_busy()) {
+    kind = SW_VMU_WRITING;
+  } else if (save_hold > 0) {
+    kind = SW_VMU_SAVING;
+  } else if (save_msg_frames > 0) {
+    if (!strncmp(save_msg, "Saved", 5)) kind = SW_VMU_SAVED;
+    else if (strstr(save_msg, "space")) kind = SW_VMU_NO_SPACE;
+    else kind = SW_VMU_CHECK;
+  } else if (save_countdown > 0 && sw_lib_dirty()) {
+    if (save_tries > 0) {
+      kind = SW_VMU_BUSY;
+    } else {
+      kind = SW_VMU_COUNTDOWN;
+      arg = save_countdown;
+    }
+  }
+  sw_vmu_overlay(kind, arg);
+}
+
 static void show_toast(const char *msg) {
   strncpy(toast, msg, sizeof(toast) - 1);
   toast[sizeof(toast) - 1] = 0;
@@ -1174,6 +1198,7 @@ static void tick_launch(void) {
     return;
   if (!saved_at) {
     sw_audio_shutdown();
+    sw_vmu_freeze(1); /* the game gets the VMU as it is; nothing more is sent, and no "saving" picture */
     sw_lib_save(); /* SWIRL.DAT and openMenu's settings; the launch screen stays up until it is done */
     saved_at = launch_frames;
     return;
@@ -1186,6 +1211,7 @@ static void tick_launch(void) {
     default: dreamcast_launch_disc_ex((gd_item *)launch_item, &launch_o); break;
   }
   /* only returns when a launcher file was missing */
+  sw_vmu_freeze(0);
   mode = MODE_TABS;
   sw_audio_init();
   show_toast("That launcher is not on the menu disc");
@@ -1902,6 +1928,7 @@ FUNCTION(UI_NAME, init) {
   sw_trace("SWIRL: graphics");
   sw_gfx_init();
   sw_trace("SWIRL: VMU screen");
+  sw_vmu_boot_stop(); /* the power on logo intro: it carries on from the menu, and SWIRL.DAT is next */
   sw_vmu_init();
   sw_trace("SWIRL: VMU.DAT, SHOT.DAT");
   if (!have_vmu_dat) {
@@ -2401,6 +2428,7 @@ FUNCTION(UI_NAME, drawTR) {
       const int r2 = save_outcome;
       save_outcome = 1;
       save_msg_frames = 150;
+      sw_trace("save: result %d shown", r2);
       if (r2 == 0) {
         snprintf(save_msg, sizeof(save_msg), "Saved to VMU");
         save_tries = 0;
@@ -2420,6 +2448,7 @@ FUNCTION(UI_NAME, drawTR) {
     if (save_msg_frames > 0 && !save_hold) save_msg_frames--;
   }
 
+  vmu_status();
   sw_vmu_tick();
   sw_audio_poll();
   tick_surprise();

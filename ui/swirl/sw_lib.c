@@ -3,6 +3,7 @@
  */
 #define _DEFAULT_SOURCE
 #include "sw_lib.h"
+#include "sw_vmu.h"
 
 #include <strings.h>
 #include <time.h>
@@ -349,6 +350,8 @@ static int start_save(void) {
     }
     job->data = pkt;
   }
+  /* the VMU screen shows "writing" now and is left alone until the save is done */
+  sw_vmu_before_write();
   job->settings = settings_dirty;
   dirty = 0;          /* set again if the write fails */
   settings_dirty = 0; /* likewise */

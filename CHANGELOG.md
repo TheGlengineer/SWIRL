@@ -3,6 +3,25 @@
 SWIRL (the menu) and SWIRL Card Manager share one version number. Card Manager patch releases (2.11.1)
 may ship without menu changes; the menu then keeps its major.minor version (2.11).
 
+## [2.14.0-preview.2]
+
+**This is a preview for testing.** Card Manager offers it to anyone who chose **Try the preview**.
+
+### Animated VMU screen
+
+- **Power on:** the SWIRL logo on the VMU breaks apart, spins into a three armed galaxy that collapses into the centre, and the swirl paints itself back like a brush stroke. The word types in and the screen flashes twice. It plays while SWIRL loads, and only after the settings have been read, so start up is unchanged
+- **System tab:** the logo plays its intro, then a glint of light runs along the swirl every few seconds with sparkles around it
+- **Your own logo (LOGO.VMU from Card Manager):** it spirals in from the centre, flashes, and a shine sweeps across it every few seconds
+- **Saving:** the VMU follows the banner. A 3, 2, 1 countdown with a draining ring; a "saving" picture while the card is written; bits flowing into a little VMU during "Saving... please wait"; then a tick that draws itself with "SAVED". A failed save shows a shaking cross with the reason (NO SPACE, VMU BUSY, CHECK VMU)
+- Nothing is sent to the VMU while a save is writing, and the VMU is left alone once a game starts
+- The VMU is drawn on its own thread, so the menu never waits for it
+
+### What to test
+
+- Power on a few times with a VMU in: does the intro play, and does SWIRL start as before?
+- Change a setting and watch the VMU through the countdown, saving and saved
+- VM2 or VMU Pro owners: does the screen animate on your device too?
+
 ## [2.14.0-preview.1]
 
 **This is a preview for testing.** It is offered in SWIRL Card Manager 2.13.3 or newer as **Try the preview**.
