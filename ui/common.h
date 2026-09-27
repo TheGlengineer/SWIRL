@@ -33,6 +33,13 @@ static inline int file_exists(const char *path) {
   return (stat(path, &buffer) == 0);
 }
 
+/**
+ * Joins two strings with spaces between them to reach a minimum width.
+ *
+ * The right string is not truncated if both strings exceed the requested
+ * width. The caller must provide enough space for the result and its
+ * terminating null byte.
+ */
 static inline void ui_string_pad_concat(char *out, const char *left, const char *right, size_t width) {
   const size_t left_len = strlen(left);
   const size_t right_len = strlen(right);
