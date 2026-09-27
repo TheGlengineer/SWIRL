@@ -3,6 +3,17 @@
 SWIRL (the menu) and SWIRL Card Manager share one version number. Card Manager patch releases (2.11.1)
 may ship without menu changes; the menu then keeps its major.minor version (2.11).
 
+## [2.13.3]
+
+Card Manager only. The menu on your card stays 2.13.2.
+
+### Previews
+
+- Card Manager can now offer **previews** of the next version for testing. A green bar says when one is up, with **See what's new**, **Try the preview** and **Not now** (hides it until the next preview)
+- A preview is never installed unless you click **Try the preview**; **Update now** and the daily check only install released versions
+- While you use a preview, a bar says so and links to **Report a problem**. **About > Back to the released version** puts the released version back
+- **About > Tell me about preview versions** (on by default) turns the offers off
+
 ## [2.13.2]
 
 ### Fixes

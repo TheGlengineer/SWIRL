@@ -21,7 +21,10 @@ for arch in arm64 amd64; do
 done
 lipo -create -output "$APP/Contents/MacOS/$NAME" "$OUT/cm-arm64" "$OUT/cm-amd64"
 rm -f "$OUT/cm-arm64" "$OUT/cm-amd64"
-sed "s/@VERSION@/$VERSION/g" macos/Info.plist.in > "$APP/Contents/Info.plist"
+# macOS wants plain numbers here; a preview (2.14.0-preview.1) is 2.14.0 with build number 2.14.0.1
+CORE="${VERSION%%-*}"; BUILD="$CORE"
+[ "$CORE" != "$VERSION" ] && BUILD="$CORE.${VERSION##*.}"
+sed -e "0,/@VERSION@/s//$CORE/" -e "s/@VERSION@/$BUILD/g" macos/Info.plist.in > "$APP/Contents/Info.plist"
 cp macos/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 # an ad hoc signature: not a Developer ID, so the first launch needs Open Anyway (see docs)

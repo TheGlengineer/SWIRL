@@ -26,6 +26,7 @@ import (
 )
 
 var (
+	appVersion    = version // this copy's version (a variable so tests can pretend to be another one)
 	updateRepo    = "TheGlengineer/SWIRL"
 	updateAPIBase = "https://api.github.com"
 	updateAsset   = platformAsset()
@@ -61,6 +62,29 @@ type UpdateInfo struct {
 	Checked   string `json:"checked,omitempty"`
 	Error     string `json:"error,omitempty"`
 	Repo      string `json:"repo"`
+
+	// Previews: test versions published as GitHub pre-releases. They are only ever installed on request,
+	// never by the automatic update. Preview is set when one newer than both this copy and the latest
+	// release is out; OnPreview when this copy is itself a preview (it can go back to the latest release).
+	OnPreview    bool         `json:"onPreview"`
+	CurrentLabel string       `json:"currentLabel"`
+	LatestLabel  string       `json:"latestLabel,omitempty"`
+	Preview      *PreviewInfo `json:"preview,omitempty"`
+	CanGoBack    bool         `json:"canGoBack"` // on a preview, and the latest release can be installed
+
+	assetURL string
+	sha256   string
+}
+
+type PreviewInfo struct {
+	Version   string `json:"version"`
+	Label     string `json:"label"` // 2.14.0 preview 1
+	Name      string `json:"name,omitempty"`
+	Notes     string `json:"notes,omitempty"`
+	Page      string `json:"page,omitempty"`
+	Published string `json:"published,omitempty"`
+	Size      int64  `json:"size,omitempty"`
+	CanApply  bool   `json:"canApply"`
 
 	assetURL string
 	sha256   string
@@ -111,7 +135,8 @@ func CheckUpdate(force bool) *UpdateInfo {
 			return lastUpdate
 		}
 	}
-	u := &UpdateInfo{Current: version, Repo: updateRepo, Checked: time.Now().Format(time.RFC3339)}
+	u := &UpdateInfo{Current: appVersion, Repo: updateRepo, Checked: time.Now().Format(time.RFC3339),
+		OnPreview: isPreview(appVersion), CurrentLabel: versionLabel(appVersion)}
 	lastUpdate = u
 	resp, err := ghGet(updateAPIBase + "/repos/" + updateRepo + "/releases/latest")
 	if err != nil {
@@ -136,25 +161,72 @@ func CheckUpdate(force bool) *UpdateInfo {
 		return u
 	}
 	u.Latest = versionFromTag(rel.Tag)
+	u.LatestLabel = versionLabel(u.Latest)
 	u.Name, u.Notes, u.Page, u.Published = rel.Name, rel.Body, rel.Page, rel.Published
-	u.Newer = u.Latest != "" && versionNewer(u.Latest, version)
+	u.Newer = u.Latest != "" && versionNewer(u.Latest, appVersion)
+	u.assetURL, u.Size, u.sha256 = releaseAsset(rel)
+	u.CanApply = u.Newer && u.assetURL != "" && u.sha256 != "" && canSelfUpdate
+	u.CanGoBack = u.OnPreview && !u.Newer && u.assetURL != "" && u.sha256 != "" && canSelfUpdate
+	if u.OnPreview || LoadUIPrefs().OfferPreviews() {
+		u.Preview = newestPreview(u.Latest)
+	}
+	return u
+}
+
+// releaseAsset finds this platform's file in a release, with its SHA-256 (from GitHub or SHA256SUMS.txt).
+func releaseAsset(rel ghRelease) (url string, size int64, sha string) {
 	var sums string
 	for _, a := range rel.Assets {
 		switch {
 		case strings.EqualFold(a.Name, updateAsset):
-			u.assetURL, u.Size = a.URL, a.Size
+			url, size = a.URL, a.Size
 			if d, ok := strings.CutPrefix(a.Digest, "sha256:"); ok {
-				u.sha256 = strings.ToLower(d)
+				sha = strings.ToLower(d)
 			}
 		case strings.EqualFold(a.Name, "SHA256SUMS.txt"):
 			sums = a.URL
 		}
 	}
-	if u.sha256 == "" && sums != "" {
-		u.sha256 = shaFromSums(sums, updateAsset)
+	if sha == "" && sums != "" && url != "" {
+		sha = shaFromSums(sums, updateAsset)
 	}
-	u.CanApply = u.Newer && u.assetURL != "" && u.sha256 != "" && canSelfUpdate
-	return u
+	return
+}
+
+// newestPreview looks through the recent releases for the newest preview that is newer than this copy and
+// than the latest release. nil when there is none (or GitHub can't be asked).
+func newestPreview(latest string) *PreviewInfo {
+	resp, err := ghGet(updateAPIBase + "/repos/" + updateRepo + "/releases?per_page=15")
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
+	var rels []ghRelease
+	if json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(&rels) != nil {
+		return nil
+	}
+	var best *ghRelease
+	for i := range rels {
+		r := &rels[i]
+		v := versionFromTag(r.Tag)
+		if r.Draft || !r.Pre || !isPreview(v) || !versionNewer(v, appVersion) || (latest != "" && !versionNewer(v, latest)) {
+			continue
+		}
+		if best == nil || versionNewer(v, versionFromTag(best.Tag)) {
+			best = r
+		}
+	}
+	if best == nil {
+		return nil
+	}
+	p := &PreviewInfo{Version: versionFromTag(best.Tag), Name: best.Name, Notes: best.Body, Page: best.Page, Published: best.Published}
+	p.Label = versionLabel(p.Version)
+	p.assetURL, p.Size, p.sha256 = releaseAsset(*best)
+	p.CanApply = p.assetURL != "" && p.sha256 != "" && canSelfUpdate
+	return p
 }
 
 // shaFromSums reads "hash  name" lines (sha256sum output).
@@ -178,12 +250,16 @@ func updatesDir() string { return filepath.Join(appDataDir(), "updates") }
 
 // downloadUpdate fetches the new exe and checks it against the published SHA-256.
 func downloadUpdate(u *UpdateInfo) (string, error) {
+	return download(u.Latest, u.assetURL, u.Size, u.sha256)
+}
+
+func download(ver, url string, size int64, sum string) (string, error) {
 	if err := os.MkdirAll(updatesDir(), 0o755); err != nil {
 		return "", err
 	}
-	dst := filepath.Join(updatesDir(), fmt.Sprintf("SWIRL-Card-Manager-%s%s", u.Latest, filepath.Ext(updateAsset)))
+	dst := filepath.Join(updatesDir(), fmt.Sprintf("SWIRL-Card-Manager-%s%s", ver, filepath.Ext(updateAsset)))
 	tmp := dst + ".part"
-	req, _ := http.NewRequest("GET", u.assetURL, nil)
+	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("User-Agent", "SWIRL-Card-Manager/"+version)
 	resp, err := (&http.Client{Timeout: 15 * time.Minute}).Do(req)
 	if err != nil {
@@ -198,7 +274,7 @@ func downloadUpdate(u *UpdateInfo) (string, error) {
 		return "", err
 	}
 	h := sha256.New()
-	total := u.Size
+	total := size
 	if total <= 0 {
 		total = resp.ContentLength
 	}
@@ -224,7 +300,7 @@ func downloadUpdate(u *UpdateInfo) (string, error) {
 		}
 	}
 	f.Close()
-	if got := hex.EncodeToString(h.Sum(nil)); got != u.sha256 {
+	if got := hex.EncodeToString(h.Sum(nil)); got != sum {
 		os.Remove(tmp)
 		return "", errors.New("the downloaded file does not match the published checksum, so it was not used")
 	}
@@ -235,26 +311,48 @@ func downloadUpdate(u *UpdateInfo) (string, error) {
 	return dst, nil
 }
 
-// StartUpdate downloads the latest release and hands over to it.
-func StartUpdate() error {
+// StartUpdate installs a version and hands over to it. kind "" is the latest release when it is newer (the
+// normal update); "preview" is the newest preview; "stable" goes back from a preview to the latest release.
+func StartUpdate(kind string) error {
 	u := CheckUpdate(true)
 	if u.Error != "" {
 		return errors.New(u.Error)
 	}
-	if !u.Newer {
-		return errors.New("this is already the newest version")
+	ver, url, size, sum := u.Latest, u.assetURL, u.Size, u.sha256
+	switch kind {
+	case "preview":
+		p := u.Preview
+		if p == nil {
+			return errors.New("there is no preview version to try right now")
+		}
+		if !p.CanApply {
+			return errors.New("this preview cannot be installed from here; download it from its GitHub page")
+		}
+		ver, url, size, sum = p.Version, p.assetURL, p.Size, p.sha256
+	case "stable":
+		if !u.OnPreview && !u.Newer {
+			return errors.New("this is already the latest release")
+		}
+		if !u.CanGoBack && !u.CanApply {
+			return errors.New("the latest release cannot be installed from here; download it from its GitHub page")
+		}
+	default:
+		if !u.Newer {
+			return errors.New("this is already the newest version")
+		}
+		if !u.CanApply {
+			return errors.New("this release cannot be installed from here; download it from its GitHub page")
+		}
 	}
-	if !u.CanApply {
-		return errors.New("this release cannot be installed from here; download it from its GitHub page")
-	}
-	return runJob("Downloading SWIRL Card Manager "+u.Latest, "", func() error {
-		jobLog("Downloading version %s from github.com/%s", u.Latest, updateRepo)
-		exe, err := downloadUpdate(u)
+	label := versionLabel(ver)
+	return runJob("Downloading SWIRL Card Manager "+label, "", func() error {
+		jobLog("Downloading version %s from github.com/%s", label, updateRepo)
+		exe, err := download(ver, url, size, sum)
 		if err != nil {
 			return err
 		}
 		jobLog("Checksum verified.")
-		jobLog("Installing version %s. The app restarts in its own window in a few seconds.", u.Latest)
+		jobLog("Installing version %s. The app restarts in its own window in a few seconds.", label)
 		return handOverToUpdate(exe)
 	})
 }

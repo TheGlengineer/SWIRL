@@ -124,7 +124,13 @@ type UIPrefs struct {
 	// AutoUpdate turns the daily check for a newer version on GitHub on or off (on when unset)
 	AutoUpdate *bool  `json:"autoUpdate,omitempty"`
 	SkipUpdate string `json:"skipUpdate,omitempty"` // a version the owner chose not to be told about again
+	// PreviewOffers tells the owner when a preview (test) version is out (on when unset); SkipPreview is a
+	// preview they answered "Not now" to
+	PreviewOffers *bool  `json:"previewOffers,omitempty"`
+	SkipPreview   string `json:"skipPreview,omitempty"`
 }
+
+func (p UIPrefs) OfferPreviews() bool { return p.PreviewOffers == nil || *p.PreviewOffers }
 
 func (p UIPrefs) UpdateAuto() bool { return p.AutoUpdate == nil || *p.AutoUpdate }
 

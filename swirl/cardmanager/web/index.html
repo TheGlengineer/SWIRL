@@ -463,6 +463,8 @@ kbd{font-family:Barlow,sans-serif;font-size:.78rem;font-weight:600;color:var(--t
 /* update available */
 .updbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem .9rem;margin:.9rem 1.5rem 0;padding:.65rem .9rem;border:1px solid rgba(242,140,40,.45);background:var(--orange-t);border-radius:.8rem;font-size:.9rem;flex:none}
 .updbar[hidden]{display:none}
+.updbar.preview{border-color:rgba(63,185,107,.5);background:rgba(63,185,107,.12)}
+.updbar.preview svg{stroke:var(--green)}
 .updbar svg{width:1.2rem;height:1.2rem;stroke:var(--orange);fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
 .updbar .t{flex:1 1 16rem;min-width:0}
 .updbar .t small{display:block;color:var(--dim)}
@@ -743,6 +745,8 @@ kbd{font-family:Barlow,sans-serif;font-size:.78rem;font-weight:600;color:var(--t
       <button class="btn" id="abUpd">Check for updates</button>
       <span class="msg" id="abUpdMsg"></span>
       <label><input type="checkbox" id="abAuto"> Check automatically once a day</label>
+      <label title="Previews are test versions of what's coming next. They are only installed if you choose to."><input type="checkbox" id="abPrev"> Tell me about preview versions</label>
+      <button class="btn small" id="abBack" hidden>Back to the released version</button>
       <a class="btn small ghost" id="abCoffee" href="https://buymeacoffee.com/thglengineer" target="_blank" rel="noopener" title="SWIRL is free. This is an optional thank you.">Buy me a coffee</a>
     </div>
   </div>
@@ -2030,47 +2034,96 @@ async function checkUpdates(force) {
   return upd;
 }
 function fmtDay(t) { const d = new Date(t); return isNaN(d) ? "" : d.toLocaleDateString(undefined, { dateStyle: "medium" }); }
+let previewBarHidden = false;
 function renderUpdates(fromAbout) {
   const u = upd || {};
+  const p = u.preview;
   // the About window
   if (u.error) $("abUpdMsg").textContent = fromAbout ? u.error : "";
-  else if (u.newer) $("abUpdMsg").innerHTML = `Version <b>${esc(u.latest)}</b> is available.`;
-  else if (u.latest) $("abUpdMsg").textContent = `You have the newest version.`;
+  else if (u.newer) $("abUpdMsg").innerHTML = `Version <b>${esc(u.latestLabel || u.latest)}</b> is available.`;
+  else if (u.onPreview) $("abUpdMsg").innerHTML = `You're testing <b>${esc(u.currentLabel)}</b>.` + (p ? ` <b>${esc(p.label)}</b> is out.` : "");
+  else if (u.latest) $("abUpdMsg").innerHTML = `You have the newest version.` + (p && uip.previewOffers !== false ? ` A preview, <b>${esc(p.label)}</b>, is available for testing.` : "");
   else if (!fromAbout) $("abUpdMsg").textContent = "";
   if (u.newer && fromAbout) $("abUpd").textContent = "See what's new";
-  // the bar across the top
+  $("abPrev").checked = uip.previewOffers !== false;
+  $("abBack").hidden = !(u.onPreview && u.canGoBack && u.latest);
+  if (u.latest) $("abBack").textContent = `Back to ${u.latestLabel || u.latest}, the released version`;
+  // the bar across the top: an update first, then a preview to try, then the preview in use
   const bar = $("updBar");
-  if (!u.newer || (uip.skipUpdate === u.latest && !fromAbout)) { bar.hidden = true; return; }
-  bar.hidden = false;
-  bar.innerHTML = `<svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
-    <span class="t"><b>SWIRL Card Manager ${esc(u.latest)} is available</b><small>You have ${esc(u.current)}.${u.published ? " Released " + esc(fmtDay(u.published)) + "." : ""}</small></span>
-    <button class="btn small" id="updNotesBtn">What's new</button>
-    ${u.canApply ? `<button class="btn small primary" id="updNowBtn">Update now</button>` : `<a class="btn small primary" href="${esc(u.page || "")}" target="_blank" rel="noopener">Download</a>`}
-    <button class="btn small ghost" id="updSkipBtn" title="Hide until the next version">Skip this version</button>`;
-  $("updNotesBtn").onclick = showUpdateNotes;
-  if ($("updNowBtn")) $("updNowBtn").onclick = startUpdate;
-  $("updSkipBtn").onclick = () => { uip.skipUpdate = u.latest; saveUIP(); bar.hidden = true; };
+  bar.classList.remove("preview");
+  if (u.newer && (uip.skipUpdate !== u.latest || fromAbout)) {
+    bar.hidden = false;
+    bar.innerHTML = `<svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+      <span class="t"><b>SWIRL Card Manager ${esc(u.latestLabel || u.latest)} is available</b><small>You have ${esc(u.currentLabel || u.current)}.${u.published ? " Released " + esc(fmtDay(u.published)) + "." : ""}</small></span>
+      <button class="btn small" id="updNotesBtn">What's new</button>
+      ${u.canApply ? `<button class="btn small primary" id="updNowBtn">Update now</button>` : `<a class="btn small primary" href="${esc(u.page || "")}" target="_blank" rel="noopener">Download</a>`}
+      <button class="btn small ghost" id="updSkipBtn" title="Hide until the next version">Skip this version</button>`;
+    $("updNotesBtn").onclick = () => showUpdateNotes("");
+    if ($("updNowBtn")) $("updNowBtn").onclick = () => startUpdate("");
+    $("updSkipBtn").onclick = () => { uip.skipUpdate = u.latest; saveUIP(); bar.hidden = true; };
+    return;
+  }
+  if (p && uip.previewOffers !== false && uip.skipPreview !== p.version) {
+    bar.hidden = false;
+    bar.classList.add("preview");
+    bar.innerHTML = `<svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3M7.5 14h9"/></svg>
+      <span class="t"><b>SWIRL ${esc(p.label)} is available for testing</b><small>A preview of what's coming next, for anyone who'd like to help test it. You can go back to the released version at any time from About.</small></span>
+      <button class="btn small" id="prevNotesBtn">See what's new</button>
+      ${p.canApply ? `<button class="btn small primary" id="prevGoBtn">Try the preview</button>` : `<a class="btn small primary" href="${esc(p.page || "")}" target="_blank" rel="noopener">Download</a>`}
+      <button class="btn small ghost" id="prevSkipBtn" title="Hide until the next preview">Not now</button>`;
+    $("prevNotesBtn").onclick = () => showUpdateNotes("preview");
+    if ($("prevGoBtn")) $("prevGoBtn").onclick = () => startUpdate("preview");
+    $("prevSkipBtn").onclick = () => { uip.skipPreview = p.version; saveUIP(); renderUpdates(false); };
+    return;
+  }
+  if (u.onPreview && !previewBarHidden) {
+    bar.hidden = false;
+    bar.classList.add("preview");
+    bar.innerHTML = `<svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3M7.5 14h9"/></svg>
+      <span class="t"><b>You're testing SWIRL ${esc(u.currentLabel)}</b><small>Thank you. Please report anything that doesn't work. To go back to the released version, open About.</small></span>
+      <a class="btn small" href="https://github.com/${esc(u.repo || "TheGlengineer/SWIRL")}/issues/new/choose" target="_blank" rel="noopener">Report a problem</a>
+      <button class="btn small ghost" id="prevHideBtn">Hide</button>`;
+    $("prevHideBtn").onclick = () => { previewBarHidden = true; bar.hidden = true; };
+    return;
+  }
+  bar.hidden = true;
 }
-function showUpdateNotes() {
+let notesKind = "";
+function showUpdateNotes(kind) {
   const u = upd || {};
-  $("updTitle").textContent = `SWIRL Card Manager ${u.latest}`;
-  $("updWhen").textContent = u.published ? "Released " + fmtDay(u.published) : "";
-  $("updIntro").textContent = `You have ${u.current}. ${u.canApply ? `Update now downloads it from GitHub, checks it, installs it on ${IS_MAC ? "this Mac" : "this PC"} and reopens the app.` : "Download it from its GitHub page."}`;
-  $("updNotes").textContent = (u.notes || "No release notes.").replace(/\r/g, "").replace(/^#+\s*/gm, "").replace(/^[-*]\s+/gm, "\u2022 ").replace(/\*\*/g, "");
-  $("updPage").href = u.page || "#";
-  $("updGo").hidden = !u.canApply;
+  notesKind = kind || "";
+  const pv = notesKind === "preview" ? u.preview || {} : null;
+  const r = pv ? pv : { label: u.latestLabel || u.latest, published: u.published, notes: u.notes, page: u.page, canApply: u.canApply };
+  $("updTitle").textContent = pv ? `SWIRL ${r.label}` : `SWIRL Card Manager ${r.label}`;
+  $("updWhen").textContent = r.published ? "Released " + fmtDay(r.published) : "";
+  const how = `downloads it from GitHub, checks it, installs it on ${IS_MAC ? "this Mac" : "this PC"} and reopens the app.`;
+  $("updIntro").innerHTML = pv
+    ? `You have ${esc(u.currentLabel || u.current)}. Previews are test versions: most things work, but some may not. <b>Try the preview</b> ${how} To go back later, open About and choose the released version.`
+    : `You have ${esc(u.currentLabel || u.current)}. ${r.canApply ? `<b>Update now</b> ${how}` : "Download it from its GitHub page."}`;
+  $("updNotes").textContent = (r.notes || "No release notes.").replace(/\r/g, "").replace(/^#+\s*/gm, "").replace(/^[-*]\s+/gm, "\u2022 ").replace(/\*\*/g, "");
+  $("updPage").href = r.page || "#";
+  $("updGo").hidden = !r.canApply;
+  $("updGo").textContent = pv ? "Try the preview" : "Update now";
   if ($("aboutDlg").open) $("aboutDlg").close();
   $("updDlg").showModal();
 }
-async function startUpdate() {
+async function startUpdate(kind) {
   if (busyJob()) { alert("Wait for the current task to finish first."); return; }
   if ($("updDlg").open) $("updDlg").close();
-  await startJob("Updating SWIRL Card Manager", "/api/update/apply", {});
+  const title = kind === "preview" ? "Installing the SWIRL preview" : kind === "stable" ? "Going back to the released version" : "Updating SWIRL Card Manager";
+  await startJob(title, "/api/update/apply", { kind: kind || "" });
 }
 function busyJob() { return !!jobPoll; }
 $("updLater").onclick = () => $("updDlg").close();
-$("updGo").onclick = startUpdate;
-$("abUpd").onclick = () => { if (upd && upd.newer && $("abUpd").textContent !== "Check for updates") showUpdateNotes(); else checkUpdates(true); };
+$("updGo").onclick = () => startUpdate(notesKind);
+$("abUpd").onclick = () => { if (upd && upd.newer && $("abUpd").textContent !== "Check for updates") showUpdateNotes(""); else checkUpdates(true); };
+$("abPrev").onchange = () => { uip.previewOffers = $("abPrev").checked; if (uip.previewOffers) uip.skipPreview = ""; saveUIP(); checkUpdates(true); };
+$("abBack").onclick = () => {
+  const u = upd || {};
+  if (!confirm(`Go back to SWIRL Card Manager ${u.latestLabel || u.latest}, the released version? After it restarts, click Update SWIRL to put its menu back on your card.`)) return;
+  if ($("aboutDlg").open) $("aboutDlg").close();
+  startUpdate("stable");
+};
 $("abAuto").onchange = () => { uip.autoUpdate = $("abAuto").checked; saveUIP(); if (uip.autoUpdate) checkUpdates(false); };
 </script>
 </body>

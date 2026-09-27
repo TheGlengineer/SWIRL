@@ -131,6 +131,20 @@ one, a bar appears at the top with **What's new** and **Update now**. Updating d
 verifies its SHA-256 checksum, installs it and reopens the app. Then click **Update SWIRL** to put the new
 menu on your card.
 
+### Previews
+
+Before a big version is released, a **preview** of it may be put up for testing. Previews are never
+installed by **Update now** or the automatic check. When one is up, a green bar says so, with:
+
+- **See what's new**: the preview's notes, including what to test.
+- **Try the preview**: installs the preview copy of Card Manager (checksum verified, like any update). Then
+  click **Update SWIRL** to put the preview menu on your card.
+- **Not now**: hides the bar until the next preview.
+
+While you use a preview, a bar reminds you and links to **Report a problem**. To go back, open **About** and
+click **Back to the released version**, then **Update SWIRL**. Your games, art and settings are not changed
+by either step. To stop hearing about previews, untick **Tell me about preview versions** in About.
+
 ## Keyboard shortcuts
 
 | Keys | What they do |

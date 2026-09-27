@@ -168,20 +168,63 @@ func dirBytes(p string) int64 {
 	return n
 }
 
-// versionNewer reports whether a is a later version than b (2.10 > 2.9).
+// versionNewer reports whether a is a later version than b (2.10 > 2.9). A preview such as 2.14.0-preview.1
+// comes before its release 2.14.0 and after 2.13.x; previews of one version are ordered by their number.
 func versionNewer(a, b string) bool {
-	pa, pb := strings.Split(a, "."), strings.Split(b, ".")
-	for i := 0; i < len(pa) || i < len(pb); i++ {
+	ca, pa := splitVersion(a)
+	cb, pb := splitVersion(b)
+	na, nb := strings.Split(ca, "."), strings.Split(cb, ".")
+	for i := 0; i < len(na) || i < len(nb); i++ {
 		var x, y int
-		if i < len(pa) {
-			fmt.Sscan(pa[i], &x)
+		if i < len(na) {
+			fmt.Sscan(na[i], &x)
 		}
-		if i < len(pb) {
-			fmt.Sscan(pb[i], &y)
+		if i < len(nb) {
+			fmt.Sscan(nb[i], &y)
 		}
 		if x != y {
 			return x > y
 		}
 	}
-	return false
+	switch {
+	case pa == pb:
+		return false
+	case pa == "": // the release itself is newer than any of its previews
+		return true
+	case pb == "":
+		return false
+	}
+	return previewNumber(pa) > previewNumber(pb)
+}
+
+// splitVersion splits "2.14.0-preview.1" into "2.14.0" and "preview.1".
+func splitVersion(v string) (core, pre string) {
+	v = strings.TrimSpace(v)
+	if i := strings.IndexByte(v, '-'); i >= 0 {
+		return v[:i], v[i+1:]
+	}
+	return v, ""
+}
+
+func previewNumber(pre string) int {
+	n := 0
+	if i := strings.LastIndexByte(pre, '.'); i >= 0 {
+		fmt.Sscan(pre[i+1:], &n)
+	}
+	return n
+}
+
+// isPreview reports whether v is a preview version (2.14.0-preview.1).
+func isPreview(v string) bool {
+	_, pre := splitVersion(v)
+	return pre != ""
+}
+
+// versionLabel is how a version reads to people: "2.14.0 preview 1".
+func versionLabel(v string) string {
+	core, pre := splitVersion(v)
+	if pre == "" {
+		return core
+	}
+	return core + " preview " + fmt.Sprint(previewNumber(pre))
 }

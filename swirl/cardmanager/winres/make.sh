@@ -1,19 +1,23 @@
 #!/bin/sh
 # Builds rsrc_windows_amd64.syso (icon, version info, manifest). Run after changing the version.
-# usage: winres/make.sh 2.7.0
+# usage: winres/make.sh 2.7.0   (or a preview: winres/make.sh 2.14.0-preview.1)
 set -e
 cd "$(dirname "$0")"
-V="$1"; IFS=. read a b c <<END
-$V
+V="$1"
+# a preview (2.14.0-preview.1) keeps its numbers in the fourth place: 2,14,0,1
+CORE="${V%%-*}"; PRE=""
+[ "$CORE" != "$V" ] && PRE="${V##*.}"
+IFS=. read a b c <<END
+$CORE
 END
-c=${c:-0}
+c=${c:-0}; d=${PRE:-0}
 cat > app.rc <<RC
 #include <winver.h>
 1 ICON "../assets/app.ico"
 1 24 "app.manifest"
 VS_VERSION_INFO VERSIONINFO
-FILEVERSION $a,$b,$c,0
-PRODUCTVERSION $a,$b,$c,0
+FILEVERSION $a,$b,$c,$d
+PRODUCTVERSION $a,$b,$c,$d
 FILEOS VOS_NT_WINDOWS32
 FILETYPE VFT_APP
 BEGIN

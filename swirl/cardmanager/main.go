@@ -23,7 +23,7 @@ import (
 //go:embed web
 var webFS embed.FS
 
-const version = "2.13.2"
+const version = "2.13.3"
 
 var (
 	mu       sync.Mutex
@@ -743,7 +743,10 @@ func serve() {
 		}
 		writeJSON(w, CheckUpdate(force))
 	}))
-	mux.HandleFunc("/api/update/apply", post(func(m map[string]any) (any, error) { return nil, StartUpdate() }))
+	mux.HandleFunc("/api/update/apply", post(func(m map[string]any) (any, error) {
+		kind, _ := m["kind"].(string)
+		return nil, StartUpdate(kind)
+	}))
 	mux.HandleFunc("/api/app/uninstall", post(func(m map[string]any) (any, error) { return nil, startUninstall() }))
 
 	// one copy at a time: a second start just opens another window onto the first, unless it is a newer

@@ -181,6 +181,18 @@ jobs:
             on && /^## / {exit}
             on {print}' CHANGELOG.md > notes.md
           [ -s notes.md ] || echo "SWIRL $VERSION" > notes.md
+          case "$VERSION" in *-*)
+            # a preview: only people who chose to try it get it, from Card Manager's green banner
+            cat >> notes.md <<'NOTES'
+
+          ---
+          **This is a preview.** It is for testing and is not offered as a normal update.
+          - **Try it:** in SWIRL Card Manager 2.13.3 or newer, click **Try the preview** on the green banner. Then click **Update SWIRL** to put the preview menu on your card.
+          - **Go back:** in Card Manager, open **About** and click **Back to the released version**. Then click **Update SWIRL** again.
+          - **Tell us how it went:** [report a problem or say it works](https://github.com/${{ github.repository }}/issues/new/choose).
+          NOTES
+            ;;
+          *)
           cat >> notes.md <<'NOTES'
 
           ---
@@ -189,6 +201,8 @@ jobs:
           - **Mac (beta):** download `SWIRL-Card-Manager-macOS.dmg`, open it and drag the app to Applications. The first time, macOS asks you to allow it: see [Getting started](https://github.com/${{ github.repository }}/blob/master/docs/GETTING_STARTED.md#on-a-mac). The Mac version is new, so please [report anything that does not work](https://github.com/${{ github.repository }}/issues/new/choose).
           - Already installed? Click **Update now** in Card Manager. Then click **Update SWIRL** to put the new menu on your card.
           NOTES
+            ;;
+          esac
           if [ ! -f dist/SWIRL-Card-Manager-macOS.dmg ]; then
             printf '\n_The Mac beta was not built for this release; Mac users can keep using the previous version._\n' >> notes.md
           fi
@@ -198,11 +212,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # "2.14.0-preview.1" is published as a pre-release named "SWIRL 2.14.0 preview 1"
+          TITLE="SWIRL $VERSION"; PRE=""
+          case "$VERSION" in *-preview.*) TITLE="SWIRL ${VERSION%%-*} preview ${VERSION##*.}"; PRE="--prerelease";; *-*) PRE="--prerelease";; esac
           FILES=$(ls dist/SWIRL-Card-Manager.exe dist/SWIRL-Card-Manager-macOS.dmg dist/SWIRL-Card-Manager-macOS.zip dist/1ST_READ.BIN dist/SHA256SUMS.txt 2>/dev/null)
           if gh release view "$TAG" >/dev/null 2>&1; then
             # a release made on github.com first: add the files and the notes from CHANGELOG.md
             gh release upload "$TAG" $FILES --clobber
-            gh release edit "$TAG" --title "SWIRL $VERSION" --notes-file notes.md
+            gh release edit "$TAG" --title "$TITLE" --notes-file notes.md $PRE
           else
-            gh release create "$TAG" $FILES --title "SWIRL $VERSION" --notes-file notes.md
+            gh release create "$TAG" $FILES --title "$TITLE" --notes-file notes.md $PRE
           fi
