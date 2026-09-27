@@ -176,11 +176,14 @@ static const char *transform_date_readable(char out[11], const char *in) {
 }
 
 static void string_outer_concat(char *out, const char *left, const char *right, int len) {
-  const int input_len = strlen(left) + strlen(right);
-  strcpy(out, left);
-  for (int i = 0; i < len - input_len; i++)
-    strcat(out, " ");
-  strcat(out, right);
+  const size_t left_len = strlen(left);
+  const size_t right_len = strlen(right);
+  const size_t input_len = left_len + right_len;
+  const size_t padding = input_len < (size_t)len ? (size_t)len - input_len : 0;
+
+  memcpy(out, left, left_len);
+  memset(out + left_len, ' ', padding);
+  memcpy(out + left_len + padding, right, right_len + 1);
 }
 
 static const char *region_code_to_readable(const char *in) {
