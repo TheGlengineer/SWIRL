@@ -233,6 +233,49 @@ func runFormatHelper(root string, disk int, status string) int {
 	return 0
 }
 
+// elevatableExe returns a copy of this binary on a normal filesystem that root can
+// read. The AppImage runtime keeps the real binary on a FUSE mount under
+// /tmp/.mount_*, and FUSE denies access to anyone but the mounting user (root
+// included), so pkexec/sudo would fail with "Permission denied". Copying the binary
+// to a world-readable path in the data dir sidesteps that.
+func elevatableExe() (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	if !strings.HasPrefix(filepath.Clean(exe), filepath.Join(os.TempDir(), ".mount_")) {
+		return exe, nil
+	}
+	dst := filepath.Join(filepath.Dir(dbDir()), "swirl-format-helper")
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		return "", err
+	}
+	dstExe := filepath.Join(dst, "SWIRL-Card-Manager")
+	if same, _ := sameFile(exe, dstExe); same {
+		return dstExe, nil
+	}
+	if err := copyFile(exe, dstExe); err != nil {
+		return "", err
+	}
+	if err := os.Chmod(dstExe, 0o755); err != nil {
+		return "", err
+	}
+	return dstExe, nil
+}
+
+// sameFile reports whether two paths are the same file (size and mtime agree).
+func sameFile(a, b string) (bool, error) {
+	sa, err := os.Stat(a)
+	if err != nil {
+		return false, err
+	}
+	sb, err := os.Stat(b)
+	if err != nil {
+		return false, err
+	}
+	return sa.Size() == sb.Size() && sa.ModTime().Equal(sb.ModTime()), nil
+}
+
 // formatCard erases and formats the card. If this app is not running as root, Linux
 // asks for the password (pkexec, or sudo when there is no PolicyKit agent) and a
 // helper copy of the app does the work, reporting progress through a status file.
@@ -240,7 +283,7 @@ func formatCard(root string, disk int, report func(float64, string)) (string, er
 	if os.Geteuid() == 0 {
 		return doFormat(root, disk, report)
 	}
-	exe, err := os.Executable()
+	exe, err := elevatableExe()
 	if err != nil {
 		return "", err
 	}
