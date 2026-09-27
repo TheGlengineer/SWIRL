@@ -39,10 +39,17 @@ computer. Download it from the release page.
 ## On the Dreamcast
 
 **SWIRL froze after choosing a Classic style, or no longer starts with the VMU in.** Hold **Y** on the
-controller while the Dreamcast starts: SWIRL starts in its own style again. Then run **Update SWIRL** in Card
+controller while the Dreamcast starts, and keep holding it until SWIRL appears: SWIRL starts in its own style
+again. Then run **Update SWIRL** in Card
 Manager (2.13.1 or newer), which adds the openMenu theme files the Classic styles need. Before 2.13.1, cards
 set up from GDMENU or from scratch did not have them. Card Manager downloads them from openMenu's official
 release, so it needs an internet connection the first time.
+
+**The Dreamcast stops on its logo, then goes to its own menu after about a minute.** This happens when the
+Dreamcast is switched back on before it has fully powered down: the GDEMU doesn't get a clean start and the
+console can't read the menu. It isn't caused by SWIRL and happens with any menu. Switch off, wait until the
+console is fully off (a few seconds), then switch on. If you just changed a setting, wait for "Saved to VMU"
+to disappear before switching off.
 
 **GDEMU boots straight into a game.** Folder `01` has no menu. Run **Update SWIRL**, or check the card with
 **Health and preview > Run health check**.
