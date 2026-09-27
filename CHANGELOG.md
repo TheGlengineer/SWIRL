@@ -17,6 +17,10 @@ may ship without menu changes; the menu then keeps its major.minor version (2.11
 - Holding Y at power on is read several times, and holding it for about a second after a Classic style appears also switches back to SWIRL. A Y held from power on is never passed on to a Classic style (where Y leaves to the BIOS, which could then stop on the Dreamcast logo)
 - Start up is recorded step by step. If SWIRL ever stops with an error, it now shows a report screen to photograph instead of restarting the Dreamcast over and over
 
+### Start up
+
+- SWIRL appears sooner at power on: the save file is read once instead of twice (about half a second), and the fade in starts after at most 1 second (was 2.5) and takes 0.45 seconds (was 0.7). The sound start is unchanged, so no pops
+
 ### Saving
 
 - A banner shows where every change is: "Unsaved changes. Saving in 3", then "Saving... please wait" (kept up 2 seconds after the save is done), then "Saved to VMU" or why it couldn't save. It shows on every screen, so favourites and launch options are covered too

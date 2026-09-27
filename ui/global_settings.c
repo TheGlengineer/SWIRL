@@ -295,10 +295,11 @@ int settings_boot_reset_take(void) {
 }
 
 void settings_boot_guard(void) {
-  /* read Y a few times over a fifth of a second: one reading can come before the controller has reported */
+  /* read Y a few times over a tenth of a second: one reading can come before the controller has reported (and
+     holding Y a moment longer once the menu shows is caught too, see main.c) */
   boot_y = 0;
   char seen[64] = "";
-  for (int i = 0; i < 10 && !(boot_y = y_held()); i++) {
+  for (int i = 0; i < 5 && !(boot_y = y_held()); i++) {
     maple_device_t *c = maple_enum_type(0, MAPLE_FUNC_CONTROLLER);
     cont_state_t *st = c ? (cont_state_t *)maple_dev_status(c) : NULL;
     char one[8];

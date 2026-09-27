@@ -562,7 +562,10 @@ int sw_lib_init(void) {
     }
     g->color = placeholder_colors[g->key % (sizeof(placeholder_colors) / sizeof(placeholder_colors[0]))];
   }
-  load_stats();
+  /* SWIRL.DAT was already read at power on (for the picture quality); read it again only if that didn't work,
+     for example a memory card that answered late. Each read takes about half a second. */
+  if (!loaded)
+    load_stats();
   load_custom();
   return 0;
 }

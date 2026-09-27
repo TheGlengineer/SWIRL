@@ -2055,8 +2055,8 @@ static void prefetch_tick(void) {
 /* Start up: the screen comes up from black and the dashboard settles into place, instead of appearing
  * all at once when the BIOS hands over. The fade waits until the first covers have loaded (frames come
  * steadily again), so it never stutters, and it is timed by the clock rather than by frames. */
-#define INTRO_FADE_MS 700
-#define INTRO_MAX_HOLD_MS 2500
+#define INTRO_FADE_MS 450
+#define INTRO_MAX_HOLD_MS 1000
 static int intro_steady;
 static uint64_t intro_start, intro_fade_at, intro_last;
 
@@ -2074,8 +2074,10 @@ static void draw_intro(void) {
     intro_steady = (now - intro_last) < 30 ? intro_steady + 1 : 0;
     /* ready: the sharp cover of the first game and the music have loaded, and frames come steadily */
     int loaded = focus_frames > 16 && sw_audio_settled();
-    if ((loaded && intro_steady >= 8) || now - intro_start > INTRO_MAX_HOLD_MS)
+    if ((loaded && intro_steady >= 8) || now - intro_start > INTRO_MAX_HOLD_MS) {
       intro_fade_at = now;
+      sw_trace("fade in starts (%s)", loaded && intro_steady >= 8 ? "ready" : "waited the longest");
+    }
   }
   intro_last = now;
   float t = 0.f;
@@ -2083,6 +2085,7 @@ static void draw_intro(void) {
     t = (float)(now - intro_fade_at) / INTRO_FADE_MS;
     if (t >= 1.f) {
       intro_done = 1;
+      sw_trace("fade in done");
       return;
     }
   }
