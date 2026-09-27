@@ -16,6 +16,11 @@ may ship without menu changes; the menu then keeps its major.minor version (2.11
 - Nothing is sent to the VMU while a save is writing, and the VMU is left alone once a game starts
 - The VMU is drawn on its own thread, so the menu never waits for it
 
+### Fixes
+
+- Fixed a memory overflow when loading full size pictures (the header logo and the Classic style backgrounds): 32 bytes were written past the end of a buffer at every start up. It could make a game launch stop with an error report
+- If SWIRL ever stops with an error, the report is now shown as QR codes that take turns every few seconds. Photograph each one for a bug report
+
 ### What to test
 
 - Power on a few times with a VMU in: does the intro play, and does SWIRL start as before?
