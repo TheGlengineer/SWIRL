@@ -85,6 +85,27 @@ void sw_trace_redraw(void) {
   draw_all(0xFFFFFFFF);
 }
 
+static volatile uint64_t last_alive; /* when the menu last showed signs of life (a step or a picture) */
+
+void sw_trace_alive(void) { last_alive = timer_ms_gettime64(); }
+
+#ifdef SWIRL_TRACE_SCREEN
+/* diagnostic build: a start up or menu that stops making progress for 8 s is stopped on the report screen,
+   so a hang shows where it happened instead of just freezing */
+static void *watchdog(void *arg) {
+  (void)arg;
+  for (;;) {
+    thd_sleep(500);
+    if (last_alive && timer_ms_gettime64() - last_alive > 8000) {
+      char why[80];
+      snprintf(why, sizeof(why), "no progress for 8 s after: %s", num_lines ? lines[num_lines - 1] : "?");
+      sw_trace_fatal(why);
+    }
+  }
+  return NULL;
+}
+#endif
+
 void sw_trace(const char *fmt, ...) {
   char buf[128];
   va_list ap;
@@ -97,6 +118,7 @@ void sw_trace(const char *fmt, ...) {
     num_lines--;
   }
   snprintf(lines[num_lines++], LINE_LEN, "%5u %s", (unsigned)timer_ms_gettime64(), buf);
+  last_alive = timer_ms_gettime64();
   if (screen_on)
     draw_all(0xFFFFFFFF);
 }
@@ -170,6 +192,7 @@ static int show_page(pvr_ptr_t tex, uint16_t *buf, int tw, int th) {
     }
     pvr_list_finish();
     pvr_scene_finish();
+    sw_trace_alive();
     const int a = a_pressed() || x_pressed();
     if (state == 0 && !a) state = 1;
     else if (state == 1 && a) state = 2;
@@ -306,8 +329,19 @@ static void on_assert(const char *file, int line, const char *expr, const char *
   sw_trace_fatal("assert");
 }
 
+/* a crash (CPU exception): note where it happened; KallistiOS then panics, which ends in sw_trace_fatal */
+static void on_exception(irq_t code, irq_context_t *ctx, void *data) {
+  (void)data;
+  sw_trace("crash %03lx pc=%08lx pr=%08lx", (unsigned long)code, ctx ? (unsigned long)ctx->pc : 0UL,
+           ctx ? (unsigned long)ctx->pr : 0UL);
+}
+
 void sw_trace_init(void) {
   assert_set_handler(on_assert);
+  irq_set_handler(EXC_UNHANDLED_EXC, on_exception, NULL);
+#ifdef SWIRL_TRACE_SCREEN
+  thd_create(1, watchdog, NULL);
+#endif
   if (screen_on)
     vid_clear(0, 0, 0);
 }

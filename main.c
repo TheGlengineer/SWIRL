@@ -96,9 +96,14 @@ int round(float x) {
     return (int)(x + 0.5f);
 }
 
+/* SWIRL: set when the style changes; the button that made the change (A on Save or Apply) is still down and must
+   not count as a press in the new style (SWIRL would start the first game). Cleared once nothing is held. */
+static int input_latched;
+
 void reload_ui(void) {
   openmenu_settings *settings = settings_get();
   ui_set_choice(settings->ui);
+  input_latched = 1;
 }
 
 static int init(void) {
@@ -167,6 +172,7 @@ void main_draw_frame(void);
 void main_draw_frame(void) {
   z_reset();
   draw();
+  sw_trace_alive();
 }
 
 static void processInput(void) {
@@ -307,9 +313,12 @@ static void init_gfx_pvr(void) {
 
   pvr_init(&params);
 #ifdef SWIRL_TRACE_SCREEN
-  /* diagnostic build: show the plain frame buffer again (the graphics chip takes over at the first picture) */
-  vid_set_mode(dm, pm);
-  sw_trace_redraw();
+  /* diagnostic build: show the plain frame buffer again (the graphics chip takes over at the first picture).
+     Not with anti-aliasing: setting the video mode again undoes what the graphics chip set up for it. */
+  if (!hq) {
+    vid_set_mode(dm, pm);
+    sw_trace_redraw();
+  }
 #else
   (void)dm;
 #endif
@@ -369,6 +378,12 @@ int main(int argc, char *argv[]) {
   if (init())
     sw_trace("start up had errors (carrying on)");
   sw_trace_done();
+#ifdef SW_TEST_CRASH
+  { void (*volatile bad)(void) = (void (*)(void))0x8c000002; bad(); } /* test only: an early crash */
+#endif
+#ifdef SW_TEST_HANG
+  for (volatile int spin = 1; spin;) { } /* test only: a hang */
+#endif
 #ifdef SWIRL_TRACE_SCREEN
   sw_trace_report(); /* diagnostic build: the whole report, page by page, drawn by the graphics chip */
 #endif
@@ -380,6 +395,12 @@ int main(int argc, char *argv[]) {
   for (int frame = 0;; frame++) {
     z_reset();
     enum control input = translate_input(); /* also reads the controller for INPT_Button below */
+    if (input_latched) {
+      if (input == NONE)
+        input_latched = 0;
+      else
+        input = NONE;
+    }
     const int y_now = INPT_Button(BTN_Y);
     if (y_latched && !y_now)
       y_latched = 0;
@@ -407,8 +428,11 @@ int main(int argc, char *argv[]) {
 #endif
     (*current_ui_handle_input)(input);
     draw();
+    sw_trace_alive();
     if (frame == 0)
       sw_trace("first picture drawn");
+    if (frame == 60 || frame == 600)
+      sw_trace("%d pictures drawn", frame);
   }
 
   return 0;

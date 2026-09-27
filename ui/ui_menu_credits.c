@@ -169,6 +169,7 @@ static void menu_accept(void) {
   }
   if (current_choice == CHOICE_SAVE) {
     /* update Global Settings */
+    const int old_ui = settings->ui;
     settings->ui = choices[CHOICE_THEME];
     settings->region = choices[CHOICE_REGION];
     settings->aspect = choices[CHOICE_ASPECT];
@@ -204,7 +205,9 @@ static void menu_accept(void) {
       list_get_genre_sort((FLAGS_GENRE)choices[CHOICE_FILTER] - 1, choices[CHOICE_SORT]);
     }
 
-    if (choices[CHOICE_SAVE] == 0 /* Save */)
+    /* SWIRL: a change of style is always saved, as in SWIRL's own settings (otherwise the old style comes back at
+       the next power on, which looks like the change was lost) */
+    if (choices[CHOICE_SAVE] == 0 /* Save */ || settings->ui != old_ui)
       settings_save();
     extern void reload_ui(void);
     reload_ui();

@@ -7,6 +7,8 @@
 void sw_trace_init(void);
 /* draws the steps again (after the video mode changed) */
 void sw_trace_redraw(void);
+/* the menu drew a picture (for the diagnostic build's hang detector) */
+void sw_trace_alive(void);
 void sw_trace(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 /* the steps so far, one per line */
 const char *sw_trace_text(void);
