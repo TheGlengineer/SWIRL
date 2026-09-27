@@ -101,6 +101,7 @@ It saves straight away.
 | Clock | 12 hour, 24 hour (uses the Dreamcast's own clock) |
 | Rumble on launch | On, Off |
 | VMU beep on save | On, Off |
+| VM2 / VMU Pro game cards | On, Off (on by default). See [VM2 and VMU Pro](#vm2-and-vmu-pro) |
 | Screen saver | On, Off (on by default) |
 | Screen saver style | Cover drift, Game showcase, Swirl, Bouncing logo, Dim the screen |
 | Start screen saver | After 1 to 30 minutes (5 by default) |
@@ -118,6 +119,14 @@ The panel on the right shows how many games, favorites and launches you have, an
 
 After the chosen number of minutes without a button press, SWIRL starts the screen saver. Any button brings
 the menu back, and that press does nothing else.
+
+## VM2 and VMU Pro
+
+A VM2, VMU Pro, USB4MAPLE or Pico2Maple can keep a separate memory card for each game. When you start a game,
+SWIRL tells it which game it is (the Game ID), so it switches to that game's own card. SWIRL sends it only when a
+game starts, after it has saved your settings, and only to these devices; a standard VMU is never sent anything.
+It is on by default. Turn it off in **System > VM2 / VMU Pro game cards** to keep one card for everything. The
+Classic styles follow the same setting.
 
 ## What is saved, and where
 

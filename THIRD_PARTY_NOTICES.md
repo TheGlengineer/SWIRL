@@ -12,6 +12,7 @@ programs it builds, and under which terms. The full license texts are in the fil
 | KallistiOS (linked at build time, `fs_iso9660.c` vendored with one change) | The KallistiOS team | KOS License (BSD style) | `ui/swirl/kos/fs_iso9660.c`, [KallistiOS](https://github.com/KallistiOS/KallistiOS) |
 | GDMENU loader | megavolt85 | as shipped with openMenu | `backend/gdmenu_binary.h` |
 | CodeBreaker loader | from the openMenu Virtual Folder Bundle (Derek Pascarella) | BSD 3-Clause (openMenu) | `backend/cb_loader.h` |
+| VM2 / VMU Pro Game ID protocol | from the openMenu Virtual Folder Bundle (Derek Pascarella) | BSD 3-Clause (openMenu) | `backend/gdemu_control.c` |
 | inih | Ben Hoyt | BSD 3-Clause | `external/ini.c` |
 | AHEasing | Auerhaus Development, LLC | WTFPL 2 | `external/easing.c` |
 | uthash | Troy D. Hanson | BSD 1-Clause | `external/uthash.h` |

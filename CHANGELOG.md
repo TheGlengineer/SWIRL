@@ -3,6 +3,24 @@
 SWIRL (the menu) and SWIRL Card Manager share one version number. Card Manager patch releases (2.11.1)
 may ship without menu changes; the menu then keeps its major.minor version (2.11).
 
+## [2.14.0-preview.1]
+
+**This is a preview for testing.** It is offered in SWIRL Card Manager 2.13.3 or newer as **Try the preview**.
+
+### VM2 and VMU Pro game cards
+
+- When a game starts, SWIRL tells a VM2, VMU Pro, USB4MAPLE or Pico2Maple which game it is (the Game ID), so it switches to that game's own memory card, as the openMenu Virtual Folder Bundle does
+- It is only sent when a game starts, after SWIRL has saved, and only to those devices. A standard VMU is never sent anything new. It works from SWIRL and from the Classic styles, and for CodeBreaker and Bleem launches too
+- New setting: **System > VM2 / VMU Pro game cards** (on by default). Turn it off to keep one card for everything
+- A device that is busy or doesn't answer can't hold up a game: SWIRL waits at most about a second in total, then starts the game anyway
+
+### What to test
+
+- **VM2 or VMU Pro owners:** start a few games. Does your device switch to each game's own card, and do the games save and load there?
+- Turn the setting off, start a game: does the device stay on its current card?
+- Go back to SWIRL from a game with the in game reset (A+B+X+Y+Start). Are your SWIRL settings and favourites still there, or does SWIRL start with default settings? Please tell us either way
+- **Standard VMU owners:** everything should work exactly as in 2.13.2
+
 ## [2.13.3]
 
 Card Manager only. The menu on your card stays 2.13.2.

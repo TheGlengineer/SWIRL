@@ -73,7 +73,8 @@ typedef struct sw_prefs {
   /* screen saver: "attract" above turns it on or off */
   uint8_t saver_style; /* index into the screen saver list */
   uint8_t saver_min;   /* minutes without input before it starts, 1..30 */
-  uint8_t reserved[2];
+  uint8_t gameid_off; /* 1: no Game ID for a VM2 / VMU Pro at launch (0, on, in older saves) */
+  uint8_t reserved[1];
 } sw_prefs;
 sw_prefs *sw_lib_prefs(void);
 int sw_lib_early_quality(void); /* before the screen is set up: 1 for high */

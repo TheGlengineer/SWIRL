@@ -896,7 +896,7 @@ static void draw_collections(float slide) {
 /* ---------- SYSTEM ---------- */
 enum {
   SYS_STYLE = 0, SYS_ACCENT, SYS_BACKDROP, SYS_QUALITY, SYS_MUSIC, SYS_MUSIC_VOL, SYS_SFX, SYS_SFX_VOL, SYS_RESUME, SYS_CLOCK,
-  SYS_RUMBLE, SYS_BEEP, SYS_ATTRACT, SYS_SAVER_STYLE, SYS_SAVER_TIME, SYS_SAVER_TEST, SYS_VMU, SYS_SAVE, SYS_PADTEST,
+  SYS_RUMBLE, SYS_BEEP, SYS_GAMEID, SYS_ATTRACT, SYS_SAVER_STYLE, SYS_SAVER_TIME, SYS_SAVER_TEST, SYS_VMU, SYS_SAVE, SYS_PADTEST,
   SYS_BIOS, SYS_COUNT
 };
 #define SYS_ROWS 9
@@ -930,6 +930,7 @@ static const char *sys_value(int i, char *buf, int len) {
     case SYS_CLOCK: return p->clock24 ? "24 hour" : "12 hour";
     case SYS_RUMBLE: return p->rumble ? "On" : "Off";
     case SYS_BEEP: return s->beep == BEEP_ON ? "On" : "Off";
+    case SYS_GAMEID: return p->gameid_off ? "Off" : "On";
     case SYS_ATTRACT: return p->attract ? "On" : "Off";
     case SYS_SAVER_STYLE: return saver_names[p->saver_style % SAVER_COUNT];
     case SYS_SAVER_TIME: snprintf(buf, len, "After %d min", p->saver_min); return buf;
@@ -941,7 +942,7 @@ static const char *sys_value(int i, char *buf, int len) {
 
 static const char *sys_names[SYS_COUNT] = {"Menu style", "Accent colour", "Backdrop", "Picture quality", "Menu music", "Music volume",
                                            "Navigation sounds", "Sound volume", "Start on", "Clock",
-                                           "Rumble on launch", "VMU beep on save", "Screen saver", "Screen saver style",
+                                           "Rumble on launch", "VMU beep on save", "VM2 / VMU Pro game cards", "Screen saver", "Screen saver style",
                                            "Start screen saver", "Preview screen saver", "VMU saves",
                                            "Save settings to VMU", "Controller test", "Exit to Dreamcast BIOS"};
 
@@ -1802,6 +1803,7 @@ static void input_tabs(unsigned int btn, int pressed) {
             sw_lib_settings_dirty(); /* kept in openMenu's settings file; saved with the rest */
             save_countdown = 180;
             break;
+          case SYS_GAMEID: p->gameid_off = !p->gameid_off; break;
           case SYS_ATTRACT: p->attract = !p->attract; break;
           case SYS_SAVER_STYLE: p->saver_style = (uint8_t)((p->saver_style + d + SAVER_COUNT) % SAVER_COUNT); break;
           case SYS_SAVER_TIME: p->saver_min = (uint8_t)((p->saver_min - 1 + d + 30) % 30 + 1); break;

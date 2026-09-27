@@ -159,6 +159,10 @@ int gdemu_img_cmd(uint8_t cmd) {
 /* 0 = reset to default img */
 /* 1 to 999 = set image index */
 int gdemu_set_img_num(uint16_t img_num) {
+#ifdef SW_TEST_NO_GDEMU
+  (void)img_num; /* emulator tests only: Flycast has no GDEMU, so the disc switch would never answer */
+  return 0;
+#endif
   uint8_t cmd_buff[12] __attribute__((aligned(4)));
   ((uint32_t *)cmd_buff)[0] = 0;
   ((uint32_t *)cmd_buff)[1] = 0;

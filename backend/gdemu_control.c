@@ -11,12 +11,15 @@
  * same fork; those files are taken from the menu the card already had.
  */
 #include <arch/arch.h>
+#include <dc/maple.h>
+#include <kos/genwait.h>
 #include <dc/cdrom.h>
 #include <dc/sound/sound.h>
 #include <kos.h>
 #include <kos/thread.h>
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 
 #include "backend/gd_item.h"
 #include "cb_loader.h"
@@ -61,6 +64,135 @@ static int region_code(const char *region, int override) {
 static void quiet(void) {
   if (gdemu_before_launch)
     gdemu_before_launch();
+}
+
+/* ---------- Game ID for VMU replacements (VM2, VMU Pro, USB4MAPLE, Pico2Maple) ---------- */
+/*
+ * These devices keep a separate virtual memory card per game. When a game starts, SWIRL tells them which one
+ * (maple command 33 with the disc's product ID and name), so each game gets its own card. A standard VMU is never
+ * sent anything new: each memory card is first asked for its full device information (ALLINFO) and only the four
+ * devices below, which name themselves there, get the Game ID.
+ *
+ * Protocol and device names from the openMenu Virtual Folder Bundle (Derek Pascarella, BSD 3-Clause,
+ * src/openmenu/src/vm2/vm2_api.c). SWIRL's version limits every wait: 200 ms per reply, a few retries when the
+ * device says "again", and at most about a second for all cards together, so a launch can never hang here.
+ * It is only sent at launch, after SWIRL's last save, so SWIRL never reads or writes a card that is switching.
+ */
+
+#define MAPLE_COMMAND_GAMEID 33
+#define REPLY_WAIT_MS 200
+#define AGAIN_TRIES 5
+#define TOTAL_MS 1000
+
+/* the reply is copied here by the callback (interrupt time) */
+static uint8_t reply[4 + 192];
+static volatile int reply_len;
+
+static void on_reply(maple_state_t *st, maple_frame_t *frm) {
+  (void)st;
+  maple_response_t *resp = (maple_response_t *)frm->recv_buf;
+  int n = 4 + resp->data_len * 4;
+  if (n > (int)sizeof(reply)) n = sizeof(reply);
+  memcpy(reply, resp, n);
+  reply_len = n;
+  maple_frame_unlock(frm);
+  genwait_wake_all(frm);
+}
+
+/* sends one frame and waits for its reply; 0 when a reply came. data must stay valid (static) until then. */
+static int exchange(maple_device_t *dev, int cmd, const void *data, int words) {
+  /* the frame is free unless something else is using this card; give up quickly if so */
+  int locked = 0;
+  for (int i = 0; i < 20 && !locked; i++) {
+    if (maple_frame_lock(&dev->frame) == 0) locked = 1;
+    else thd_sleep(5);
+  }
+  if (!locked) return -1;
+
+  memset(reply, 0, sizeof(reply));
+  reply_len = 0;
+  maple_frame_init(&dev->frame);
+  /* KOS sends a frame again by itself when the device answers "again", so the message must not share the buffer
+     the reply is written to (as KOS's own VMU commands do); it is copied from here on every send */
+  void *send_buf = words ? (void *)data : (void *)dev->frame.recv_buf;
+  dev->frame.cmd = cmd;
+  dev->frame.dst_port = dev->port;
+  dev->frame.dst_unit = dev->unit;
+  dev->frame.length = words;
+  dev->frame.callback = on_reply;
+  dev->frame.send_buf = send_buf;
+  maple_queue_frame(&dev->frame);
+
+  if (genwait_wait(&dev->frame, "sw_gameid", REPLY_WAIT_MS, NULL) < 0) {
+    if (dev->frame.state != MAPLE_FRAME_UNSENT) {
+      /* no answer: free the frame, as KOS does for its own VMU commands */
+      dev->frame.state = MAPLE_FRAME_VACANT;
+      return -1;
+    }
+  }
+  return reply_len ? 0 : -1;
+}
+
+/* the 16 character name a VMU replacement gives in its full device information, or NULL for a standard VMU */
+static const char *replacement_name(maple_device_t *dev) {
+  static const struct { const char *id, *name; } known[] = {
+    {"VM2 by Dreamware", "VM2"},
+    {"8BITMODS VMUPro ", "VMU Pro"},
+    {"USB RP2040 EMU  ", "USB4MAPLE"},
+    {"Pico2Maple USBBT", "Pico2Maple"},
+  };
+  if (exchange(dev, MAPLE_COMMAND_ALLINFO, NULL, 0) != 0) return NULL;
+  maple_response_t *resp = (maple_response_t *)reply;
+  /* functions, 3 function data words, area, direction, name 30, license 60, power 2 + 2: 112 bytes, then extended */
+  if (resp->response != MAPLE_RESPONSE_ALLINFO || resp->data_len * 4 < 112 + 16) return NULL;
+  const char *ext = (const char *)reply + 4 + 112;
+  for (unsigned i = 0; i < sizeof(known) / sizeof(known[0]); i++)
+    if (!strncasecmp(ext, known[i].id, 16)) return known[i].name;
+  return NULL;
+}
+
+static int send_id(maple_device_t *dev, const gd_item *disc, uint64_t until) {
+  /* word 0 memory card function, then the product ID (12 bytes) and the name (128 bytes) */
+  static uint32_t msg[36];
+  memset(msg, 0, sizeof(msg));
+  msg[0] = MAPLE_FUNC_MEMCARD;
+  strncpy((char *)&msg[1], disc->product, 12);
+  strncpy((char *)&msg[4], disc->name, 128);
+  for (int i = 0; i < AGAIN_TRIES && timer_ms_gettime64() < until; i++) {
+    if (exchange(dev, MAPLE_COMMAND_GAMEID, msg, 36) != 0) return -1;
+    int r = ((maple_response_t *)reply)->response;
+    if (r == MAPLE_RESPONSE_OK) return 0;
+    if (r != MAPLE_RESPONSE_AGAIN) return -1;
+    thd_sleep(20);
+  }
+  return -1;
+}
+
+static int gameid_send(const gd_item *disc) {
+  if (!disc || !disc->product[0]) return 0;
+  const uint64_t until = timer_ms_gettime64() + TOTAL_MS;
+  int sent = 0;
+  for (int i = 0; i < 8 && timer_ms_gettime64() < until; i++) {
+    maple_device_t *dev = maple_enum_type(i, MAPLE_FUNC_MEMCARD);
+    if (!dev) break;
+    if (!dev->valid) continue;
+    const char *kind = replacement_name(dev);
+    if (!kind) continue; /* a standard VMU: nothing is sent */
+    int rv = send_id(dev, disc, until);
+    dbglog(DBG_INFO, "SWIRL: Game ID %.12s to %s on %c%d: %s\n", disc->product, kind, 'A' + dev->port, dev->unit,
+           rv ? "no answer" : "OK");
+    if (!rv) sent++;
+  }
+  return sent;
+}
+
+/* System > Game ID for VM2 / VMU Pro (on unless turned off; kept in SWIRL.DAT) */
+extern int sw_gameid_enabled(void);
+
+/* after the disc is chosen: a VM2 or VMU Pro switches to this game's own card. SWIRL has finished saving by now. */
+static void send_game_id(const gd_item *disc) {
+  if (sw_gameid_enabled())
+    gameid_send(disc);
 }
 
 static void launch_loader(const char *region, int game_fix, const launch_opts *o) __attribute__((noreturn));
@@ -110,6 +242,7 @@ void dreamcast_launch_disc_ex(gd_item *disc, const launch_opts *o) {
   quiet();
   gdemu_set_img_num((uint16_t)disc->slot_num);
   thd_sleep(200);
+  send_game_id(disc);
   launch_loader(disc->region, needs_fix(disc), o);
 }
 
@@ -184,6 +317,7 @@ void dreamcast_launch_cb(gd_item *disc) {
 
   gdemu_set_img_num((uint16_t)disc->slot_num);
   thd_sleep(200);
+  send_game_id(disc);
   wait_cd_ready();
 
   ((uint16_t *)0xAC000198)[0] = 0xFF86;
@@ -241,6 +375,7 @@ void bleem_launch(gd_item *disc) {
   quiet();
   gdemu_set_img_num((uint16_t)disc->slot_num);
   thd_sleep(200);
+  send_game_id(disc);
   wait_cd_ready();
 
   ((uint16_t *)0xAC000198)[0] = 0xFF86;

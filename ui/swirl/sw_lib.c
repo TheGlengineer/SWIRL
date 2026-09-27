@@ -458,6 +458,7 @@ void sw_lib_mark_dirty(void) {
 }
 int sw_lib_stats_loaded(void) { return loaded; }
 sw_prefs *sw_lib_prefs(void) { return &prefs; }
+int sw_gameid_enabled(void) { return !prefs.gameid_off; }
 
 /* ---------- custom collections (COLLECT.TXT, written by SWIRL Card Manager) ---------- */
 #define MAX_CUSTOM 24
