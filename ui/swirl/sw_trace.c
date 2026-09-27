@@ -290,21 +290,20 @@ void sw_trace_report(void) {
 
 void sw_trace_fatal(const char *why) {
   printf("SWIRL: %s\n", why);
-#ifdef SWIRL_TRACE_SCREEN
+  /* Every build stops on a report screen: returning to the BIOS would start SWIRL again and fail the same way,
+     over and over, with nothing to show what happened. The screen can be photographed for a bug report. */
   static int inside;
   if (!inside) {
     inside = 1;
     sw_trace("STOPPED: %s", why);
+    sw_trace("Photo this screen for a bug report.");
+    sw_trace("Switch off. Hold Y at power on for SWIRL.");
     vid_set_mode(DM_640x480, PM_RGB565);
     vid_clear(96, 0, 0);
     draw_all(0xFFFFFFFF);
   }
   for (;;) {
   }
-#else
-  extern void __real_arch_abort(void) __attribute__((noreturn));
-  __real_arch_abort();
-#endif
 }
 
 /* KallistiOS's ways out: an assert, a panic (crash) or abort. The linker's --wrap sends them here. */

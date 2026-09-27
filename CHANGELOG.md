@@ -15,7 +15,7 @@ may ship without menu changes; the menu then keeps its major.minor version (2.11
 - A damaged SWIRL save file is replaced at the next save instead of being ignored
 - Holding Y at power on to go back to the SWIRL style now sticks: the style is saved to the VMU straight away. Before, the Classic style came back at the next power on unless a game was started
 - Holding Y at power on is read several times, and holding it for about a second after a Classic style appears also switches back to SWIRL. A Y held from power on is never passed on to a Classic style (where Y leaves to the BIOS, which could then stop on the Dreamcast logo)
-- Start up is recorded step by step, so a problem report can say exactly where a start stopped
+- Start up is recorded step by step. If SWIRL ever stops with an error, it now shows a report screen to photograph instead of restarting the Dreamcast over and over
 
 ### Saving
 
