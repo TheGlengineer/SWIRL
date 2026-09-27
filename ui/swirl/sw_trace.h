@@ -18,3 +18,5 @@ void sw_trace_done(void);
 void sw_trace_report(void);
 /* stops SWIRL on a report screen (the diagnostic build) or returns to the BIOS (normal build) */
 void sw_trace_fatal(const char *why) __attribute__((noreturn));
+/* checks the memory allocator's lists (a crash here means earlier damage); NULL: no trace line */
+void sw_mem_check(const char *when);

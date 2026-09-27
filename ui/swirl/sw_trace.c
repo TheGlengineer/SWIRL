@@ -13,6 +13,7 @@
 #include <dc/pvr.h>
 #include <dc/video.h>
 #include <kos/thread.h>
+#include <malloc.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -114,7 +115,16 @@ void sw_trace(const char *fmt, ...) {
   va_start(ap, fmt);
   vsnprintf(buf, sizeof(buf), fmt, ap);
   va_end(ap);
+#ifdef SW_MEM_TRACE
+  {
+    extern struct mallinfo mallinfo(void);
+    struct mallinfo mi = mallinfo();
+    printf("SWIRL trace %5u ms: %s [free %u of %u]\n", (unsigned)timer_ms_gettime64(), buf, (unsigned)mi.fordblks,
+           (unsigned)mi.arena);
+  }
+#else
   printf("SWIRL trace %5u ms: %s\n", (unsigned)timer_ms_gettime64(), buf);
+#endif
   if (num_lines == MAX_LINES) {
     memmove(lines[1], lines[2], sizeof(lines[0]) * (MAX_LINES - 2)); /* keep the first line */
     num_lines--;
@@ -415,6 +425,38 @@ static void on_exception(irq_t code, irq_context_t *ctx, void *data) {
   (void)data;
   sw_trace("crash %03lx pc=%08lx pr=%08lx", (unsigned long)code, ctx ? (unsigned long)ctx->pc : 0UL,
            ctx ? (unsigned long)ctx->pr : 0UL);
+  if (!ctx)
+    return;
+  /* the code addresses on the stack: with the build's symbol file they show which functions led here */
+  extern char start[]; /* the linker's _start; _etext (KallistiOS's arch.h) is the end of the code */
+  const uintptr_t lo = (uintptr_t)start, hi = (uintptr_t)&_etext, sp = ctx->r[15];
+  if (sp < 0x8c000000u || sp > 0x8d000000u - 4 * 128 || (sp & 3))
+    return;
+  char line[96];
+  int n = 0, len = 0;
+  line[0] = 0;
+  for (int i = 0; i < 128 && n < 16; i++) {
+    const uint32_t v = ((const uint32_t *)sp)[i];
+    if (v >= lo && v < hi && !(v & 1)) {
+      len += snprintf(line + len, sizeof(line) - len, "%s%08lx", len ? " " : "", (unsigned long)v);
+      if (++n % 8 == 0) {
+        sw_trace("stack %s", line);
+        len = 0;
+        line[0] = 0;
+      }
+    }
+  }
+  if (len)
+    sw_trace("stack %s", line);
+}
+
+/* walks the memory allocator's lists: damage shows up here (a crash in mallinfo) instead of later, somewhere
+   unrelated. The trace says when the check ran. */
+#include <malloc.h>
+void sw_mem_check(const char *when) {
+  struct mallinfo mi = mallinfo();
+  if (when)
+    sw_trace("memory ok %s (%u KB free of %u)", when, (unsigned)mi.fordblks / 1024, (unsigned)mi.arena / 1024);
 }
 
 void sw_trace_init(void) {

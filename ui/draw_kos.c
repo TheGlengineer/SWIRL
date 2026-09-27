@@ -116,7 +116,8 @@ void* draw_load_texture_buffer(const char* filename, void* user, void* buffer) {
 void* draw_load_texture_from_DAT_to_buffer(const struct dat_file* bin, const char* ID, void* user, void* buffer) {
   image* img = (image*)user;
   pvr_ptr_t txr;
-  int ret = DAT_read_file_by_ID(bin, ID, pvr_get_internal_buffer());
+  /* SWIRL: an entry larger than the buffer would be read past its end */
+  int ret = bin->chunk_size <= pvr_internal_buffer_size() ? DAT_read_file_by_ID(bin, ID, pvr_get_internal_buffer()) : 0;
   if (!ret) {
     img->texture = img_empty_boxart.texture;
     img->width = img_empty_boxart.width;

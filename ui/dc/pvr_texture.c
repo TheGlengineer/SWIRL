@@ -133,9 +133,16 @@ pvr_ptr_t load_pvr_from_buffer(const void* input, uint32_t* w, uint32_t* h, uint
   return rv;
 }
 
+/* SWIRL: room for the largest picture (512 x 512, 16 bit) plus its header. openMenu's buffer had no room for the
+   header, so a full size picture (the theme backgrounds, the header logo: 524 320 bytes) wrote 32 bytes past the
+   end, into the memory allocator's own records; a later free() could then crash (the preview 2 launch crash). */
+#define PVR_INTERNAL_SIZE (512 * 512 * 2 + PVR_HDR_SIZE)
+
+unsigned int pvr_internal_buffer_size(void) { return PVR_INTERNAL_SIZE; }
+
 void* pvr_get_internal_buffer(void) {
   if (!_internal_buf) {
-    _internal_buf = malloc(512 * 512 * 2);
+    _internal_buf = malloc(PVR_INTERNAL_SIZE);
   }
   return _internal_buf;
 }
@@ -166,6 +173,12 @@ static void pvr_read_to_internal(const char* filename) {
   texSize = ftell(tex_fd);
 
   fseek(tex_fd, 0, SEEK_SET);
+  if (texSize > PVR_INTERNAL_SIZE) {
+    /* too big for any texture SWIRL uses: never read past the buffer */
+    printf("PVR: %s is %u bytes, larger than %u; not loaded\n", filename_safe, texSize, (unsigned)PVR_INTERNAL_SIZE);
+    fclose(tex_fd);
+    return;
+  }
   fread(texBuf, texSize, 1, tex_fd);
   fclose(tex_fd);
 }

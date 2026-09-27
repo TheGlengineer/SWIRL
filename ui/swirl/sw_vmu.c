@@ -291,6 +291,9 @@ static void *vmu_thread(void *p) {
 }
 
 static void start_thread(void) {
+#ifdef SW_NO_VMU_ANIM
+  return; /* test build: the VMU screen thread never runs */
+#endif
   if (thd)
     return;
   quit = 0;

@@ -339,9 +339,13 @@ static void vmu_status(void) {
 /* every launcher calls this first: the music stops and the VMU thread ends, so nothing of SWIRL's is running
    when the console is handed over (the Classic styles use it too once SWIRL has run) */
 static void before_launch(void) {
-  sw_trace("launch: stopping music and VMU screen");
+  sw_mem_check("before launch");
+  sw_trace("launch: stopping music");
   sw_audio_shutdown();
+  sw_mem_check("after music");
+  sw_trace("launch: stopping VMU screen");
   sw_vmu_shutdown();
+  sw_mem_check("after VMU screen");
 }
 
 static void show_toast(const char *msg) {
@@ -1939,7 +1943,8 @@ FUNCTION(UI_NAME, init) {
   sw_trace("SWIRL: graphics");
   sw_gfx_init();
   sw_trace("SWIRL: VMU screen");
-  sw_vmu_boot_stop(); /* the power on logo intro: it carries on from the menu, and SWIRL.DAT is next */
+  sw_vmu_boot_stop();
+  sw_mem_check("after power on intro"); /* the power on logo intro: it carries on from the menu, and SWIRL.DAT is next */
   sw_vmu_init();
   sw_trace("SWIRL: VMU.DAT, SHOT.DAT");
   if (!have_vmu_dat) {
@@ -2432,6 +2437,7 @@ FUNCTION(UI_NAME, drawTR) {
   {
     int r;
     if (sw_lib_save_result(&r)) {
+      sw_mem_check("after save");
       save_outcome = r;
       save_hold = 120; /* "Saving..." stays up 2 s longer, so it is never switched off too soon */
     }
@@ -2460,6 +2466,8 @@ FUNCTION(UI_NAME, drawTR) {
   }
 
   vmu_status();
+  if (frame_no % 120 == 0)
+    sw_mem_check(NULL); /* every 2 s: damage stops here, close to when it happened */
   sw_vmu_tick();
   sw_audio_poll();
   tick_surprise();
