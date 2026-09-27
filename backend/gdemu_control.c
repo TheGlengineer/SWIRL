@@ -27,6 +27,7 @@
 #include "gdemu_control.h"
 #include "gdemu_sdk.h"
 #include "gdmenu_binary.h"
+#include "ui/swirl/sw_trace.h"
 void run_game(const char *region, const char *product) __attribute__((noreturn));
 
 /* called before handing the machine to another program (stops music and sound effects) */
@@ -209,10 +210,18 @@ static void launch_loader(const char *region, int game_fix, const launch_opts *o
   param.sega_license = (o->boot == LAUNCH_BOOT_LICENSE || o->boot == LAUNCH_BOOT_BOTH) ? 1 : 0;
   param.game_region = region_code(region, o->region);
 
+  sw_trace("launch: waiting for the disc");
   wait_cd_ready();
   int status = 0, disc_type = 0;
   cdrom_get_status(&status, &disc_type);
   param.disc_type = (disc_type == CD_GDROM);
+  {
+    /* the loader's settings go to 0xACCFFF00 (0x8CCFFF00 cached): SWIRL's memory must end below it */
+    extern void *sbrk(intptr_t);
+    const uintptr_t heap_end = (uintptr_t)sbrk(0);
+    sw_trace("launch: disc ready (type %d), memory ends at %08lx (loader data at 8ccfff00)", disc_type,
+             (unsigned long)heap_end);
+  }
   param.need_game_fix = game_fix;
 
   /* BIOS version specific patches used by GDMENU / openMenu */
@@ -240,8 +249,10 @@ static int needs_fix(const gd_item *disc) {
 
 void dreamcast_launch_disc_ex(gd_item *disc, const launch_opts *o) {
   quiet();
+  sw_trace("launch: disc %u (%.12s)", disc->slot_num, disc->product);
   gdemu_set_img_num((uint16_t)disc->slot_num);
   thd_sleep(200);
+  sw_trace("launch: Game ID");
   send_game_id(disc);
   launch_loader(disc->region, needs_fix(disc), o);
 }

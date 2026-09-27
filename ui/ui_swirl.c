@@ -336,6 +336,14 @@ static void vmu_status(void) {
   sw_vmu_overlay(kind, arg);
 }
 
+/* every launcher calls this first: the music stops and the VMU thread ends, so nothing of SWIRL's is running
+   when the console is handed over (the Classic styles use it too once SWIRL has run) */
+static void before_launch(void) {
+  sw_trace("launch: stopping music and VMU screen");
+  sw_audio_shutdown();
+  sw_vmu_shutdown();
+}
+
 static void show_toast(const char *msg) {
   strncpy(toast, msg, sizeof(toast) - 1);
   toast[sizeof(toast) - 1] = 0;
@@ -1798,6 +1806,7 @@ static void input_tabs(unsigned int btn, int pressed) {
                 snprintf(save_msg, sizeof(save_msg), "%s", r == 0 ? "Saved to VMU" : r == -2 ? "Not saved: no VMU with space" : "Not saved: check the VMU");
                 save_msg_frames = 60;
                 while (save_msg_frames > 0) { idle_frame(); save_msg_frames--; }
+                sw_vmu_shutdown(); /* the Classic styles draw their own VMU screen */
                 reload_ui();
                 return;
               }
@@ -1864,6 +1873,8 @@ static void input_tabs(unsigned int btn, int pressed) {
               sw_lib_save();
               save_hold = 120;
               while (save_hold > 0) { idle_frame(); save_hold--; }
+              sw_vmu_shutdown();
+              sw_trace("leaving for the BIOS");
               arch_menu();
             }
             break;
@@ -1950,7 +1961,7 @@ FUNCTION(UI_NAME, init) {
   srand((unsigned)rtc_unix_secs());
   sw_trace("SWIRL: music");
   sw_audio_init(); /* no-op when already running */
-  gdemu_before_launch = sw_audio_shutdown;
+  gdemu_before_launch = before_launch;
   apply_theme();
   printf("SWIRL: %d games, stats %s\n", sw_lib_count(), sw_lib_stats_loaded() ? "loaded" : "new");
 }

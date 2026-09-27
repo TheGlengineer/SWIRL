@@ -30,6 +30,7 @@ enum {
 void sw_vmu_overlay(int kind, int arg);
 void sw_vmu_before_write(void); /* a save is about to write: show "writing" now, then leave the card alone */
 void sw_vmu_freeze(int on);     /* 1 while launching a game: nothing more is sent */
+void sw_vmu_shutdown(void);     /* ends the VMU thread (a game, the BIOS or another style is next) */
 
 /* power on */
 void sw_vmu_boot_logo(void);  /* the still logo, drawn straight away */

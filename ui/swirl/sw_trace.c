@@ -1,5 +1,7 @@
 /* SWIRL start up trace (see sw_trace.h) */
 #include "sw_trace.h"
+#include "sw_version.h"
+#define SWIRL_REPORT_VERSION SWIRL_VERSION
 
 #include <arch/arch.h>
 #include <arch/irq.h>
@@ -157,8 +159,9 @@ void sw_trace_done(void) {
   screen_on = 0;
 }
 
-#ifdef SWIRL_TRACE_SCREEN
 #include "../../external/qrcodegen/qrcodegen.h"
+
+#ifdef SWIRL_TRACE_SCREEN
 
 /* shows one prepared 640 x 480 page (in buf) until A is let go and pressed */
 static int x_pressed(void);
@@ -288,19 +291,98 @@ void sw_trace_report(void) {
 }
 #endif
 
+/* ---------- the report screen, in every build ----------
+   It must work however SWIRL stopped: in the middle of handing over to a game the graphics chip, the controllers
+   and the timer may already be shut down. So it writes straight into the picture being shown (no graphics chip),
+   needs no button, and times its pages by counting. The log is cut into parts, each a QR code that a phone
+   camera reads (or send a photo of each); the codes take turns, a few seconds each, for ever. */
+static uint16_t *fb565(void) {
+  return (uint16_t *)((uint8_t *)PVR_RAM_BASE + (PVR_GET(PVR_FB_ADDR) & (PVR_RAM_SIZE - 1)));
+}
+
+static void fb_text(int y, const char *s, uint16_t fg, uint16_t bg) {
+  static uint16_t row[640 * (BFONT_HEIGHT + 1)];
+  for (int i = 0; i < 640 * BFONT_HEIGHT; i++) row[i] = bg;
+  char cut[SCREEN_CHARS + 1];
+  snprintf(cut, sizeof(cut), "%s", s);
+  bfont_draw_str_ex(row + 8, 640, fg, bg, 16, true, cut);
+  uint16_t *d = fb565() + y * 640;
+  memcpy(d, row, 640 * BFONT_HEIGHT * 2);
+}
+
+/* waits by counting TV pictures: the video chip's own signal, read from its register, works even when the timer
+   and interrupts are off (50 or 60 a second) */
+static void wait_frames(int n) {
+  for (int i = 0; i < n; i++)
+    vid_waitvbl();
+}
+
+static void report_loop(void) {
+  static char all[MAX_LINES * LINE_LEN + 64];
+  all[0] = 0;
+  for (int i = 0; i < num_lines; i++) {
+    const char *l = lines[i];
+    while (*l == ' ') l++;
+    strcat(all, l);
+    strcat(all, "\n");
+  }
+  enum { PART = 500, MAX_PARTS = 12 };
+  static int starts[MAX_PARTS + 1];
+  int parts = 0, len = (int)strlen(all), at = 0;
+  /* the end of the log matters most: if it is too long, keep the first line and the latest steps */
+  while (len - at > PART * MAX_PARTS) {
+    char *nl = strchr(all + at, '\n');
+    if (!nl) break;
+    at = (int)(nl - all) + 1;
+  }
+  while (at < len && parts < MAX_PARTS) {
+    int end = at + PART < len ? at + PART : len;
+    if (end < len)
+      while (end > at + 1 && all[end - 1] != '\n') end--;
+    starts[parts++] = at;
+    at = end;
+  }
+  starts[parts] = at;
+  static uint8_t qr[qrcodegen_BUFFER_LEN_FOR_VERSION(25)], tmp[qrcodegen_BUFFER_LEN_FOR_VERSION(25)];
+  static char text[PART + 48];
+  for (;;) {
+    for (int p = 0; p < parts; p++) {
+      const int n = starts[p + 1] - starts[p];
+      snprintf(text, sizeof(text), "SWIRL %s report %d/%d\n", SWIRL_REPORT_VERSION, p + 1, parts);
+      strncat(text, all + starts[p], n);
+      uint16_t *fb = fb565();
+      for (int i = 0; i < 640 * 480; i++) fb[i] = 0xFFFF; /* white: a QR code needs a light border */
+      if (qrcodegen_encodeText(text, tmp, qr, qrcodegen_Ecc_MEDIUM, 1, 25, qrcodegen_Mask_AUTO, true)) {
+        const int size = qrcodegen_getSize(qr);
+        int scale = 400 / (size + 8);
+        if (scale < 1) scale = 1;
+        const int x0 = (640 - size * scale) / 2, y0 = 20 + (410 - size * scale) / 2;
+        for (int y = 0; y < size; y++)
+          for (int x = 0; x < size; x++)
+            if (qrcodegen_getModule(qr, x, y))
+              for (int yy = 0; yy < scale; yy++)
+                for (int xx = 0; xx < scale; xx++) fb[(y0 + y * scale + yy) * 640 + x0 + x * scale + xx] = 0x0000;
+      }
+      char line[80];
+      snprintf(line, sizeof(line), "SWIRL stopped. Photo each code: %d of %d", p + 1, parts);
+      fb_text(4, line, 0xF800, 0xFFFF);
+      fb_text(480 - BFONT_HEIGHT - 4, "Then switch off. Hold Y at power on for SWIRL.", 0x0000, 0xFFFF);
+      wait_frames(parts > 1 ? 6 * 60 : 60 * 60);
+    }
+  }
+}
+
 void sw_trace_fatal(const char *why) {
   printf("SWIRL: %s\n", why);
   /* Every build stops on a report screen: returning to the BIOS would start SWIRL again and fail the same way,
-     over and over, with nothing to show what happened. The screen can be photographed for a bug report. */
+     over and over, with nothing to show what happened. */
   static int inside;
   if (!inside) {
     inside = 1;
+    irq_disable(); /* nothing else runs from here on */
     sw_trace("STOPPED: %s", why);
-    sw_trace("Photo this screen for a bug report.");
-    sw_trace("Switch off. Hold Y at power on for SWIRL.");
     vid_set_mode(DM_640x480, PM_RGB565);
-    vid_clear(96, 0, 0);
-    draw_all(0xFFFFFFFF);
+    report_loop();
   }
   for (;;) {
   }

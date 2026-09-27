@@ -278,9 +278,11 @@ static void step(void) {
   sending = 0;
 }
 
+static volatile int quit;
+
 static void *vmu_thread(void *p) {
   (void)p;
-  for (;;) {
+  while (!quit) {
     if (may_send())
       step();
     thd_sleep(10);
@@ -289,8 +291,21 @@ static void *vmu_thread(void *p) {
 }
 
 static void start_thread(void) {
+  if (thd)
+    return;
+  quit = 0;
+  thd = thd_create(0, vmu_thread, NULL);
+}
+
+/* the thread ends: before a game starts, before the BIOS and before another style. Nothing of SWIRL's may still
+   be running when the console is handed over. */
+void sw_vmu_shutdown(void) {
+  frozen = 1;
   if (!thd)
-    thd = thd_create(1, vmu_thread, NULL);
+    return;
+  quit = 1;
+  thd_join(thd, NULL);
+  thd = NULL;
 }
 
 /* waits (at most 600 ms) until the thread is not talking to a VMU */
