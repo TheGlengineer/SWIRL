@@ -26,6 +26,7 @@
 #include "ui/dc/input.h"
 #include "ui/draw_prototypes.h"
 #include "ui/global_settings.h"
+#include "ui/swirl/sw_trace.h"
 
 /* UI Collection */
 #include "ui/ui_grid.h"
@@ -101,26 +102,41 @@ void reload_ui(void) {
 }
 
 static int init(void) {
-  int ret = 0;
+  int ret = 0, r;
 
   /* Load settings */
+  sw_trace("openMenu settings (VMU)");
   settings_init();
 
-  ret += txr_create_small_pool();
-  ret += txr_create_large_pool();
-  ret += txr_load_DATs();
-  ret += list_read_default();
-  ret += db_load_DAT();
-  ret += theme_manager_load();
+  /* SWIRL: each step is traced; a step that fails is noted and start up carries on (a missing picture file
+     must not send the Dreamcast back to its BIOS) */
+#define STEP(call)                                   \
+  do {                                               \
+    sw_trace("%s", #call);                           \
+    if ((r = (call)) != 0) {                         \
+      sw_trace("  %s failed (%d)", #call, r);        \
+      ret++;                                         \
+    }                                                \
+  } while (0)
+  STEP(txr_create_small_pool());
+  STEP(txr_create_large_pool());
+  STEP(txr_load_DATs());
+  STEP(list_read_default());
+  STEP(db_load_DAT());
+  STEP(theme_manager_load());
+#undef STEP
 
   /* setup internal memory zones */
+  sw_trace("draw_init");
   draw_init();
 
   /* SWIRL: never start a style this disc cannot run (hold Y at start up to force SWIRL) */
   settings_boot_guard();
 
   /* Load UI */
+  sw_trace("style %d: loading", settings_get()->ui);
   reload_ui();
+  sw_trace("style %d: ready", settings_get()->ui);
 
   return ret;
 }
@@ -144,6 +160,13 @@ static void draw(void) {
   pvr_list_finish();
 
   pvr_scene_finish();
+}
+
+/* one frame, for SWIRL to keep the screen moving while a memory card save finishes */
+void main_draw_frame(void);
+void main_draw_frame(void) {
+  z_reset();
+  draw();
 }
 
 static void processInput(void) {
@@ -257,10 +280,16 @@ static void init_gfx_pvr(void) {
 
   /* Prompt the user for whether to run in PAL50 or PAL60 if the flashrom says
        the Dreamcast is European and a VGA Box is not hooked up. */
-  const int hq = sw_lib_early_quality();
+  sw_trace("SWIRL.DAT picture quality (VMU)");
+  int hq = sw_lib_early_quality();
+#ifdef SW_FORCE_STD
+  hq = 0;
+#endif
+  sw_trace("video: %s, cable %d, region %d", hq ? "high" : "standard", ct, dc_region);
   const int pm = hq ? PM_RGB888P : PM_RGB565;
+  int dm = DM_640x480;
   if (dc_region == FLASHROM_REGION_EUROPE && ct != CT_VGA) {
-    vid_set_mode(DM_640x480_NTSC_IL, pm);
+    vid_set_mode(dm = DM_640x480_NTSC_IL, pm);
   } else if (hq) {
     vid_set_mode(DM_640x480, pm); /* VGA or TV, whichever cable is plugged in */
   }
@@ -277,6 +306,14 @@ static void init_gfx_pvr(void) {
   };
 
   pvr_init(&params);
+#ifdef SWIRL_TRACE_SCREEN
+  /* diagnostic build: show the plain frame buffer again (the graphics chip takes over at the first picture) */
+  vid_set_mode(dm, pm);
+  sw_trace_redraw();
+#else
+  (void)dm;
+#endif
+  sw_trace("graphics chip ready");
   if (hq) {
     om_xscale = 2.f;
     sw_fix_fsaa_clip();
@@ -290,17 +327,29 @@ static void init_gfx_pvr(void) {
    one that gives up after a while (the linker's --wrap sends KallistiOS's call here). A device that turns up
    later is picked up by KallistiOS's normal hot plug scan. */
 #define SWIRL_SCAN_WAIT_MS 1500
+#ifndef SWIRL_VERSION_STR
+#define SWIRL_VERSION_STR "2.13.2"
+#endif
 void __wrap_maple_wait_scan(void); /* linked in place of KallistiOS's maple_wait_scan (see Makefile) */
 void __wrap_maple_wait_scan(void) {
   const uint64_t start = timer_ms_gettime64();
   while (maple_state.scan_ready_mask != 0xf) {
     if (timer_ms_gettime64() - start > SWIRL_SCAN_WAIT_MS) {
-      printf("SWIRL: controller port scan incomplete after %d ms (ports %x), carrying on\n", SWIRL_SCAN_WAIT_MS,
-             maple_state.scan_ready_mask);
+      sw_trace("controller scan incomplete after %d ms (ports %x)", SWIRL_SCAN_WAIT_MS, maple_state.scan_ready_mask);
       return;
     }
     thd_pass();
   }
+  sw_trace("controller scan done in %u ms", (unsigned)(timer_ms_gettime64() - start));
+}
+
+static void trace_devices(void) {
+  for (int p = 0; p < MAPLE_PORT_COUNT; p++)
+    for (int u = 0; u < MAPLE_UNIT_COUNT; u++) {
+      maple_device_t *d = maple_enum_dev(p, u);
+      if (d)
+        sw_trace("  %c%d %.20s %08lx", 'A' + p, u, d->info.product_name, (unsigned long)d->info.functions);
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -312,18 +361,54 @@ int main(int argc, char *argv[]) {
 
   fflush(stdout);
   setbuf(stdout, NULL);
+  sw_trace_init();
+  sw_trace("SWIRL " SWIRL_VERSION_STR " starting");
+  trace_devices();
   init_gfx_pvr();
 
-  if (init()) {
-    puts("Init error.");
-    return 1;
-  }
+  if (init())
+    sw_trace("start up had errors (carrying on)");
+  sw_trace_done();
+#ifdef SWIRL_TRACE_SCREEN
+  sw_trace_report(); /* diagnostic build: the whole report, page by page, drawn by the graphics chip */
+#endif
 
-  for (;;) {
+  /* SWIRL: a Y held since power on belongs to the style reset. It is never passed on to the menu (openMenu's
+     Classic styles leave to the BIOS on Y) until it is let go, and held for about a second it switches a
+     Classic style to SWIRL, in case the check at start up missed it. */
+  int y_latched = 1, y_frames = 0;
+  for (int frame = 0;; frame++) {
     z_reset();
-    enum control input = translate_input();
+    enum control input = translate_input(); /* also reads the controller for INPT_Button below */
+    const int y_now = INPT_Button(BTN_Y);
+    if (y_latched && !y_now)
+      y_latched = 0;
+    if (y_latched) {
+      if (input == Y)
+        input = NONE;
+      if (++y_frames == 45 && settings_get()->ui != UI_SWIRL) {
+        settings_force_swirl();
+        reload_ui();
+        continue;
+      }
+    }
+#ifdef SWIRL_TRACE_SCREEN
+    {
+      /* diagnostic build: both triggers fully down with X shows the log so far (for what happened after start
+         up, like saves) */
+      maple_device_t *c = maple_enum_type(0, MAPLE_FUNC_CONTROLLER);
+      cont_state_t *st = c ? (cont_state_t *)maple_dev_status(c) : NULL;
+      if (st && st->ltrig > 200 && st->rtrig > 200 && (st->buttons & CONT_X)) {
+        sw_trace("log shown on request");
+        sw_trace_report();
+        continue;
+      }
+    }
+#endif
     (*current_ui_handle_input)(input);
     draw();
+    if (frame == 0)
+      sw_trace("first picture drawn");
   }
 
   return 0;

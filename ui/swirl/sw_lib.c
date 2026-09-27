@@ -8,6 +8,7 @@
 #include <time.h>
 
 #include <arch/rtc.h>
+#include <arch/timer.h>
 #include <dc/maple.h>
 #include <dc/maple/vmu.h>
 #include <dc/vmu_pkg.h>
@@ -23,6 +24,7 @@
 #include "../../backend/gd_item.h"
 #include "../../backend/gd_list.h"
 #include "../global_settings.h"
+#include "sw_trace.h"
 
 #if __has_include("../openmenu_vmu.h") && __has_include("../openmenu_pal.h")
 #include "../openmenu_pal.h"
@@ -237,7 +239,9 @@ static int take_in_file(int merge) {
 }
 
 static void load_stats(void) {
-  take_in_file(0);
+  static const char *const names[] = {"none", "ok", "no file", "damaged", "no answer"};
+  const int st = take_in_file(0);
+  sw_trace("SWIRL.DAT: %s", st >= 0 && st <= 4 ? names[st] : "?");
 }
 
 /* builds the VMU file for the current stats; caller frees *out */
@@ -306,9 +310,12 @@ typedef struct save_job {
 
 static void *save_thread(void *arg) {
   save_job *job = arg;
+  sw_trace("save: start (SWIRL.DAT %s, settings %s)", job->data ? "yes" : "no", job->settings ? "yes" : "no");
   int rv = job->data ? write_save(job->data, job->size, async_where) : 0;
+  sw_trace("save: SWIRL.DAT done (%d)", rv);
   if (job->settings)
     settings_save();
+  sw_trace("save: finished");
   free(job->data);
   free(job);
   async_rv = rv;
@@ -375,28 +382,39 @@ int sw_lib_save_result(int *rv) {
   return 1;
 }
 
-/* Saves now and waits, but never longer than max_ms: used before leaving SWIRL (a game, the BIOS, another
-   style). A memory card that doesn't answer can't hold the Dreamcast. 0 on success. */
-int sw_lib_save(void) {
-  return sw_lib_save_wait(3000);
+/* Only one part of SWIRL uses the memory card at a time. Anything else that needs it (leaving SWIRL, the VMU
+   manager) first lets a save in progress finish: a save is never cut short, because a half written file is
+   worse than a short wait. KallistiOS gives every memory card read and write its own 100 ms limit, so a card
+   that stops answering ends the save with an error instead of holding it. While waiting, the menu keeps
+   drawing (idle_fn) so the screen doesn't look frozen. */
+static void (*idle_fn)(void);
+void sw_lib_set_idle(void (*fn)(void)) { idle_fn = fn; }
+
+void sw_lib_finish(void) {
+  if (!async_busy)
+    return;
+  const uint64_t t0 = timer_ms_gettime64();
+  while (async_busy) {
+    if (idle_fn)
+      idle_fn();
+    else
+      thd_sleep(10);
+  }
+  sw_trace("waited %u ms for a save to finish", (unsigned)(timer_ms_gettime64() - t0));
 }
 
-int sw_lib_save_wait(int max_ms) {
+/* Saves now and waits until it is done: used before leaving SWIRL (a game, the BIOS, another style).
+   0 on success. */
+int sw_lib_save(void) {
   int rv;
-  sw_lib_save_result(&rv); /* drop an older result */
-  for (int t = 0; async_busy && t < max_ms; t += 10) thd_sleep(10);
-  if (async_busy)
-    return -5;
+  sw_lib_finish();
+  sw_lib_save_result(&rv); /* take in the result of that one (a failure marks the data unsaved again) */
   if (!dirty && !settings_dirty)
     return 0;
   rv = start_save();
   if (rv != 0)
     return rv;
-  for (int t = 0; async_busy && t < max_ms; t += 10) thd_sleep(10);
-  if (async_busy) {
-    printf("SWIRL: the memory card did not finish saving in %d ms\n", max_ms);
-    return -5;
-  }
+  sw_lib_finish();
   sw_lib_save_result(&rv);
   return rv;
 }
@@ -404,6 +422,9 @@ int sw_lib_save_wait(int max_ms) {
 int sw_lib_busy(void) { return async_busy; }
 
 void sw_lib_settings_dirty(void) { settings_dirty = 1; }
+
+/* diagnostic A/B: 1 = an automatic save writes exactly what System > Save to VMU writes (both files) */
+int sw_autosave_like_manual = 0; /* hardware tests: both work; the lighter SWIRL.DAT-only save stays */
 
 /* one line for System > Save: where the data is, or why it isn't saved */
 const char *sw_lib_save_status(char *buf, int len) {

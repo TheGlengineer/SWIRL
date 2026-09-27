@@ -15,6 +15,7 @@ programs it builds, and under which terms. The full license texts are in the fil
 | inih | Ben Hoyt | BSD 3-Clause | `external/ini.c` |
 | AHEasing | Auerhaus Development, LLC | WTFPL 2 | `external/easing.c` |
 | uthash | Troy D. Hanson | BSD 1-Clause | `external/uthash.h` |
+| QR Code generator (diagnostic builds only) | Project Nayuki | MIT | `external/qrcodegen/` |
 | Sora font | The Sora Project Authors | SIL Open Font License 1.1 | `swirl/assets/fonts/OFL-Sora.txt` |
 | Barlow font | The Barlow Project Authors | SIL Open Font License 1.1 | `swirl/assets/fonts/OFL-Barlow.txt` |
 | Silkscreen font (VMU text) | The Silkscreen Project Authors | SIL Open Font License 1.1 | `swirl/assets/fonts/OFL-Silkscreen.txt` |

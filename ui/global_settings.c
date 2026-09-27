@@ -9,8 +9,12 @@
  */
 
 #include "global_settings.h"
+#include "swirl/sw_trace.h"
 
 #include <dc/maple.h>
+#include <stdio.h>
+#include <string.h>
+#include <kos/thread.h>
 #include <dc/maple/controller.h>
 #include <external/libcrayonvmu/savefile.h>
 #include <external/libcrayonvmu/setup.h>
@@ -84,7 +88,9 @@ void settings_init(void) {
   savefile_details.icon_palette = (unsigned short *)OPENMENU_PAL;
 
   /* SWIRL: its own logo (or the owner's LOGO.VMU) instead of the openMenu one */
+  sw_trace("VMU logo");
   sw_vmu_boot_logo();
+  sw_trace("OPENMENU.CFG: finding it");
 
   // Find the first savefile (if it exists)
   for (int iter = 0; iter <= 3; iter++) {
@@ -99,6 +105,8 @@ void settings_init(void) {
 Exit_loop_1:
 
   settings_load();
+  sw_trace("OPENMENU.CFG: VMU %d/%d, cards %02x saves %02x, style %d", savefile_details.savefile_port,
+           savefile_details.savefile_slot, savefile_details.valid_memcards, savefile_details.valid_saves, savedata.ui);
   settings_validate();
 }
 
@@ -167,16 +175,22 @@ void settings_load(void) {
 /* Beeps while saving if enabled */
 void settings_save(void) {
   maple_device_t *vmu = NULL;
+  int on = 0;
   if ((savedata.beep == BEEP_ON) && (vmu = maple_enum_dev(savefile_details.savefile_port, savefile_details.savefile_slot))) {
-    vmu_beep_raw(vmu, 0x000065f0); /* Turn on Beep */
+    on = vmu_beep_raw(vmu, 0x000065f0); /* Turn on Beep */
   }
+  int rv = -1;
   if (savefile_details.valid_memcards) {
-    crayon_savefile_save(&savefile_details);
+    rv = crayon_savefile_save(&savefile_details);
     crayon_savefile_update_valid_saves(&savefile_details, CRAY_SAVEFILE_UPDATE_MODE_BOTH);
-    if ((savedata.beep == BEEP_ON) && (vmu)) {
-      vmu_beep_raw(vmu, 0x00000000); /* Turn off Beep */
-    }
   }
+  /* SWIRL: always turn the beep off again, and keep trying if the memory card is busy: a beep left on can leave
+     the VMU in a state the console's own start up may not like */
+  int off = 0;
+  if (vmu) {
+    for (int i = 0; i < 10 && (off = vmu_beep_raw(vmu, 0x00000000)) != 0; i++) thd_sleep(20);
+  }
+  sw_trace("OPENMENU.CFG saved: %d (beep on %d, off %d)", rv, on, off);
 }
 
 openmenu_settings *settings_get(void) {
@@ -263,6 +277,17 @@ static int boot_reset; /* Y switched a saved Classic style back to SWIRL; still 
 
 int settings_boot_y(void) { return boot_y; }
 
+/* Y held for a moment just after the menu appeared (the start up check can miss it): same as holding it at
+   start up */
+void settings_force_swirl(void) {
+  if (savedata.ui == UI_SWIRL)
+    return;
+  sw_trace("Y held after start: switching to the SWIRL style");
+  savedata.ui = UI_SWIRL;
+  boot_y = 1;
+  boot_reset = 1;
+}
+
 int settings_boot_reset_take(void) {
   const int r = boot_reset;
   boot_reset = 0;
@@ -270,7 +295,26 @@ int settings_boot_reset_take(void) {
 }
 
 void settings_boot_guard(void) {
-  boot_y = y_held();
+  /* read Y a few times over a fifth of a second: one reading can come before the controller has reported */
+  boot_y = 0;
+  char seen[64] = "";
+  for (int i = 0; i < 10 && !(boot_y = y_held()); i++) {
+    maple_device_t *c = maple_enum_type(0, MAPLE_FUNC_CONTROLLER);
+    cont_state_t *st = c ? (cont_state_t *)maple_dev_status(c) : NULL;
+    char one[8];
+    snprintf(one, sizeof(one), "%s%lx", i ? " " : "", st ? (unsigned long)st->buttons : 0xfffffUL);
+    strncat(seen, one, sizeof(seen) - strlen(seen) - 1);
+    thd_sleep(20);
+  }
+  sw_trace("Y samples: %s", seen[0] ? seen : "(first one held)");
+  {
+    maple_device_t *dev;
+    for (int i = 0; (dev = maple_enum_type(i, MAPLE_FUNC_CONTROLLER)); i++) {
+      cont_state_t *st = (cont_state_t *)maple_dev_status(dev);
+      sw_trace("pad %c%d buttons %04lx", 'A' + dev->port, dev->unit, st ? (unsigned long)st->buttons : 0xFFFFUL);
+    }
+    sw_trace("Y held: %s, saved style %d", boot_y ? "yes" : "no", savedata.ui);
+  }
   if (savedata.ui == UI_SWIRL)
     return;
   /* only the running style changes here; the memory card is written once the menu is up */

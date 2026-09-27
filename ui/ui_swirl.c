@@ -39,6 +39,7 @@
 #include "global_settings.h"
 #include "swirl/sw_audio.h"
 #include "swirl/sw_gfx.h"
+#include "swirl/sw_trace.h"
 #include "swirl/sw_lib.h"
 #include "swirl/sw_vmu.h"
 #include "swirl/sw_version.h"
@@ -1147,7 +1148,7 @@ static void tick_launch(void) {
     return;
   if (!saved_at) {
     sw_audio_shutdown();
-    sw_lib_save_wait(3000); /* SWIRL.DAT and openMenu's settings, never longer than 3 s */
+    sw_lib_save(); /* SWIRL.DAT and openMenu's settings; the launch screen stays up until it is done */
     saved_at = launch_frames;
     return;
   }
@@ -1360,6 +1361,7 @@ static void vmu_load_device(void) {
 }
 
 static void open_vmu_manager(void) {
+  sw_lib_finish(); /* one user of the memory cards at a time */
   vmu_ndev = 0;
   maple_device_t *d;
   for (int i = 0; vmu_ndev < VMU_MAX_DEV && (d = maple_enum_type(i, MAPLE_FUNC_MEMCARD)); i++)
@@ -1378,6 +1380,7 @@ static void vmu_name(const vmu_dir_t *e, char *out) {
 /* read one save's description per frame so the screen opens instantly */
 static void vmu_tick(void) {
   if (mode != MODE_VMU || !vmu_dir || !vmu_desc || vmu_desc_next >= vmu_nfiles || vmu_desc_next >= 200) return;
+  if (sw_lib_busy()) return; /* a save is using the memory card */
   int i = vmu_desc_next++;
   void *buf = NULL;
   int size = 0;
@@ -1502,6 +1505,7 @@ static void input_vmu(unsigned int btn, int pressed) {
     if (btn == A && pressed && vmu_file_sel < vmu_nfiles) {
       char fname[13];
       vmu_name(&vmu_dir[vmu_file_sel], fname);
+      sw_lib_finish();
       int r = vmufs_delete(vmu_devs[vmu_dev_sel], fname);
       show_toast(r == 0 ? "Save deleted" : "Could not delete that save");
       int keep = vmu_file_sel;
@@ -1726,7 +1730,8 @@ static void input_tabs(unsigned int btn, int pressed) {
                 s->ui = style_values[sys_style];
                 sw_audio_shutdown(); /* before the VMU writes */
                 sw_lib_settings_dirty();
-                sw_lib_save_wait(3000); /* one save for both files, never longer than 3 s */
+                show_toast("Saving to VMU");
+                sw_lib_save(); /* one save for both files, finished before the new style touches the VMU */
                 reload_ui();
                 return;
               }
@@ -1786,7 +1791,8 @@ static void input_tabs(unsigned int btn, int pressed) {
             changed_pref = 0;
             if (btn == A) {
               sw_audio_shutdown();
-              sw_lib_save_wait(3000);
+              show_toast("Saving to VMU");
+              sw_lib_save();
               arch_menu();
             }
             break;
@@ -1819,7 +1825,17 @@ static void input_detail(unsigned int btn, int pressed) {
 }
 
 /* ---------- UI entry points ---------- */
+/* drawing frames while a save finishes (see sw_lib_finish): pictures only, no timers or saves */
+static int waiting_for_save;
+void main_draw_frame(void);
+static void idle_frame(void) {
+  waiting_for_save = 1;
+  main_draw_frame();
+  waiting_for_save = 0;
+}
+
 FUNCTION(UI_NAME, init) {
+  sw_trace("SWIRL: pictures");
   texman_clear();
   unsigned int t = texman_create();
   draw_load_texture_buffer("EMPTY.PVR", &img_empty_boxart, texman_get_tex_data(t));
@@ -1838,8 +1854,11 @@ FUNCTION(UI_NAME, init) {
       texman_reserve_memory(img_logo_src.width, img_logo_src.height, 2);
   }
 
+  sw_trace("SWIRL: graphics");
   sw_gfx_init();
+  sw_trace("SWIRL: VMU screen");
   sw_vmu_init();
+  sw_trace("SWIRL: VMU.DAT, SHOT.DAT");
   if (!have_vmu_dat) {
     DAT_init(&vmu_dat);
     have_vmu_dat = (DAT_load_parse(&vmu_dat, "VMU.DAT") == 0 && vmu_dat.chunk_size == 192);
@@ -1848,13 +1867,16 @@ FUNCTION(UI_NAME, init) {
     DAT_init(&shot_dat);
     have_shot_dat = (DAT_load_parse(&shot_dat, "SHOT.DAT") == 0 && shot_dat.chunk_size == SHOT_CHUNK);
   }
+  sw_trace("SWIRL: library and SWIRL.DAT");
   sw_lib_init();
+  sw_lib_set_idle(idle_frame);
   if (settings_boot_reset_take()) {
     sw_lib_settings_dirty(); /* Y at start up: save the SWIRL style, or the Classic style comes back next time */
     save_countdown = 180;
   }
   lib_sort = sw_lib_prefs()->sort % SW_SORT_COUNT;
   srand((unsigned)rtc_unix_secs());
+  sw_trace("SWIRL: music");
   sw_audio_init(); /* no-op when already running */
   gdemu_before_launch = sw_audio_shutdown;
   apply_theme();
@@ -2308,8 +2330,15 @@ FUNCTION(UI_NAME, drawTR) {
   frame_no++;
   prefetch_tick();
   if (toast_frames > 0) toast_frames--;
+  if (!waiting_for_save) {
   /* VMU writes run on a worker thread so the music keeps streaming while they happen */
   if (save_countdown > 0 && --save_countdown == 0 && sw_lib_dirty()) {
+    extern int sw_autosave_like_manual;
+    if (sw_autosave_like_manual) {
+      /* the same save as System > Save to VMU: SWIRL.DAT and openMenu's settings file */
+      sw_lib_mark_dirty();
+      sw_lib_settings_dirty();
+    }
     int r = sw_lib_save_async();
     if (r == -7 || r == -1) /* card not answering, or a save still running: try again shortly */
       save_countdown = 120 * (save_tries < 5 ? ++save_tries : 5);
@@ -2336,6 +2365,7 @@ FUNCTION(UI_NAME, drawTR) {
   tick_resume();
   vmu_tick();
   if (mode == MODE_LAUNCH) tick_launch();
+  }
 
   draw_ambient(C_DEEP);
 

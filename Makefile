@@ -3,7 +3,7 @@ TARGET := themeMenu.elf
 EXT_SRCS := external/easing.c external/libcrayonvmu/savefile.c external/libcrayonvmu/setup.c
 TXR_SRCS := texture/block_pool.c texture/lru.c texture/txr_manager.c texture/dat_reader.c texture/serial_sanitize.c texture/simple_texture_allocator.c
 BACKEND_SRCS := external/ini.c backend/gd_list.c backend/gdemu_sdk.c backend/gdemu_control.c backend/db_list.c
-SWIRL_SRCS := ui/swirl/kos/fs_iso9660.c ui/ui_swirl.c ui/swirl/sw_gfx.c ui/swirl/sw_lib.c ui/swirl/sw_vmu.c ui/swirl/sw_audio.c ui/swirl/sw_prim.c ui/swirl/sw_spu.c
+SWIRL_SRCS := ui/swirl/kos/fs_iso9660.c ui/ui_swirl.c ui/swirl/sw_gfx.c ui/swirl/sw_lib.c ui/swirl/sw_vmu.c ui/swirl/sw_audio.c ui/swirl/sw_prim.c ui/swirl/sw_spu.c ui/swirl/sw_trace.c external/qrcodegen/qrcodegen.c
 SWIRL_ASM := ui/swirl/assets.S
 UI_MENUS := ui/ui_bios.c ui/ui_gdmenu.c ui/ui_line_large.c ui/ui_line_desc.c ui/ui_grid.c ui/global_settings.c ui/ui_menu_credits.c ui/theme_manager.c
 UI_SRCS := ui/dc/font_bios.c ui/dc/font_bmf.c ui/dc/font_bitmap.c ui/dc/pvr_texture.c ui/dc/input.c ui/draw_kos.c ui/animation.c
@@ -17,7 +17,7 @@ OBJCOPY := $(KOS_OBJCOPY)
 RM := rm
 
 CFLAGS := -I. -Dpvr_prim=om_prim -ffunction-sections -fdata-sections -std=c11 -O2 -g -Wno-unknown-pragmas -Wall -Wextra $(OPTIONS)
-LDFLAGS := -Wl,--gc-sections -Wl,-Map,output.map -Wl,--wrap=spu_init,--wrap=spu_shutdown,--wrap=spu_enable,--wrap=spu_disable,--wrap=maple_wait_scan
+LDFLAGS := -Wl,--gc-sections -Wl,-Map,output.map -Wl,--wrap=spu_init,--wrap=spu_shutdown,--wrap=spu_enable,--wrap=spu_disable,--wrap=maple_wait_scan,--wrap=arch_abort,--wrap=arch_panic
 LIBS := -lm
 
 all: clean-elf $(TARGET)

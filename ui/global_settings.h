@@ -140,3 +140,5 @@ void settings_boot_guard(void);
 int settings_boot_y(void);
 /* SWIRL: 1 once if Y at start up switched the saved style to SWIRL, so the menu saves that choice */
 int settings_boot_reset_take(void);
+/* SWIRL: Y held for about a second just after start up: switch to the SWIRL style and save it */
+void settings_force_swirl(void);

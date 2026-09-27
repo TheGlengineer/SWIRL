@@ -1,0 +1,313 @@
+/* SWIRL start up trace (see sw_trace.h) */
+#include "sw_trace.h"
+
+#include <arch/arch.h>
+#include <arch/irq.h>
+#include <arch/timer.h>
+#include <assert.h>
+#include <dc/biosfont.h>
+#include <dc/maple.h>
+#include <dc/maple/controller.h>
+#include <dc/pvr.h>
+#include <dc/video.h>
+#include <kos/thread.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
+
+#define MAX_LINES 64
+#define LINE_LEN 96
+#define SCREEN_CHARS 51 /* 51 characters of 12 pixels, plus the 8 pixel margin, fit in 640 */
+static char lines[MAX_LINES][LINE_LEN];
+static int num_lines;
+static char text[MAX_LINES * LINE_LEN];
+
+#ifdef SWIRL_TRACE_SCREEN
+static int screen_on = 1; /* until the menu draws its first picture */
+#else
+static int screen_on = 0;
+#endif
+
+/* one line of text on the frame buffer, in whatever pixel mode is set */
+static void draw_line(int row, const char *s, uint32_t fg) {
+  static uint32_t tmp[640 * (BFONT_HEIGHT + 1)]; /* a spare row: bfont may touch one past the end */
+  if (!vid_mode)
+    return;
+  /* the picture being shown (graphics chip start up moves it away from vram_s) */
+  uint8_t *const shown = (uint8_t *)PVR_RAM_BASE + (PVR_GET(PVR_FB_ADDR) & (PVR_RAM_SIZE - 1));
+  const int w = vid_mode->width, y = 8 + row * BFONT_HEIGHT;
+  if (w != 640 || y + BFONT_HEIGHT > vid_mode->height)
+    return;
+  memset(tmp, 0, sizeof(tmp));
+  char cut[SCREEN_CHARS + 1];
+  snprintf(cut, sizeof(cut), "%s", s);
+  bfont_draw_str_ex(tmp + 8, 640, fg, 0, 32, true, cut);
+  for (int yy = 0; yy < BFONT_HEIGHT; yy++) {
+    const uint32_t *src = tmp + yy * 640;
+    switch (vid_mode->pm) {
+      case PM_RGB565: {
+        uint16_t *d = (uint16_t *)shown + (y + yy) * 640;
+        for (int x = 0; x < 640; x++) {
+          const uint32_t c = src[x];
+          d[x] = ((c >> 8) & 0xF800) | ((c >> 5) & 0x07E0) | ((c >> 3) & 0x001F);
+        }
+        break;
+      }
+      case PM_RGB888P: {
+        uint8_t *d = shown + (y + yy) * 640 * 3;
+        for (int x = 0; x < 640; x++) {
+          d[3 * x] = src[x];
+          d[3 * x + 1] = src[x] >> 8;
+          d[3 * x + 2] = src[x] >> 16;
+        }
+        break;
+      }
+      case PM_RGB0888:
+        memcpy((uint32_t *)shown + (y + yy) * 640, src, 640 * 4);
+        break;
+      default:
+        break;
+    }
+  }
+}
+
+/* 18 rows fit: the latest steps */
+static void draw_all(uint32_t fg) {
+  const int rows = 18;
+  const int first = num_lines > rows ? num_lines - rows : 0;
+  for (int i = first; i < num_lines; i++) draw_line(i - first, lines[i], fg);
+}
+
+void sw_trace_redraw(void) {
+  if (!screen_on)
+    return;
+  vid_clear(0, 0, 0);
+  draw_all(0xFFFFFFFF);
+}
+
+void sw_trace(const char *fmt, ...) {
+  char buf[128];
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(buf, sizeof(buf), fmt, ap);
+  va_end(ap);
+  printf("SWIRL trace %5u ms: %s\n", (unsigned)timer_ms_gettime64(), buf);
+  if (num_lines == MAX_LINES) {
+    memmove(lines[1], lines[2], sizeof(lines[0]) * (MAX_LINES - 2)); /* keep the first line */
+    num_lines--;
+  }
+  snprintf(lines[num_lines++], LINE_LEN, "%5u %s", (unsigned)timer_ms_gettime64(), buf);
+  if (screen_on)
+    draw_all(0xFFFFFFFF);
+}
+
+const char *sw_trace_text(void) {
+  text[0] = 0;
+  for (int i = 0; i < num_lines; i++) {
+    strcat(text, lines[i]);
+    strcat(text, "\n");
+  }
+  return text;
+}
+
+static int x_pressed(void) {
+  maple_device_t *dev;
+  for (int i = 0; (dev = maple_enum_type(i, MAPLE_FUNC_CONTROLLER)); i++) {
+    cont_state_t *st = (cont_state_t *)maple_dev_status(dev);
+    if (st && (st->buttons & CONT_X))
+      return 1;
+  }
+  return 0;
+}
+
+static int a_pressed(void) {
+  maple_device_t *dev;
+  for (int i = 0; (dev = maple_enum_type(i, MAPLE_FUNC_CONTROLLER)); i++) {
+    cont_state_t *st = (cont_state_t *)maple_dev_status(dev);
+    if (st && (st->buttons & CONT_A))
+      return 1;
+  }
+  return 0;
+}
+
+void sw_trace_done(void) {
+  sw_trace("start up done");
+  screen_on = 0;
+}
+
+#ifdef SWIRL_TRACE_SCREEN
+#include "../../external/qrcodegen/qrcodegen.h"
+
+/* shows one prepared 640 x 480 page (in buf) until A is let go and pressed */
+static int x_pressed(void);
+/* returns 1 if the page was left with X instead of A */
+static int show_page(pvr_ptr_t tex, uint16_t *buf, int tw, int th) {
+  pvr_txr_load(buf, tex, tw * th * 2);
+  pvr_poly_cxt_t cxt;
+  pvr_poly_hdr_t hdr;
+  pvr_poly_cxt_txr(&cxt, PVR_LIST_OP_POLY, PVR_TXRFMT_RGB565 | PVR_TXRFMT_NONTWIDDLED, tw, th, tex, PVR_FILTER_NONE);
+  pvr_poly_compile(&hdr, &cxt);
+  int state = 0;
+  for (int t = 0; t < 60 * 600 && state < 2; t++) {
+    pvr_wait_ready();
+    pvr_scene_begin();
+    pvr_list_begin(PVR_LIST_OP_POLY);
+    pvr_prim(&hdr, sizeof(hdr));
+    pvr_vertex_t v;
+    const float u1 = 640.f / tw, v1 = 480.f / th;
+    const float xs[4] = {0, 0, 640, 640}, ys[4] = {480, 0, 480, 0};
+    const float us[4] = {0, 0, u1, u1}, vs[4] = {v1, 0, v1, 0};
+    for (int k = 0; k < 4; k++) {
+      v.flags = k == 3 ? PVR_CMD_VERTEX_EOL : PVR_CMD_VERTEX;
+      v.x = xs[k];
+      v.y = ys[k];
+      v.z = 1.f;
+      v.u = us[k];
+      v.v = vs[k];
+      v.argb = 0xFFFFFFFF;
+      v.oargb = 0;
+      pvr_prim(&v, sizeof(v));
+    }
+    pvr_list_finish();
+    pvr_scene_finish();
+    const int a = a_pressed() || x_pressed();
+    if (state == 0 && !a) state = 1;
+    else if (state == 1 && a) state = 2;
+  }
+  const int was_x = x_pressed();
+  for (int t = 0; t < 300 && (a_pressed() || x_pressed()); t++) thd_sleep(10);
+  return was_x;
+}
+
+/* The start up report as ordinary pictures from the graphics chip. First as QR codes (a phone camera reads
+   them, or send Claude a photo), each holding part of the text, then as text, 18 steps a page. */
+void sw_trace_report(void) {
+  const int tw = 1024, th = 512;
+  pvr_ptr_t tex = pvr_mem_malloc(tw * th * 2);
+  static uint16_t buf[1024 * 512];
+  if (!tex)
+    return;
+
+  /* the whole log as one text, cut into parts of up to 600 bytes at line ends */
+  static char all[MAX_LINES * LINE_LEN + 64];
+  all[0] = 0;
+  for (int i = 0; i < num_lines; i++) {
+    const char *l = lines[i];
+    while (*l == ' ') l++;
+    strcat(all, l);
+    strcat(all, "\n");
+  }
+  enum { PART = 400, MAX_PARTS = 12 };
+  int starts[MAX_PARTS + 1], parts = 0, len = (int)strlen(all), at = 0;
+  while (at < len && parts < MAX_PARTS) {
+    int end = at + PART < len ? at + PART : len;
+    if (end < len)
+      while (end > at + 1 && all[end - 1] != '\n') end--;
+    starts[parts++] = at;
+    at = end;
+  }
+  starts[parts] = at;
+
+  static uint8_t qr[qrcodegen_BUFFER_LEN_FOR_VERSION(25)], tmp[qrcodegen_BUFFER_LEN_FOR_VERSION(25)];
+  for (int p = 0; p < parts; p++) {
+    char text[PART + 32];
+    const int n = starts[p + 1] - starts[p];
+    snprintf(text, sizeof(text), "SWIRL log %d/%d\n", p + 1, parts);
+    strncat(text, all + starts[p], n);
+    for (int i = 0; i < tw * th; i++) buf[i] = 0xFFFF; /* white, the QR code needs a light border */
+    if (qrcodegen_encodeText(text, tmp, qr, qrcodegen_Ecc_MEDIUM, 1, 25, qrcodegen_Mask_AUTO, true)) {
+      const int size = qrcodegen_getSize(qr);
+      int scale = 420 / (size + 8);
+      if (scale < 1) scale = 1;
+      const int x0 = (640 - size * scale) / 2, y0 = (436 - size * scale) / 2;
+      for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++)
+          if (qrcodegen_getModule(qr, x, y))
+            for (int yy = 0; yy < scale; yy++)
+              for (int xx = 0; xx < scale; xx++) buf[(y0 + y * scale + yy) * tw + x0 + x * scale + xx] = 0;
+    }
+    char foot[80];
+    snprintf(foot, sizeof(foot), "QR %d of %d. Photo or scan it, then press A.", p + 1, parts);
+    bfont_draw_str_ex(buf + 444 * tw + 40, tw, 0x0000, 0xFFFF, 16, true, foot);
+    show_page(tex, buf, tw, th);
+  }
+
+  /* then as text */
+  const int per_page = 18, pages = (num_lines + per_page - 1) / per_page;
+  for (int page = 0; page < pages; page++) {
+    memset(buf, 0, tw * th * 2);
+    for (int r = 0; r < per_page && page * per_page + r < num_lines; r++) {
+      char cut[SCREEN_CHARS + 1];
+      snprintf(cut, sizeof(cut), "%s", lines[page * per_page + r]);
+      bfont_draw_str_ex(buf + (8 + r * BFONT_HEIGHT) * tw + 8, tw, 0xFFFF, 0, 16, true, cut);
+    }
+    char foot[64];
+    snprintf(foot, sizeof(foot), "Page %d of %d. Press A.", page + 1, pages);
+    bfont_draw_str_ex(buf + (8 + 19 * BFONT_HEIGHT) * tw + 8, tw, 0xFFE0, 0, 16, true, foot);
+    show_page(tex, buf, tw, th);
+  }
+
+  /* A/B test of the automatic save */
+  extern int sw_autosave_like_manual;
+  for (;;) {
+    memset(buf, 0, tw * th * 2);
+    const char *l[] = {"Automatic save test", "",
+                       sw_autosave_like_manual ? "Now: NEW  (writes both files, like Save)" : "Now: OLD  (writes SWIRL.DAT only)",
+                       "", "X: switch   A: start SWIRL", NULL};
+    for (int r = 0; l[r]; r++)
+      bfont_draw_str_ex(buf + (60 + r * BFONT_HEIGHT) * tw + 40, tw, r == 2 ? 0xFFE0 : 0xFFFF, 0, 16, true, l[r]);
+    if (!show_page(tex, buf, tw, th))
+      break;
+    sw_autosave_like_manual = !sw_autosave_like_manual;
+  }
+  sw_trace("automatic save: %s", sw_autosave_like_manual ? "new" : "old");
+  pvr_mem_free(tex);
+}
+#endif
+
+void sw_trace_fatal(const char *why) {
+  printf("SWIRL: %s\n", why);
+#ifdef SWIRL_TRACE_SCREEN
+  static int inside;
+  if (!inside) {
+    inside = 1;
+    sw_trace("STOPPED: %s", why);
+    vid_set_mode(DM_640x480, PM_RGB565);
+    vid_clear(96, 0, 0);
+    draw_all(0xFFFFFFFF);
+  }
+  for (;;) {
+  }
+#else
+  extern void __real_arch_abort(void) __attribute__((noreturn));
+  __real_arch_abort();
+#endif
+}
+
+/* KallistiOS's ways out: an assert, a panic (crash) or abort. The linker's --wrap sends them here. */
+void __wrap_arch_abort(void) __attribute__((noreturn));
+void __wrap_arch_abort(void) { sw_trace_fatal("abort"); }
+
+void __wrap_arch_panic(const char *msg) __attribute__((noreturn));
+void __wrap_arch_panic(const char *msg) {
+  irq_context_t *c = irq_get_context();
+  char buf[96];
+  if (c)
+    snprintf(buf, sizeof(buf), "crash: %s pc=%08lx pr=%08lx", msg, (unsigned long)c->pc, (unsigned long)c->pr);
+  else
+    snprintf(buf, sizeof(buf), "crash: %s", msg);
+  sw_trace_fatal(buf);
+}
+
+static void on_assert(const char *file, int line, const char *expr, const char *msg, const char *func) {
+  (void)func;
+  const char *f = strrchr(file, '/');
+  sw_trace("assert %s:%d %s", f ? f + 1 : file, line, msg ? msg : expr);
+  sw_trace_fatal("assert");
+}
+
+void sw_trace_init(void) {
+  assert_set_handler(on_assert);
+  if (screen_on)
+    vid_clear(0, 0, 0);
+}
