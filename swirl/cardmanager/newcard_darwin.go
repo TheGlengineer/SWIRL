@@ -201,7 +201,7 @@ func formatWithDiskutil(disk int, report func(float64, string)) error {
 }
 
 // runFormatHelper is the child process started with administrator rights by formatCard.
-func runFormatHelper(root string, disk int, status string) int {
+func runFormatHelper(root string, disk int, status string, uid, gid int, user string) int {
 	last := time.Time{}
 	var cur fmtStatus
 	root, err := doFormat(root, disk, func(p float64, msg string) {

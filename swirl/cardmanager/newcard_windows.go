@@ -363,7 +363,7 @@ func doFormat(root string, disk int, report func(float64, string)) (string, erro
 }
 
 // runFormatHelper is the elevated child process started by formatCard.
-func runFormatHelper(root string, disk int, status string) int {
+func runFormatHelper(root string, disk int, status string, uid, gid int, user string) int {
 	last := time.Time{}
 	var cur fmtStatus
 	root, err := doFormat(root, disk, func(p float64, msg string) {

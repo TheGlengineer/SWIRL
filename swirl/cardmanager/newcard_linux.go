@@ -99,16 +99,34 @@ func mountsOnDevice(whole string) []string {
 	return out
 }
 
-// mountPointFor picks where the freshly formatted card is mounted.
-func mountPointFor(whole string) string {
-	user := os.Getenv("SUDO_USER")
+// mountPointFor picks where the freshly formatted card is mounted. The mount must
+// live in a directory the owning user can reach; /media/<user> is the udisks
+// convention, with /run/media/<user> as a fallback on systems that use it.
+func mountPointFor(whole, user string) string {
+	if user == "" {
+		user = os.Getenv("SUDO_USER")
+	}
 	if user == "" {
 		user = os.Getenv("USER")
 	}
 	if user != "" {
+		for _, base := range []string{"/media", "/run/media"} {
+			mnt := filepath.Join(base, user, "SWIRL")
+			if os.MkdirAll(filepath.Dir(mnt), 0o755) == nil {
+				return mnt
+			}
+		}
 		return filepath.Join("/media", user, "SWIRL")
 	}
 	return filepath.Join("/mnt", "SWIRL")
+}
+
+// mountOpts returns the vfat mount options that give the owning user write access.
+func mountOpts(uid, gid int) string {
+	if uid >= 0 && gid >= 0 {
+		return fmt.Sprintf("uid=%d,gid=%d,umask=002", uid, gid)
+	}
+	return ""
 }
 
 func diskInfo(root string) (*DiskInfo, error) {
@@ -137,7 +155,7 @@ func diskInfo(root string) (*DiskInfo, error) {
 }
 
 // doFormat does the destructive part. It must run as root.
-func doFormat(root string, disk int, report func(float64, string)) (string, error) {
+func doFormat(root string, disk int, uid, gid int, user string, report func(float64, string)) (string, error) {
 	dev, whole, err := linuxDiskForRoot(root)
 	if err != nil {
 		return "", err
@@ -198,9 +216,9 @@ func doFormat(root string, disk int, report func(float64, string)) (string, erro
 		if _, err := os.Stat(part); err != nil {
 			continue
 		}
-		mnt := mountPointFor(whole)
+		mnt := mountPointFor(whole, user)
 		os.MkdirAll(mnt, 0o755)
-		if syscall.Mount(part, mnt, "vfat", 0, "") == nil {
+		if syscall.Mount(part, mnt, "vfat", 0, mountOpts(uid, gid)) == nil {
 			report(1, "")
 			return mnt, nil
 		}
@@ -209,10 +227,10 @@ func doFormat(root string, disk int, report func(float64, string)) (string, erro
 }
 
 // runFormatHelper is the child process started with root rights by formatCard.
-func runFormatHelper(root string, disk int, status string) int {
+func runFormatHelper(root string, disk int, status string, uid, gid int, user string) int {
 	last := time.Time{}
 	var cur fmtStatus
-	root, err := doFormat(root, disk, func(p float64, msg string) {
+	root, err := doFormat(root, disk, uid, gid, user, func(p float64, msg string) {
 		cur.Pct = p
 		if msg != "" {
 			cur.Msg = msg
@@ -281,7 +299,7 @@ func sameFile(a, b string) (bool, error) {
 // helper copy of the app does the work, reporting progress through a status file.
 func formatCard(root string, disk int, report func(float64, string)) (string, error) {
 	if os.Geteuid() == 0 {
-		return doFormat(root, disk, report)
+		return doFormat(root, disk, os.Getuid(), os.Getgid(), os.Getenv("USER"), report)
 	}
 	exe, err := elevatableExe()
 	if err != nil {
@@ -290,7 +308,12 @@ func formatCard(root string, disk int, report func(float64, string)) (string, er
 	status := filepath.Join(os.TempDir(), fmt.Sprintf("swirl_format_%d.json", time.Now().UnixNano()))
 	defer os.Remove(status)
 	defer os.Remove(status + ".tmp")
-	args := []string{"-format-disk", root, "-disk", strconv.Itoa(disk), "-status", status}
+	uid, gid, user := os.Getuid(), os.Getgid(), os.Getenv("USER")
+	if os.Getenv("USER") == "" {
+		user = os.Getenv("LOGNAME")
+	}
+	args := []string{"-format-disk", root, "-disk", strconv.Itoa(disk), "-status", status,
+		"-format-uid", strconv.Itoa(uid), "-format-gid", strconv.Itoa(gid), "-format-user", user}
 	var cmd *exec.Cmd
 	switch {
 	case lookPath("pkexec") != "":
