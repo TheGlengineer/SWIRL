@@ -36,3 +36,4 @@ __pycache__/
 # Flycast build folder from swirl/vmucap/build_macos.sh
 swirl/vmucap/build-macos/
 swirl/vmucap/build-linux/
+dist/

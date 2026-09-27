@@ -1306,9 +1306,10 @@ function brRender() {
     const cb = d.querySelector("input");
     if (cb) { cb.onclick = ev => ev.stopPropagation(); cb.onchange = () => brPick(cb.value, cb.checked); }
     d.onclick = () => {
+      // a pickable row (game folder, disc or archive) ticks on click; plain folders still navigate
+      if (cb && !cb.disabled) { cb.checked = !cb.checked; brPick(cb.value, cb.checked); return; }
       if (d.dataset.dir) { brLoad(d.dataset.p); return; }
       if (br.pickFile) { if (d.dataset.kind === "music" || d.dataset.kind === "file") brDone(d.dataset.p); return; }
-      if (cb && !cb.disabled) { cb.checked = !cb.checked; brPick(cb.value, cb.checked); }
     };
   });
   const games = items.filter(e => pickable(e));
