@@ -30,11 +30,8 @@ func TestPartDev(t *testing.T) {
 }
 
 func TestLinuxConfirmWord(t *testing.T) {
-	if linuxConfirmWord("sdb") != "SDB" || linuxConfirmWord("") != "ERASE" {
-		t.Fatal("confirm word")
-	}
-	if linuxConfirmWord("averylongdevicenamethatistoolong") != "ERASE" {
-		t.Fatal("long confirm word not ERASE")
+	if linuxConfirmWord("sdb") != "CONFIRM" || linuxConfirmWord("") != "CONFIRM" {
+		t.Fatal("confirm word should always be CONFIRM on Linux")
 	}
 }
 

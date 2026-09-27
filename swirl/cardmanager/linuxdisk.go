@@ -45,14 +45,11 @@ func linuxDevHash(name string) int {
 	return int(h.Sum32() & 0x7fffffff)
 }
 
-// linuxConfirmWord is what the person types to confirm erasing a card: the device
-// name in capitals (SDB), or ERASE when that cannot be used.
+// linuxConfirmWord is what the person types to confirm erasing a card. Linux mount
+// points are long and awkward to retype, so the confirmation is always the fixed word
+// CONFIRM rather than a device or volume name (as Windows and macOS use).
 func linuxConfirmWord(device string) string {
-	w := strings.ToUpper(strings.TrimSpace(device))
-	if w == "" || len(w) > 24 {
-		return "ERASE"
-	}
-	return w
+	return "CONFIRM"
 }
 
 // judgeLinuxDisk fills in a DiskInfo for a whole block device. protected is the
