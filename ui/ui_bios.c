@@ -22,6 +22,7 @@
 #include "font_prototypes.h"
 #include "global_settings.h"
 #include "ui_menu_credits.h"
+#include "common.h"
 
 #define UNUSED __attribute__((unused))
 
@@ -175,17 +176,6 @@ static const char *transform_date_readable(char out[11], const char *in) {
   return out;
 }
 
-static void string_outer_concat(char *out, const char *left, const char *right, int len) {
-  const size_t left_len = strlen(left);
-  const size_t right_len = strlen(right);
-  const size_t input_len = left_len + right_len;
-  const size_t padding = input_len < (size_t)len ? (size_t)len - input_len : 0;
-
-  memcpy(out, left, left_len);
-  memset(out + left_len, ' ', padding);
-  memcpy(out + left_len + padding, right, right_len + 1);
-}
-
 static const char *region_code_to_readable(const char *in) {
   if (strcmp(in, "JUE") == 0) {
     return STR_FREE;
@@ -214,19 +204,19 @@ static void draw_gameinfo(void) {
   font_bios_begin_draw();
   font_bios_set_color(color_image_name_highlight); /* Unsure */
   // Region
-  string_outer_concat(line_buf, STR_REGION, region_code_to_readable(list_current[current_selected_item]->region), INFO_STR_LEN);
+  ui_string_pad_concat(line_buf, STR_REGION, region_code_to_readable(list_current[current_selected_item]->region), INFO_STR_LEN);
   font_bios_draw_main(pos_gameinfo_x, pos_gameinfo_region_y, line_buf);
   // VGA
-  string_outer_concat(line_buf, STR_VGA, (list_current[current_selected_item]->vga[0] == '1' ? STR_YES : STR_NO), INFO_STR_LEN);
+  ui_string_pad_concat(line_buf, STR_VGA, (list_current[current_selected_item]->vga[0] == '1' ? STR_YES : STR_NO), INFO_STR_LEN);
   font_bios_draw_main(pos_gameinfo_x, pos_gameinfo_vga_y, line_buf);
   // DISC
-  string_outer_concat(line_buf, STR_DISC, list_current[current_selected_item]->disc, INFO_STR_LEN);
+  ui_string_pad_concat(line_buf, STR_DISC, list_current[current_selected_item]->disc, INFO_STR_LEN);
   font_bios_draw_main(pos_gameinfo_x, pos_gameinfo_disc_y, line_buf);
   // DATE
-  string_outer_concat(line_buf, STR_DATE, transform_date_readable(date_buf, list_current[current_selected_item]->date), INFO_STR_LEN);
+  ui_string_pad_concat(line_buf, STR_DATE, transform_date_readable(date_buf, list_current[current_selected_item]->date), INFO_STR_LEN);
   font_bios_draw_main(pos_gameinfo_x, pos_gameinfo_date_y, line_buf);
   // VERSION
-  string_outer_concat(line_buf, STR_VERSION, list_current[current_selected_item]->version, INFO_STR_LEN);
+  ui_string_pad_concat(line_buf, STR_VERSION, list_current[current_selected_item]->version, INFO_STR_LEN);
   font_bios_draw_main(pos_gameinfo_x, pos_gameinfo_version_y, line_buf);
 }
 
