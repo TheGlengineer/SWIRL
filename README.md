@@ -1,8 +1,9 @@
 > [!CAUTION]
-> # ⚠️ Known Issues intermittently Impacting Various Users
-> # ⚠️ SWIRL is actively in development and tested under a controlled environment. Issues may occur, please submit issues to the repo with as much detail for to replicate it as possible. 
-> KNOWN ISSUES WITH THE VM2 AND VMU PRO (logged 09/26/2026 - currently targeted for resolution in the official releast of 2.14.x) , see repo issues list for more details)
-> Additional known issues captured. Currently working through. Thank you all for your patience!
+> # ⚠️ Known Issues intermittently Impacting Various Users<br>
+> SWIRL is actively in development and tested under a controlled environment. Issues may occur, please submit issues to the repo with as much detail for to replicate it as possible. 
+<br>
+> Additional known issues captured. Currently working through. Thank you all for your patience! <br>
+
 > The next release of swirl will include a built in diagnostics utility, in the event of a black screen, crash, or errors, swirl will display the logs embedded in QR codes. When this feature is released I would greatly appreciate it if users take pictuers of the codes and submit them as a reported issues against the repo to aid in further improvement. 
 
 <div align="center">
