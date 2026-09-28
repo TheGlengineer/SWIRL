@@ -1,6 +1,6 @@
 > [!CAUTION]
 > # ⚠️ Known Issues intermittently Impacting Various Users<br>
-> SWIRL is actively in development and tested under a controlled environment. Issues may occur, please submit issues to the repo with as much detail for to replicate it as possible. 
+> SWIRL is actively in development and tested under a controlled environment. Issues may occur, please submit issues to the repo with as much detail for me to replicate it, as possible. 
 <br>
 > Additional known issues captured. Currently working through. Thank you all for your patience! <br>
 
