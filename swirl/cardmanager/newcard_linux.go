@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -251,11 +252,20 @@ func doFormat(root string, disk int, uid, gid int, user string, report func(floa
 	if err != nil {
 		return "", fmt.Errorf("could not list the card's mounts, so it was not touched: %v", err)
 	}
+	// Unmount nested mount points deepest-first, using a normal (non-lazy)
+	// unmount. A lazy MNT_DETACH can succeed while a filesystem is still active,
+	// leaving the kernel to flush cached writes over the new FAT32 layout. A
+	// normal unmount fails with EBUSY when something still holds the mount open,
+	// which is the safe place to stop.
+	sort.Slice(mounted, func(i, j int) bool { return len(mounted[i]) > len(mounted[j]) })
 	for _, mp := range mounted {
 		if mp == "/" {
 			continue
 		}
-		if err := syscall.Unmount(mp, syscall.MNT_DETACH); err != nil {
+		if err := syscall.Unmount(mp, 0); err != nil {
+			if err == syscall.EBUSY {
+				return "", fmt.Errorf("%s is still in use; close anything using the card and try again", mp)
+			}
 			return "", fmt.Errorf("could not unmount %s, so the card was not touched: %v", mp, err)
 		}
 	}
