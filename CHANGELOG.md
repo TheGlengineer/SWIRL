@@ -3,6 +3,12 @@
 SWIRL (the menu) and SWIRL Card Manager share one version number. Card Manager patch releases (2.11.1)
 may ship without menu changes; the menu then keeps its major.minor version (2.11).
 
+## [2.13.4]
+
+### Fixes
+
+- Fixed a memory overflow when SWIRL loads full size pictures (the Sega Dreamcast header logo, and the backgrounds of the Classic styles): 32 bytes were written past the end of a buffer at every start up. It could corrupt SWIRL's memory and make the Dreamcast stop later, for example when starting a game
+
 ## [2.13.3]
 
 Card Manager only. The menu on your card stays 2.13.2.

@@ -8,7 +8,9 @@ source "${KOS_ENV:-$HOME/dreamcast/kos/environ.sh}" >/dev/null
 set -u
 cd "$ROOT"
 make clean >/dev/null
-make
+# the full version (for the start up log and reports) comes from Card Manager's, which the release checks
+VERSION_STR=$(sed -n 's/^const version = "\(.*\)"/\1/p' swirl/cardmanager/main.go)
+make OPTIONS="${OPTIONS:-} -DSWIRL_VERSION_STR=\\\"$VERSION_STR\\\""
 mkdir -p swirl/build/gdemu swirl/build/cdi
 cp themeMenu.bin swirl/build/gdemu/1ST_READ.BIN
 cp 1ST_READ.BIN swirl/build/cdi/1ST_READ.BIN
