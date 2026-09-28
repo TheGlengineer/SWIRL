@@ -10,9 +10,12 @@ package main
 // platforms: MBR, 32 KB clusters, label SWIRL).
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -58,6 +61,19 @@ func wholeDeviceForMajorMinor(major, minor int) string {
 	return whole
 }
 
+// wholeDeviceForName resolves a block device name (e.g. "dm-0", "vg-root") to the
+// whole block device that backs it, via /sys/class/block/<name>. This lets
+// device-mapper and LVM names be normalized to their underlying disk during the
+// physical-disk walk.
+func wholeDeviceForName(name string) string {
+	link, err := os.Readlink(filepath.Join("/sys/class/block", name))
+	if err != nil {
+		return ""
+	}
+	whole, _ := parseSysfsBlockLink(link)
+	return whole
+}
+
 // linuxDiskForRoot resolves a mount point to its whole block device and sysfs view.
 func linuxDiskForRoot(root string) (linuxBlockDev, string, error) {
 	entries, err := readMountinfo()
@@ -87,6 +103,9 @@ func physicalDisksFor(whole string) map[string]bool {
 	visited := map[string]bool{}
 	var walk func(string)
 	walk = func(name string) {
+		if resolved := wholeDeviceForName(name); resolved != "" {
+			name = resolved
+		}
 		if name == "" || visited[name] {
 			return
 		}
@@ -131,16 +150,27 @@ func rootDeviceNames() map[string]bool {
 	return physicalDisksFor(whole)
 }
 
-// mountsOnDevice lists every mount point on a whole block device.
-func mountsOnDevice(whole string) []string {
-	entries, _ := readMountinfo()
+// mountsOnDevice lists every mount point that is physically on the given whole
+// block device. It matches by physical backing disks (so a dm-crypt/LVM mount on
+// the same disk is still found), and returns the error from readMountinfo so a
+// caller can refuse to format when the mounts cannot be determined.
+func mountsOnDevice(whole string) ([]string, error) {
+	entries, err := readMountinfo()
+	if err != nil {
+		return nil, err
+	}
+	backing := physicalDisksFor(whole)
 	var out []string
 	for _, e := range entries {
-		if wholeDeviceForMajorMinor(e.Major, e.Minor) == whole {
-			out = append(out, e.MountPoint)
+		mounted := wholeDeviceForMajorMinor(e.Major, e.Minor)
+		for disk := range physicalDisksFor(mounted) {
+			if backing[disk] {
+				out = append(out, e.MountPoint)
+				break
+			}
 		}
 	}
-	return out
+	return out, nil
 }
 
 // mountPointFor picks where the freshly formatted card is mounted. The mount must
@@ -190,7 +220,10 @@ func diskInfo(root string) (*DiskInfo, error) {
 	}
 	judgeLinuxDisk(info, dev, rootDeviceNames())
 	if info.Disk >= 0 {
-		info.Letters = mountsOnDevice(whole)
+		letters, err := mountsOnDevice(whole)
+		if err == nil {
+			info.Letters = letters
+		}
 	}
 	if len(info.Letters) == 0 {
 		info.Letters = []string{info.Root}
@@ -214,11 +247,17 @@ func doFormat(root string, disk int, uid, gid int, user string, report func(floa
 	}
 	devPath := filepath.Join("/dev", whole)
 	report(0, "Unmounting the card")
-	for _, mp := range mountsOnDevice(whole) {
+	mounted, err := mountsOnDevice(whole)
+	if err != nil {
+		return "", fmt.Errorf("could not list the card's mounts, so it was not touched: %v", err)
+	}
+	for _, mp := range mounted {
 		if mp == "/" {
 			continue
 		}
-		syscall.Unmount(mp, syscall.MNT_DETACH)
+		if err := syscall.Unmount(mp, syscall.MNT_DETACH); err != nil {
+			return "", fmt.Errorf("could not unmount %s, so the card was not touched: %v", mp, err)
+		}
 	}
 	f, err := os.OpenFile(devPath, os.O_RDWR|os.O_SYNC, 0)
 	switch {
@@ -308,34 +347,56 @@ func elevatableExe() (string, error) {
 	if !strings.HasPrefix(filepath.Clean(exe), filepath.Join(os.TempDir(), ".mount_")) {
 		return exe, nil
 	}
+	// The helper copy is private to this user (0700) and, before it is handed to
+	// pkexec/sudo, its contents are verified to still match this binary. Size and
+	// mtime are not integrity checks, so the comparison is by SHA-256.
 	dst := filepath.Join(filepath.Dir(dbDir()), "swirl-format-helper")
-	if err := os.MkdirAll(dst, 0o755); err != nil {
+	if err := os.MkdirAll(dst, 0o700); err != nil {
 		return "", err
 	}
 	dstExe := filepath.Join(dst, "SWIRL-Card-Manager")
-	if same, _ := sameFile(exe, dstExe); same {
-		return dstExe, nil
-	}
 	if err := copyFile(exe, dstExe); err != nil {
 		return "", err
 	}
-	if err := os.Chmod(dstExe, 0o755); err != nil {
+	if err := os.Chmod(dstExe, 0o700); err != nil {
 		return "", err
+	}
+	same, err := sameFile(exe, dstExe)
+	if err != nil {
+		return "", err
+	}
+	if !same {
+		return "", errors.New("the format helper could not be verified, so the card was not touched")
 	}
 	return dstExe, nil
 }
 
-// sameFile reports whether two paths are the same file (size and mtime agree).
+// sameFile reports whether two paths hold identical contents, compared by SHA-256
+// so a same-user process that swaps the file for a different binary is detected.
 func sameFile(a, b string) (bool, error) {
-	sa, err := os.Stat(a)
+	ha, err := fileSHA256(a)
 	if err != nil {
 		return false, err
 	}
-	sb, err := os.Stat(b)
+	hb, err := fileSHA256(b)
 	if err != nil {
 		return false, err
 	}
-	return sa.Size() == sb.Size() && sa.ModTime().Equal(sb.ModTime()), nil
+	return ha == hb, nil
+}
+
+// fileSHA256 returns the lowercase hex SHA-256 of the file at path.
+func fileSHA256(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // formatCard erases and formats the card. If this app is not running as root, Linux
