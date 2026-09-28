@@ -53,8 +53,10 @@ func linuxConfirmWord(device string) string {
 }
 
 // judgeLinuxDisk fills in a DiskInfo for a whole block device. protected is the
-// device name that holds the running system's root filesystem.
-func judgeLinuxDisk(info *DiskInfo, dev linuxBlockDev, protected string) {
+// set of physical device names that hold the running system's root filesystem.
+// An empty protected set means the system disk could not be determined, so no
+// disk is allowed (fail closed).
+func judgeLinuxDisk(info *DiskInfo, dev linuxBlockDev, protected map[string]bool) {
 	info.Disk = linuxDevHash(dev.Name)
 	info.Model = strings.TrimSpace(dev.Model)
 	if info.Model == "" {
@@ -69,7 +71,9 @@ func judgeLinuxDisk(info *DiskInfo, dev linuxBlockDev, protected string) {
 	switch {
 	case dev.Name == "":
 		info.Reason = "this is not a disk that can be formatted"
-	case dev.Name == protected:
+	case len(protected) == 0:
+		info.Reason = "could not find which disk holds Linux, so no disk can be formatted"
+	case protected[dev.Name]:
 		info.Reason = "this disk holds Linux and can never be formatted here"
 	case dev.SecSize != 0 && dev.SecSize != secSize:
 		info.Reason = fmt.Sprintf("this card uses %d byte sectors; only %d is supported", dev.SecSize, secSize)

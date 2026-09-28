@@ -256,8 +256,10 @@ func Uninstall(quiet bool) int {
 		os.RemoveAll(appDataDir())
 	}
 	dir := installDir()
-	// this exe may be the one being removed, so a detached helper deletes the folder after it exits
-	helper := exec.Command("/bin/sh", "-c", fmt.Sprintf("sleep 3; rm -rf %s", shellQuote(dir)))
+	// this exe may be the one being removed, so a detached helper deletes the folder after it exits.
+	// The path is passed as $1 (never interpolated into the shell string) and guarded with -- so a
+	// path starting with a hyphen is not read as an option.
+	helper := exec.Command("/bin/sh", "-c", `sleep 3; rm -rf -- "$1"`, "sh", dir)
 	helper.Dir = os.TempDir()
 	helper.Start()
 	return 0

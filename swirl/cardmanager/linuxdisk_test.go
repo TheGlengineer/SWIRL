@@ -38,7 +38,7 @@ func TestLinuxConfirmWord(t *testing.T) {
 func TestJudgeLinuxDisk(t *testing.T) {
 	usb := linuxBlockDev{Name: "sdb", Model: "SD Card Reader", USB: true, SizeBytes: 63864569856, SecSize: 512}
 	var info DiskInfo
-	judgeLinuxDisk(&info, usb, "sda")
+	judgeLinuxDisk(&info, usb, map[string]bool{"sda": true})
 	if !info.OK || info.Disk == 0 || info.Model != "SD Card Reader" || info.Bus != "USB" {
 		t.Fatalf("SD card refused: %+v", info)
 	}
@@ -48,7 +48,7 @@ func TestJudgeLinuxDisk(t *testing.T) {
 
 	// the disk holding / is refused
 	info = DiskInfo{}
-	judgeLinuxDisk(&info, usb, "sdb")
+	judgeLinuxDisk(&info, usb, map[string]bool{"sdb": true})
 	if info.OK || !strings.Contains(info.Reason, "Linux") {
 		t.Fatalf("root disk: %+v", info)
 	}
@@ -56,7 +56,7 @@ func TestJudgeLinuxDisk(t *testing.T) {
 	// a built-in SD slot (mmc, not USB, marked removable) is allowed
 	builtin := linuxBlockDev{Name: "mmcblk0", Model: "SD", Removable: true, SizeBytes: 63864569856, SecSize: 512}
 	info = DiskInfo{}
-	judgeLinuxDisk(&info, builtin, "sda")
+	judgeLinuxDisk(&info, builtin, map[string]bool{"sda": true})
 	if !info.OK {
 		t.Fatalf("built in slot refused: %+v", info)
 	}
@@ -64,15 +64,22 @@ func TestJudgeLinuxDisk(t *testing.T) {
 	// an internal SATA disk is refused
 	internal := linuxBlockDev{Name: "sda", Model: "Samsung SSD 850", USB: false, Removable: false, SizeBytes: 500 << 30, SecSize: 512}
 	info = DiskInfo{}
-	judgeLinuxDisk(&info, internal, "nvme0n1")
+	judgeLinuxDisk(&info, internal, map[string]bool{"nvme0n1": true})
 	if info.OK || !strings.Contains(info.Reason, "internal") {
 		t.Fatalf("internal: %+v", info)
+	}
+
+	// when the protected set is empty, every disk is refused (fail closed)
+	info = DiskInfo{}
+	judgeLinuxDisk(&info, usb, map[string]bool{})
+	if info.OK || !strings.Contains(info.Reason, "no disk can be formatted") {
+		t.Fatalf("empty protected set should refuse: %+v", info)
 	}
 
 	// wrong sector size
 	odd := linuxBlockDev{Name: "sdb", Model: "SD", USB: true, SizeBytes: 63864569856, SecSize: 4096}
 	info = DiskInfo{}
-	judgeLinuxDisk(&info, odd, "sda")
+	judgeLinuxDisk(&info, odd, map[string]bool{"sda": true})
 	if info.OK || !strings.Contains(info.Reason, "sectors") {
 		t.Fatalf("4k sectors: %+v", info)
 	}
@@ -80,7 +87,7 @@ func TestJudgeLinuxDisk(t *testing.T) {
 	// no card in the reader
 	empty := linuxBlockDev{Name: "sdb", Model: "SD Card Reader", USB: true, SizeBytes: 0, SecSize: 512}
 	info = DiskInfo{}
-	judgeLinuxDisk(&info, empty, "sda")
+	judgeLinuxDisk(&info, empty, map[string]bool{"sda": true})
 	if info.OK || !strings.Contains(info.Reason, "size") {
 		t.Fatalf("empty reader: %+v", info)
 	}
@@ -88,7 +95,7 @@ func TestJudgeLinuxDisk(t *testing.T) {
 	// a huge disk is refused
 	huge := linuxBlockDev{Name: "sdb", Model: "Disk", USB: true, SizeBytes: 3 << 40, SecSize: 512}
 	info = DiskInfo{}
-	judgeLinuxDisk(&info, huge, "sda")
+	judgeLinuxDisk(&info, huge, map[string]bool{"sda": true})
 	if info.OK || !strings.Contains(info.Reason, "2 TB") {
 		t.Fatalf("huge disk: %+v", info)
 	}
@@ -96,7 +103,7 @@ func TestJudgeLinuxDisk(t *testing.T) {
 	// a tiny disk is refused
 	tiny := linuxBlockDev{Name: "sdb", Model: "Disk", USB: true, SizeBytes: 64 << 20, SecSize: 512}
 	info = DiskInfo{}
-	judgeLinuxDisk(&info, tiny, "sda")
+	judgeLinuxDisk(&info, tiny, map[string]bool{"sda": true})
 	if info.OK || !strings.Contains(info.Reason, "small") {
 		t.Fatalf("tiny disk: %+v", info)
 	}

@@ -42,15 +42,42 @@ func vmucapExe() (string, error) {
 	}
 	p := filepath.Join(dir, "swirl-vmucap")
 	if old, err := os.ReadFile(p); err != nil || !bytes.Equal(old, bin) {
-		if err := os.WriteFile(p, bin, 0o755); err != nil {
+		// Write to a temp file in the same directory and rename over p, so a
+		// still-running older copy is never overwritten in place (which would fail
+		// with ETXTBSY on Linux).
+		tmp, err := os.CreateTemp(dir, "swirl-vmucap-*.tmp")
+		if err != nil {
+			return "", err
+		}
+		tmpName := tmp.Name()
+		if _, err := tmp.Write(bin); err != nil {
+			tmp.Close()
+			os.Remove(tmpName)
+			return "", err
+		}
+		if err := tmp.Chmod(0o755); err != nil {
+			tmp.Close()
+			os.Remove(tmpName)
+			return "", err
+		}
+		if err := tmp.Close(); err != nil {
+			os.Remove(tmpName)
+			return "", err
+		}
+		if err := os.Rename(tmpName, p); err != nil {
+			os.Remove(tmpName)
 			return "", err
 		}
 	}
 	// portable mode: Flycast keeps its settings and VMU files in its own home, not ~/.flycast
-	os.MkdirAll(filepath.Join(vmucapHome(), ".flycast", "data"), 0o755)
+	if err := os.MkdirAll(filepath.Join(vmucapHome(), ".flycast", "data"), 0o755); err != nil {
+		return "", err
+	}
 	cfg := filepath.Join(vmucapHome(), ".flycast", "emu.cfg")
 	if _, err := os.Stat(cfg); err != nil {
-		os.WriteFile(cfg, []byte("[config]\nUseReios = yes\n[audio]\nbackend = null\n"), 0o644)
+		if err := os.WriteFile(cfg, []byte("[config]\nUseReios = yes\n[audio]\nbackend = null\n"), 0o644); err != nil {
+			return "", err
+		}
 	}
 	return p, nil
 }

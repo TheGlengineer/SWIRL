@@ -75,16 +75,60 @@ func linuxDiskForRoot(root string) (linuxBlockDev, string, error) {
 	return linuxReadDevice(whole), whole, nil
 }
 
-// rootDeviceName is the whole block device that holds the running system's root filesystem.
-func rootDeviceName() string {
+// physicalDisksFor resolves a whole block device to the physical disk (or disks)
+// behind it, walking device-mapper slaves so an LVM/LUKS/dm-crypt root maps back
+// to the real disk that must be protected. It returns the set of physical device
+// names (for example {"sda"} or {"sdb", "sdc"} for a spanned root).
+func physicalDisksFor(whole string) map[string]bool {
+	if whole == "" {
+		return nil
+	}
+	disks := map[string]bool{}
+	visited := map[string]bool{}
+	var walk func(string)
+	walk = func(name string) {
+		if name == "" || visited[name] {
+			return
+		}
+		visited[name] = true
+		slaves := filepath.Join("/sys/block", name, "slaves")
+		entries, err := os.ReadDir(slaves)
+		if err != nil || len(entries) == 0 {
+			// no slaves: name itself is a physical disk
+			disks[name] = true
+			return
+		}
+		for _, e := range entries {
+			walk(e.Name())
+		}
+	}
+	walk(whole)
+	return disks
+}
+
+// rootDeviceNames is the set of physical device names that hold the running
+// system's root filesystem. An empty set means it could not be determined.
+func rootDeviceNames() map[string]bool {
 	entries, err := readMountinfo()
 	if err != nil {
-		return ""
+		return nil
 	}
-	if e, ok := mountEntryFor(entries, "/"); ok {
-		return wholeDeviceForMajorMinor(e.Major, e.Minor)
+	e, ok := mountEntryFor(entries, "/")
+	if !ok {
+		return nil
 	}
-	return ""
+	whole := wholeDeviceForMajorMinor(e.Major, e.Minor)
+	if whole == "" {
+		// The major:minor lookup failed; fall back to the mount's Source. This is
+		// usually /dev/mapper/<name> or /dev/sdX, and the slave walk below resolves
+		// device-mapper names (dm-0, vg-root, ...) back to their physical disks.
+		whole = strings.TrimPrefix(e.Source, "/dev/")
+		whole = strings.TrimSuffix(whole, "/")
+	}
+	if whole == "" {
+		return nil
+	}
+	return physicalDisksFor(whole)
 }
 
 // mountsOnDevice lists every mount point on a whole block device.
@@ -144,7 +188,7 @@ func diskInfo(root string) (*DiskInfo, error) {
 		Confirm: linuxConfirmWord(whole),
 		Letters: []string{filepath.Clean(root)},
 	}
-	judgeLinuxDisk(info, dev, rootDeviceName())
+	judgeLinuxDisk(info, dev, rootDeviceNames())
 	if info.Disk >= 0 {
 		info.Letters = mountsOnDevice(whole)
 	}
@@ -161,7 +205,7 @@ func doFormat(root string, disk int, uid, gid int, user string, report func(floa
 		return "", err
 	}
 	info := &DiskInfo{Root: filepath.Clean(root), Name: filepath.Base(root), Confirm: linuxConfirmWord(whole)}
-	judgeLinuxDisk(info, dev, rootDeviceName())
+	judgeLinuxDisk(info, dev, rootDeviceNames())
 	if !info.OK {
 		return "", errors.New(info.Reason)
 	}

@@ -38,7 +38,10 @@ func platformAsset() string {
 	case "darwin":
 		return "SWIRL-Card-Manager-macOS.zip"
 	case "linux":
-		return "SWIRL-Card-Manager-linux-amd64.gz"
+		if runtime.GOARCH == "amd64" {
+			return "SWIRL-Card-Manager-linux-amd64.gz"
+		}
+		return ""
 	}
 	return "SWIRL-Card-Manager.exe"
 }
