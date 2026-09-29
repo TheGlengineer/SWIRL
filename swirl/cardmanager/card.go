@@ -234,6 +234,7 @@ func ScanCard(root string) (*Card, error) {
 	if err != nil {
 		return nil, err
 	}
+	vfbDB := readVFBDatabase(root)
 	var nums []int
 	for _, e := range entries {
 		if !e.IsDir() || !folderRe.MatchString(e.Name()) {
@@ -283,6 +284,18 @@ func ScanCard(root string) (*Card, error) {
 		}
 		if g.Name == "" {
 			g.Name = "Folder " + folder
+		}
+		// the Virtual Folder Bundle's type.txt and disc.txt (an audio CD as "other", a disc number the header has wrong)
+		if x := readVFBExtras(dir, vfbDB[folder]); x.Type != "" || x.Disc != "" {
+			if x.Type != "" {
+				g.Type = x.Type
+				if x.Type == "other" {
+					g.Error = ""
+				}
+			}
+			if x.Disc != "" {
+				g.Disc = x.Disc
+			}
 		}
 		if e := edits.Games[folder]; e != nil && e.Product == g.Product {
 			g.Edited = true
@@ -562,6 +575,9 @@ func buildMenuImageInto(root, datDir string, allowEmpty bool, log Logger) (strin
 	}
 	if err := applyEdits(root, c, data, log); err != nil {
 		return work, "", nil, err
+	}
+	if err := importVFBFolders(root, c, log); err != nil {
+		log("%v", err)
 	}
 	if err := addExtras(root, c, data, log); err != nil {
 		return work, "", nil, err
