@@ -67,7 +67,10 @@ type Card struct {
 	MenuTitle string `json:"menuTitle"`
 	// MenuVariant names a build of openMenu that is not the stock one ("VFB", the Virtual Folder Bundle)
 	MenuVariant string `json:"menuVariant,omitempty"`
-	SwirlVer    string `json:"swirlVersion"`
+	// MenuImage is the disc image file in 01 (disc.gdi, disc.cdi, ...) and MenuFormat its kind (GDI, CDI, MDS, CCD, ISO)
+	MenuImage  string `json:"menuImage,omitempty"`
+	MenuFormat string `json:"menuFormat,omitempty"`
+	SwirlVer   string `json:"swirlVersion"`
 	// SwirlRelease is the version SWIRL reports in About ("2.10"); empty for early builds
 	SwirlRelease string   `json:"swirlRelease,omitempty"`
 	HasBox       bool     `json:"hasBox"`
@@ -161,24 +164,21 @@ func ScanCard(root string) (*Card, error) {
 	var boxIDs, iconIDs, metaIDs, vmuIDs map[string]bool
 	edits := loadEdits(root)
 
-	// menu disc in 01
-	gdi := findGDI(filepath.Join(root, "01"))
-	if gdi != "" {
-		if d, err := openGDI(gdi); err == nil {
-			if b, err := d.readSectors(d.highDensityStart(), 1); err == nil {
-				if ip, ok := parseIP(b); ok {
-					c.MenuTitle = ip.Name
-					switch {
-					case strings.Contains(ip.Name, "openMenu"):
-						c.MenuType = "openMenu"
-					case strings.Contains(strings.ToUpper(ip.Name), "GDMENU"):
-						c.MenuType = "GDMENU"
-					default:
-						c.MenuType = "Game"
-					}
-				}
-			}
-			if c.MenuType == "openMenu" {
+	// menu disc in 01: any image is looked at, so a game or an unknown menu is named for what it is
+	menuDir := filepath.Join(root, "01")
+	if img := menuImageIn01(menuDir); img != "" {
+		c.MenuImage, c.MenuFormat = img, imageFormat(img)
+		ip, _, err := readImageIP(menuDir)
+		switch {
+		case err != nil || ip == nil:
+			c.MenuType = "Unknown"
+			c.Warnings = append(c.Warnings, fmt.Sprintf("Folder 01 holds %s, a disc image whose header cannot be read (%v). SWIRL cannot be installed until it is moved to a later folder.", img, err))
+		default:
+			c.MenuTitle = ip.Name
+			c.MenuType = menuTypeFromIP(ip)
+		}
+		if c.MenuType == "openMenu" {
+			if d, err := openGameDisc(menuDir); err == nil {
 				if files, err := listISO(d); err == nil {
 					for _, f := range files {
 						switch strings.ToUpper(f.Path) {
@@ -207,12 +207,15 @@ func ScanCard(root string) (*Card, error) {
 						}
 					}
 				}
+				d.Close()
 			}
-			d.Close()
 		}
 	}
-	if c.MenuType == "Game" {
-		c.Warnings = append(c.Warnings, "Folder 01 holds a game, not a menu. Move it to a later folder first.")
+	switch c.MenuType {
+	case "Game":
+		c.Warnings = append(c.Warnings, fmt.Sprintf("Folder 01 holds a game, not a menu: %s (%s). Move it to a later folder first.", c.MenuTitle, c.MenuImage))
+	case "Menu":
+		c.Warnings = append(c.Warnings, fmt.Sprintf("Folder 01 holds a menu SWIRL does not know, %s (%s). Installing SWIRL keeps it in Backups.", c.MenuTitle, c.MenuImage))
 	}
 
 	entries, err := os.ReadDir(root)
@@ -346,6 +349,42 @@ func findGDI(dir string) string {
 	return ""
 }
 
+// imageExtOrder is the order a folder's disc image is picked in when it holds more than one file.
+var imageExtOrder = []string{".gdi", ".cdi", ".mds", ".ccd", ".iso"}
+
+// menuImageIn01 names the disc image file in the menu folder ("" when there is none).
+func menuImageIn01(dir string) string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	for _, ext := range imageExtOrder {
+		for _, e := range entries {
+			if !e.IsDir() && !isJunk(e.Name()) && strings.EqualFold(filepath.Ext(e.Name()), ext) {
+				return e.Name()
+			}
+		}
+	}
+	return ""
+}
+
+func imageFormat(name string) string {
+	return strings.ToUpper(strings.TrimPrefix(filepath.Ext(name), "."))
+}
+
+// menuTypeFromIP says what a disc in 01 is from its header: a menu SWIRL knows, one it does not, or a game.
+func menuTypeFromIP(ip *ipInfo) string {
+	switch {
+	case strings.Contains(ip.Name, "openMenu"):
+		return "openMenu"
+	case strings.Contains(strings.ToUpper(ip.Name), "GDMENU"):
+		return "GDMENU"
+	case strings.Contains(strings.ToUpper(ip.Name), "MENU"):
+		return "Menu"
+	}
+	return "Game"
+}
+
 func iniEntry(b *strings.Builder, slot int, name, disc string, vga bool, region, version, date, product string, extra ...string) {
 	v := "0"
 	if vga {
@@ -430,6 +469,9 @@ func buildMenuImageInto(root, datDir string, allowEmpty bool, log Logger) (strin
 	if c.MenuType == "Game" {
 		return "", "", nil, errors.New("folder 01 holds a game, not a menu; nothing was changed")
 	}
+	if c.MenuType == "Unknown" {
+		return "", "", nil, fmt.Errorf("folder 01 holds %s, a disc image that cannot be read; move it to a later folder first. Nothing was changed", c.MenuImage)
+	}
 	if len(c.Games) == 0 && !allowEmpty {
 		return "", "", nil, errors.New("no game folders (02, 03, ...) were found on this card")
 	}
@@ -449,8 +491,8 @@ func buildMenuImageInto(root, datDir string, allowEmpty bool, log Logger) (strin
 	menuIP := &ipInfo{Name: "openMenu", Version: "V1.000", Date: time.Now().Format("20060102"), Product: "SWIRL_1"}
 	ipBytes := fallbackIP
 	menuDir := filepath.Join(root, "01")
-	if gdi := findGDI(menuDir); gdi != "" && (c.MenuType == "openMenu" || c.MenuType == "SWIRL") {
-		d, err := openGDI(gdi)
+	if c.MenuType == "openMenu" || c.MenuType == "SWIRL" {
+		d, err := openGameDisc(menuDir)
 		if err != nil {
 			return work, "", nil, err
 		}

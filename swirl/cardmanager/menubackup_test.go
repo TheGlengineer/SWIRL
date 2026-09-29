@@ -162,3 +162,175 @@ func TestMakeUICard(t *testing.T) {
 	}
 	os.MkdirAll(filepath.Join(dir, backupDir, "removed_20260901_120000", "09"), 0o755)
 }
+
+// writeTestCDIWith is writeTestCDI with files of the caller's choosing on the disc.
+func writeTestCDIWith(t *testing.T, path, title, serial string, files map[string][]byte) {
+	t.Helper()
+	dir := t.TempDir()
+	data := filepath.Join(dir, "d")
+	os.MkdirAll(data, 0o755)
+	for n, b := range files {
+		os.WriteFile(filepath.Join(data, n), b, 0o644)
+	}
+	iso := filepath.Join(dir, "s.iso")
+	if err := buildISO(data, iso, 11702, "T", ipSector(title, serial)); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(iso)
+	os.MkdirAll(filepath.Dir(path), 0o755)
+	f, _ := os.Create(path)
+	f.Write(make([]byte, 2352*300))
+	for i := 0; i < len(raw)/2048; i++ {
+		f.Write(make([]byte, 8))
+		f.Write(raw[i*2048 : (i+1)*2048])
+		f.Write(make([]byte, 280))
+	}
+	f.Close()
+}
+
+// CM-4: whatever image is in 01 is named for what it is. A game blocks the install and is never moved.
+func TestImageIn01(t *testing.T) {
+	t.Run("cdi game", func(t *testing.T) {
+		root := txnCard(t, "", 2)
+		writeTestCDI(t, filepath.Join(root, "01", "disc.cdi"), "MY CDI GAME", "T-99999N")
+		c, err := ScanCard(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.MenuType != "Game" || c.MenuTitle != "MY CDI GAME" || c.MenuImage != "disc.cdi" || c.MenuFormat != "CDI" {
+			t.Fatalf("type %q title %q image %q format %q", c.MenuType, c.MenuTitle, c.MenuImage, c.MenuFormat)
+		}
+		if len(c.Warnings) != 1 || !strings.Contains(c.Warnings[0], "MY CDI GAME (disc.cdi)") {
+			t.Fatalf("warnings %q", c.Warnings)
+		}
+		err = InstallSwirl(root, "", quiet)
+		if err == nil || err.Error() != "folder 01 holds a game, not a menu; nothing was changed" {
+			t.Fatalf("install: %v", err)
+		}
+		if !fileExists(filepath.Join(root, "01", "disc.cdi")) || len(listBackups(root)) != 0 {
+			t.Fatalf("the game was moved: %v", listBackups(root))
+		}
+		h, _ := CheckCard(root)
+		found := false
+		for _, it := range h.Items {
+			if it.Folder == "01" && it.Level == "error" && strings.Contains(it.Message, "MY CDI GAME (disc.cdi)") {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("health items %+v", h.Items)
+		}
+	})
+	t.Run("mds game", func(t *testing.T) {
+		root := txnCard(t, "", 2)
+		writeTestCDI(t, filepath.Join(root, "01", "game.mdf"), "MDS GAME", "T-99998N")
+		os.WriteFile(filepath.Join(root, "01", "game.mds"), []byte("MEDIA DESCRIPTOR"), 0o644)
+		c, _ := ScanCard(root)
+		if c.MenuType != "Game" || c.MenuImage != "game.mds" || c.MenuFormat != "MDS" || c.MenuTitle != "MDS GAME" {
+			t.Fatalf("type %q title %q image %q format %q", c.MenuType, c.MenuTitle, c.MenuImage, c.MenuFormat)
+		}
+	})
+	t.Run("unreadable image", func(t *testing.T) {
+		root := txnCard(t, "", 2)
+		os.MkdirAll(filepath.Join(root, "01"), 0o755)
+		os.WriteFile(filepath.Join(root, "01", "odd.cdi"), []byte(strings.Repeat("x", 4096)), 0o644)
+		c, _ := ScanCard(root)
+		if c.MenuType != "Unknown" || c.MenuImage != "odd.cdi" || len(c.Warnings) != 1 || !strings.Contains(c.Warnings[0], "odd.cdi") {
+			t.Fatalf("type %q image %q warnings %q", c.MenuType, c.MenuImage, c.Warnings)
+		}
+		if err := InstallSwirl(root, "", quiet); err == nil || !strings.Contains(err.Error(), "odd.cdi") {
+			t.Fatalf("install: %v", err)
+		}
+		if !fileExists(filepath.Join(root, "01", "odd.cdi")) {
+			t.Fatal("the image was moved")
+		}
+	})
+	t.Run("unknown menu", func(t *testing.T) {
+		root := txnCard(t, "", 2)
+		makeMenuIn01(t, root, "SOME OTHER MENU")
+		c, _ := ScanCard(root)
+		if c.MenuType != "Menu" || c.MenuTitle != "SOME OTHER MENU" || len(c.Warnings) != 1 || !strings.Contains(c.Warnings[0], "does not know") {
+			t.Fatalf("type %q title %q warnings %q", c.MenuType, c.MenuTitle, c.Warnings)
+		}
+		for i := 0; i < 5; i++ {
+			if err := InstallSwirl(root, "", quiet); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if n := backupsWithPrefix(root, "01_original_menu_"); len(n) != 1 {
+			t.Fatalf("the unknown menu was not pinned: %v", listBackups(root))
+		}
+	})
+}
+
+// CM-4: a CDI build of openMenu in 01 is a menu. Its art and themes are carried over, it is pinned, and
+// the covers page can read it.
+func TestCDIMenuIn01(t *testing.T) {
+	root := txnCard(t, "", 2)
+	box := newDat(131104)
+	box.Set("T00002N", []byte("box art for game A"))
+	bp := filepath.Join(t.TempDir(), "BOX.DAT")
+	if err := box.Write(bp); err != nil {
+		t.Fatal(err)
+	}
+	boxBytes, _ := os.ReadFile(bp)
+	writeTestCDIWith(t, filepath.Join(root, "01", "menu.cdi"), "openMenu", "NEODC_1", map[string][]byte{
+		"1ST_READ.BIN": []byte(strings.Repeat("stock openMenu ", 200)),
+		"OPENMENU.INI": []byte("[OPENMENU]\r\nnum_items=1\r\n"),
+		"MARKER.TXT":   []byte("theme file from the CDI menu"),
+		"BOX.DAT":      boxBytes,
+	})
+	c, err := ScanCard(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.MenuType != "openMenu" || c.MenuFormat != "CDI" || c.MenuImage != "menu.cdi" || !c.HasBox {
+		t.Fatalf("type %q format %q image %q hasBox %v", c.MenuType, c.MenuFormat, c.MenuImage, c.HasBox)
+	}
+	if !findGame(c, "02").HasArt {
+		t.Fatal("art on the CDI menu was not seen")
+	}
+	if b, err := GameArt(root, "02", "box"); err == nil && len(b) > 0 {
+		t.Log("box art read from the CDI menu")
+	}
+	for i := 0; i < 5; i++ {
+		if err := InstallSwirl(root, "", quiet); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c, _ = ScanCard(root)
+	if c.MenuType != "SWIRL" || c.MenuFormat != "GDI" {
+		t.Fatalf("after install: type %q format %q", c.MenuType, c.MenuFormat)
+	}
+	m, err := openMenuDisc(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, marker := m.files["MARKER.TXT"]
+	_, hasBox := m.files["BOX.DAT"]
+	m.Close()
+	if !marker || !hasBox {
+		t.Fatalf("files from the CDI menu were not carried over: marker %v box %v", marker, hasBox)
+	}
+	pinned := backupsWithPrefix(root, "01_original_openmenu_")
+	if len(pinned) != 1 || !fileExists(filepath.Join(root, backupDir, pinned[0], "menu.cdi")) {
+		t.Fatalf("the CDI menu was not pinned: %v", listBackups(root))
+	}
+	c, _ = ScanCard(root)
+	if c.BackupList[0].Name != pinned[0] || c.BackupList[0].Menu != "openMenu" {
+		t.Fatalf("backup list %+v", c.BackupList)
+	}
+}
+
+// An automatic backup that holds a game (made by an older Card Manager) is never pruned.
+func TestPruneSkipsBackupsHoldingGames(t *testing.T) {
+	root := t.TempDir()
+	for i := 0; i < 5; i++ {
+		writeTestCDI(t, filepath.Join(root, backupDir, fmt.Sprintf("01_202601%02d_120000", 10+i), "disc.cdi"), "OLD GAME", "T-00001N")
+	}
+	os.MkdirAll(filepath.Join(root, backupDir, "01_20260120_120000"), 0o755)
+	pruneMenuBackups(root, 1)
+	if n := len(listBackups(root)); n != 6 {
+		t.Fatalf("%d backups left: %v", n, listBackups(root))
+	}
+}

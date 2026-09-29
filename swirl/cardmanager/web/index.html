@@ -955,6 +955,9 @@ function menuBadge(c) {
   if (c.menuType === "openMenu") return `<span class="badge">openMenu</span>`;
   if (c.menuType === "GDMENU") return `<span class="badge">GDMENU</span>`;
   if (c.menuType === "None") return `<span class="badge warn">No menu yet</span>`;
+  if (c.menuType === "Game") return `<span class="badge warn">Game, not a menu: ${esc(c.menuTitle || c.menuImage)} (${esc(c.menuFormat)})</span>`;
+  if (c.menuType === "Menu") return `<span class="badge warn">${esc(c.menuTitle)} (a menu SWIRL does not know, ${esc(c.menuFormat)})</span>`;
+  if (c.menuType === "Unknown") return `<span class="badge warn">Unreadable disc image: ${esc(c.menuImage)}</span>`;
   return `<span class="badge warn">${esc(c.menuType)}</span>`;
 }
 
@@ -1000,11 +1003,11 @@ async function scan() {
   $("cardFlag").hidden = !warnCount;
   $("cardLed").className = "led " + (warnCount || c.menuType !== "SWIRL" ? "warn" : "ok");
   $("cardChipName").textContent = c.root;
-  $("cardChipInfo").textContent = `${c.menuType === "SWIRL" ? "SWIRL" : c.menuType === "None" ? "No menu" : c.menuType} · ${c.games.length} games`;
+  $("cardChipInfo").textContent = `${c.menuType === "SWIRL" ? "SWIRL" : c.menuType === "None" ? "No menu" : c.menuType === "Game" ? "Game in 01" : c.menuType === "Unknown" ? "Unreadable image in 01" : c.menuType} · ${c.games.length} games`;
   $("gamesSub").textContent = `${c.games.length} games · ${art} with box art · ${meta} with descriptions. Folders 02 and up, in the order GDEMU and SWIRL list them.`;
   $("fillArt").disabled = !c.games.length;
   if (view === "card" && !warnCount) show("games");
-  const blocked = c.menuType === "Game" || (!c.games.length && c.menuType === "None");
+  const blocked = c.menuType === "Game" || c.menuType === "Unknown" || (!c.games.length && c.menuType === "None");
   $("install").disabled = blocked;
   $("install").textContent = c.menuType === "SWIRL" ? "Update SWIRL" : "Install SWIRL";
   log(blocked ? "This card can't be updated yet (see the notes under SD card)." : c.games.length ? `Ready. ${c.games.length} games found on ${c.root}` : `Ready. ${c.root} has SWIRL but no games yet. Add them in Games.`);

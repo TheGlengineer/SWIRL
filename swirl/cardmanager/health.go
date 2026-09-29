@@ -100,7 +100,11 @@ func CheckCard(root string) (*HealthReport, error) {
 	case "None":
 		add("error", "01", "There is no menu in folder 01, so GDEMU will boot the first game instead")
 	case "Game":
-		add("error", "01", "Folder 01 holds a game, not a menu")
+		add("error", "01", "Folder 01 holds a game, not a menu: %s (%s)", c.MenuTitle, c.MenuImage)
+	case "Unknown":
+		add("error", "01", "Folder 01 holds %s, a disc image whose header cannot be read", c.MenuImage)
+	case "Menu":
+		add("warn", "01", "Folder 01 has a menu SWIRL does not know, %s (%s), not SWIRL", c.MenuTitle, c.MenuImage)
 	default:
 		add("warn", "01", "Folder 01 has %s, not SWIRL", c.MenuType)
 	}

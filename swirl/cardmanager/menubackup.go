@@ -82,7 +82,7 @@ func sameSizes(a, b map[string]string) bool {
 // 01_original_<menu>_<time>, unless a pinned backup already holds that same menu (it was restored and
 // SWIRL is going back in). Menus SWIRL built are 01_<time>, and only the newest three of those stay.
 func menuBackupPrefix(root string, c *Card) string {
-	if c == nil || c.MenuType == "SWIRL" || c.MenuType == "None" || c.MenuType == "Game" {
+	if c == nil || c.MenuType == "SWIRL" || c.MenuType == "None" || c.MenuType == "Game" || c.MenuType == "Unknown" {
 		return "01_"
 	}
 	cur := dirSizes(filepath.Join(root, "01"))
@@ -95,13 +95,18 @@ func menuBackupPrefix(root string, c *Card) string {
 }
 
 // pruneMenuBackups keeps the newest few automatic menu backups so the card does not fill up. Pinned
-// originals, replaced menus, removed games and anything not named by SWIRL are left alone.
+// originals, replaced menus, removed games, anything not named by SWIRL, and a backup that holds
+// something other than a menu SWIRL built (a game, an unknown menu) are left alone.
 func pruneMenuBackups(root string, keep int) {
 	var auto []string
 	for _, b := range listBackups(root) { // newest first
-		if autoBackupRe.MatchString(b) {
-			auto = append(auto, b)
+		if !autoBackupRe.MatchString(b) {
+			continue
 		}
+		if k := backupMenuKind(filepath.Join(root, backupDir, b)); k != "openMenu" && k != "" {
+			continue
+		}
+		auto = append(auto, b)
 	}
 	for i := keep; i < len(auto); i++ {
 		cardfs.RemoveAll(filepath.Join(root, backupDir, auto[i]))
