@@ -931,10 +931,11 @@ func serve() {
 	}))
 	mux.HandleFunc("/api/app/uninstall", post(func(m map[string]any) (any, error) { return nil, startUninstall() }))
 
-	// one copy at a time: a second start just opens another window onto the first, unless it is a newer
-	// version, which takes over (so running a downloaded update replaces the old one)
+	// one copy at a time: a second start of the same program just opens another window onto the first. A
+	// newer version, or a different build of the same version (a test build), takes over so the card gets it
 	if ri := otherInstance(); ri != nil {
-		if !versionNewer(version, ri.Version) || !askToQuit(ri) {
+		takeOver := versionNewer(version, ri.Version) || (ri.Version == version && !ri.sameBuild())
+		if !takeOver || !askToQuit(ri) {
 			openWindow(fmt.Sprintf("http://127.0.0.1:%d/", ri.Port))
 			return
 		}

@@ -21,6 +21,23 @@ type runningInfo struct {
 	Token   string `json:"token"`
 	PID     int    `json:"pid"`
 	Version string `json:"version"`
+	Exe     string `json:"exe,omitempty"`  // the program file that is running
+	Menu    string `json:"menu,omitempty"` // hash of the menu it carries
+}
+
+func thisExe() string {
+	p, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	return p
+}
+
+// sameBuild reports whether the running copy is this very program: same version, same file, same menu inside.
+// A different file with the same version number (a test build), or a copy too old to say what it is, is
+// replaced, so the card gets the new menu.
+func (ri *runningInfo) sameBuild() bool {
+	return ri.Version == version && ri.Exe != "" && ri.Exe == thisExe() && ri.Menu == swirlHash(swirlBinary)
 }
 
 func runningPath() string { return filepath.Join(appDataDir(), "running.json") }
@@ -72,7 +89,7 @@ func askToQuit(ri *runningInfo) bool {
 
 func writeRunning(port int) {
 	os.MkdirAll(appDataDir(), 0o755)
-	b, _ := json.Marshal(runningInfo{Port: port, Token: token, PID: os.Getpid(), Version: version})
+	b, _ := json.Marshal(runningInfo{Port: port, Token: token, PID: os.Getpid(), Version: version, Exe: thisExe(), Menu: swirlHash(swirlBinary)})
 	os.WriteFile(runningPath(), b, 0o600)
 }
 
