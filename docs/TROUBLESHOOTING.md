@@ -81,6 +81,12 @@ settings to VMU** shows where it saved, or why it couldn't (no space, or the car
 a memory card that doesn't answer. Update SWIRL with Card Manager 2.13.2 or newer. Until then, start with the
 memory card removed, or switch a VM2 or VMU Pro to another card.
 
+**Settings and favorites come back a few seconds after the menu appears.** The memory card answered after
+SWIRL had started (a VM2 or VMU Pro still switching cards, a slow VMU). SWIRL watches the ports for the first
+8 seconds and reads its files from a card that turns up then, as if it had been there at power on: the
+favorites and settings return, and a saved Classic style starts. A card that turns up later is read before
+the first save, so nothing is written over it.
+
 **Getting back to SWIRL from a game.** Hold **A + B + X + Y** and press **Start**.
 
 ## Reporting a problem

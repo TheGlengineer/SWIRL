@@ -1913,6 +1913,24 @@ static void input_detail(unsigned int btn, int pressed) {
 }
 
 /* ---------- UI entry points ---------- */
+void ui_swirl_settings_changed(void) {
+  lib_sort = sw_lib_prefs()->sort % SW_SORT_COUNT;
+  apply_theme();
+  rebuild_all();
+  show_toast("Memory card found: your settings are back");
+}
+
+void ui_swirl_save_settings_soon(void) {
+  sw_lib_settings_dirty();
+  if (save_countdown <= 0) save_countdown = 180;
+}
+
+void ui_swirl_leave(void) {
+  sw_lib_finish();
+  sw_audio_shutdown();
+  sw_vmu_shutdown();
+}
+
 /* drawing frames while a save finishes (see sw_lib_finish): pictures only, no timers or saves */
 static int waiting_for_save;
 void main_draw_frame(void);

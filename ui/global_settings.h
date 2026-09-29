@@ -131,6 +131,10 @@ void settings_init(void);
 void settings_load(void);
 void settings_save(void);
 void settings_validate(void);
+/* SWIRL: a memory card that attached after start up; 1 when its OPENMENU.CFG changed the settings */
+int settings_late_card(void);
+/* SWIRL: no OPENMENU.CFG was found at start up and none has been written yet */
+int settings_cfg_missing(void);
 openmenu_settings* settings_get(void);
 /* SWIRL: whether the menu disc has the files a style needs (the Classic styles use openMenu's theme) */
 int settings_style_ready(int ui);

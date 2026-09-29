@@ -1,6 +1,7 @@
 /* Vendored from mrneo240/LibCrayonVmu_Archived @1c089e1 (Protofall, BSD-3). Patched for KallistiOS 2.2. */
 #define _DEFAULT_SOURCE /* strlcpy/strlcat under -std=c11 */
 #include "savefile.h"
+#include <arch/timer.h>
 #include "../../ui/swirl/sw_trace.h" /* SWIRL: damaged files are reported in the start up trace */
 
 //Note this assumes the vmu chosen is valid
@@ -76,6 +77,11 @@ uint8_t crayon_savefile_check_for_device(int8_t port, int8_t slot, uint32_t func
 	if(!(vmu = maple_enum_dev(port, slot))){
 		return 2;
 	}
+#ifdef SW_TEST_LATE_VMU
+	if(timer_ms_gettime64() < 12000){ /* SWIRL test only: the cards attach 12 s after power on */
+		return 2;
+	}
+#endif
 
 	//Check the device is valid and it has a certain function
 	if(!vmu->valid || !(vmu->info.functions & function)){

@@ -26,6 +26,7 @@
 #include "ui/dc/input.h"
 #include "ui/draw_prototypes.h"
 #include "ui/global_settings.h"
+#include "ui/swirl/sw_lib.h"
 #include "ui/swirl/sw_trace.h"
 #include "ui/swirl/sw_vmu.h"
 
@@ -111,7 +112,9 @@ static void apply_pending_reload(void) {
     return;
   ui_reload_pending = 0;
   openmenu_settings *settings = settings_get();
+  sw_trace("style %d: loading", settings->ui);
   ui_set_choice(settings->ui);
+  sw_trace("style %d: ready", settings->ui);
   input_latched = 1;
 }
 
@@ -159,10 +162,8 @@ static int init(void) {
   }
 
   /* Load UI */
-  sw_trace("style %d: loading", settings_get()->ui);
   reload_ui();
   apply_pending_reload();
-  sw_trace("style %d: ready", settings_get()->ui);
 
   return ret;
 }
@@ -382,6 +383,25 @@ static void trace_devices(void) {
     }
 }
 
+/* SWIRL: a memory card the start up scan missed (a VM2 still switching, a slow VMU) is looked for during the
+   first seconds after the menu is up, and its files are read as if they had been there at start up. */
+#define SWIRL_LATE_CARD_MS 8000
+static void late_card_check(void) {
+  int changed = settings_late_card();
+  if (sw_lib_late_card())
+    changed = 1;
+  if (!changed)
+    return;
+  if ((int)settings_get()->ui != ui_choice_current) {
+    sw_trace("style %d from the late card", settings_get()->ui);
+    if (ui_choice_current == UI_SWIRL)
+      ui_swirl_leave();
+    reload_ui();
+  } else if (ui_choice_current == UI_SWIRL) {
+    ui_swirl_settings_changed();
+  }
+}
+
 int main(int argc, char *argv[]) {
   /* unused */
   (void)argc;
@@ -413,9 +433,26 @@ int main(int argc, char *argv[]) {
      Classic styles leave to the BIOS on Y) until it is let go, and held for about a second it switches a
      Classic style to SWIRL, in case the check at start up missed it. */
   int y_latched = 1, y_frames = 0;
+  const uint64_t menu_up = timer_ms_gettime64();
+  int late_window_over = 0;
   for (int frame = 0;; frame++) {
     z_reset();
     apply_pending_reload();
+    if (frame % 30 == 15 && !late_window_over) {
+      if (timer_ms_gettime64() - menu_up < SWIRL_LATE_CARD_MS) {
+        late_card_check();
+      } else {
+        /* no card brought a settings file: openMenu wrote a fresh one at start up, SWIRL writes it now */
+        late_window_over = 1;
+        if (settings_cfg_missing()) {
+          sw_trace("OPENMENU.CFG: none found, writing one");
+          if (ui_choice_current == UI_SWIRL)
+            ui_swirl_save_settings_soon();
+          else
+            settings_save();
+        }
+      }
+    }
     enum control input = translate_input(); /* also reads the controller for INPT_Button below */
     if (input_latched) {
       if (input == NONE)

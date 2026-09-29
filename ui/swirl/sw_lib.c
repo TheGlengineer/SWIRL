@@ -123,6 +123,14 @@ static void dev_name(maple_device_t *dev, char *out) {
   out[2] = 0;
 }
 
+/* the i-th memory card on the ports */
+static maple_device_t *memcard(int i) {
+#ifdef SW_TEST_LATE_VMU
+  if (timer_ms_gettime64() < 12000) return NULL; /* test only: the cards attach 12 s after power on */
+#endif
+  return maple_enum_type(i, MAPLE_FUNC_MEMCARD);
+}
+
 /* blocks a copy takes on the card, 0 when the name is not there */
 static int copy_blocks(maple_device_t *dev, int which) {
   char path[32];
@@ -140,7 +148,7 @@ static int copy_blocks(maple_device_t *dev, int which) {
 static maple_device_t *find_vmu(int need_blocks, int *has_file) {
   maple_device_t *dev, *first_free = NULL;
   *has_file = 0;
-  for (int i = 0; (dev = maple_enum_type(i, MAPLE_FUNC_MEMCARD)); i++) {
+  for (int i = 0; (dev = memcard(i)); i++) {
     int mask = 0;
     for (int w = 0; w < 2; w++)
       if (copy_blocks(dev, w))
@@ -552,6 +560,31 @@ const char *sw_lib_save_status(char *buf, int len) {
   if (load_state == LOAD_DAMAGED) return "Damaged, will fix";
   if (load_state == LOAD_NO_ANSWER) return "VMU not answering";
   return "Not saved yet";
+}
+
+/* A memory card that attached after the start up scan (see settings_late_card in global_settings.c). While
+   SWIRL's file has not been read, a card that turns up is looked at; its file is merged in the same way as
+   before a first write. 1 when a file was taken in (the menu rebuilds its views and applies the settings). */
+int sw_lib_late_card(void) {
+  static int cards_seen = -1;
+  int n = 0;
+  while (memcard(n)) n++;
+  if (cards_seen < 0) {
+    cards_seen = n;
+    return 0;
+  }
+  if (n <= cards_seen)
+    return 0;
+  cards_seen = n;
+  if (loaded)
+    return 0;
+  const int st = take_in_file(1);
+  if (st != LOAD_OK) {
+    sw_trace("SWIRL.DAT: memory card attached late, %s", st == LOAD_NO_FILE ? "no file on it" : st == LOAD_DAMAGED ? "damaged" : "no answer");
+    return 0;
+  }
+  sw_trace("SWIRL.DAT: read from %s, attached late (write %lu)", save_names[cur_copy], (unsigned long)cur_seq);
+  return 1;
 }
 
 int sw_lib_early_quality(void) {

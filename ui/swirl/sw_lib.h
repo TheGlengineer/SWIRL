@@ -80,6 +80,7 @@ typedef struct sw_prefs {
 } sw_prefs;
 sw_prefs *sw_lib_prefs(void);
 int sw_lib_early_quality(void); /* before the screen is set up: 1 for high */
+int sw_lib_late_card(void);     /* a card that attached after start up: 1 when its SWIRL.DAT was taken in */
 
 /* per game launch settings, kept in sw_stat.flags */
 enum { SW_REGION_AUTO = 0, SW_REGION_JAPAN, SW_REGION_USA, SW_REGION_EUROPE };

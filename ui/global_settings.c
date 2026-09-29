@@ -11,6 +11,8 @@
 #include "global_settings.h"
 #include "swirl/sw_trace.h"
 
+#include <arch/timer.h>
+
 #include <dc/maple.h>
 #include <stdio.h>
 #include <string.h>
@@ -58,8 +60,8 @@ static void settings_defaults(void) {
   savedata.custom_theme_num = THEME_0;
 }
 
-static void settings_create(void) {
-  // If we don't already have a savefile, choose a VMU
+/* SWIRL: picks the card a new OPENMENU.CFG goes to (the left most with room) */
+static void settings_pick_card(void) {
   if (savefile_details.valid_memcards) {
     for (int iter = 0; iter <= 3; iter++) {
       for (int jiter = 1; jiter <= 2; jiter++) {
@@ -72,10 +74,16 @@ static void settings_create(void) {
     }
   }
 Exit_loop_2:;
+}
 
+/* SWIRL: no OPENMENU.CFG on any card at start up. openMenu wrote a fresh one at once; SWIRL waits for the
+   first save instead, so a card that turns up late with the real file (see settings_late_card) is not
+   shadowed by a new one on another card. */
+static int cfg_missing;
+
+static void settings_create(void) {
   settings_defaults();
-
-  settings_save();
+  cfg_missing = 1;
 }
 
 void settings_init(void) {
@@ -176,6 +184,12 @@ void settings_load(void) {
 void settings_save(void) {
   maple_device_t *vmu = NULL;
   int on = 0;
+  if (savefile_details.savefile_port < 0) {
+    /* the first save since start up found no file: choose the card now */
+    crayon_savefile_update_valid_saves(&savefile_details, CRAY_SAVEFILE_UPDATE_MODE_BOTH);
+    settings_pick_card();
+    cfg_missing = 0;
+  }
   if ((savedata.beep == BEEP_ON) && (vmu = maple_enum_dev(savefile_details.savefile_port, savefile_details.savefile_slot))) {
     on = vmu_beep_raw(vmu, 0x000065f0); /* Turn on Beep */
   }
@@ -195,6 +209,61 @@ void settings_save(void) {
 
 openmenu_settings *settings_get(void) {
   return &savedata;
+}
+
+/* ---------- SWIRL: a memory card that turned up after the start up scan ---------- */
+/* KallistiOS's scan of the controller ports gives up after 1.5 s (main.c), so a VM2 or VMU Pro still switching
+   cards, or a slow VMU, is not there when the settings are read: the menu starts with defaults and never looks
+   again. For a while after the menu is up the ports are watched, and a card that attaches then is read as if it
+   had been there at start up. */
+static int cards_seen = -1;
+
+static int count_cards(void) {
+  int n = 0;
+  for (int i = 0; maple_enum_type(i, MAPLE_FUNC_MEMCARD); i++) n++;
+#ifdef SW_TEST_LATE_VMU
+  if (timer_ms_gettime64() < 12000) n = 0; /* test only: the cards attach 12 s after power on */
+#endif
+  return n;
+}
+
+int settings_cfg_missing(void) { return cfg_missing; }
+
+/* 1 when a card that attached late carried the file, and the settings (maybe the style) changed */
+int settings_late_card(void) {
+  const int n = count_cards();
+  if (cards_seen < 0) {
+    cards_seen = n;
+    return 0;
+  }
+  if (n <= cards_seen)
+    return 0;
+  cards_seen = n;
+  if (savefile_details.savefile_port >= 0)
+    return 0; /* the file was read at start up: that card's settings stand */
+  crayon_savefile_update_valid_saves(&savefile_details, CRAY_SAVEFILE_UPDATE_MODE_BOTH);
+  int port = -1, slot = -1;
+  for (int iter = 0; iter <= 3 && port < 0; iter++)
+    for (int jiter = 1; jiter <= 2; jiter++)
+      if (crayon_savefile_get_vmu_bit(savefile_details.valid_saves, iter, jiter)) {
+        port = iter;
+        slot = jiter;
+        break;
+      }
+  if (port < 0) {
+    sw_trace("OPENMENU.CFG: memory card attached late, no file on it");
+    return 0;
+  }
+  const openmenu_settings before = savedata;
+  savefile_details.savefile_port = port;
+  savefile_details.savefile_slot = slot;
+  crayon_savefile_load(&savefile_details);
+  cfg_missing = 0;
+  sw_trace("OPENMENU.CFG: read from %c%d, attached late (style %d)", 'A' + port, slot, savedata.ui);
+  settings_validate();
+  if (savedata.ui != before.ui && !settings_style_ready(savedata.ui))
+    savedata.ui = before.ui; /* the saved style needs theme files this disc lacks: stay */
+  return memcmp(&before, &savedata, sizeof(savedata)) != 0;
 }
 /* ---------- SWIRL: styles that can actually run on this menu disc ---------- */
 
