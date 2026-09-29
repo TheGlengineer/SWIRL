@@ -36,13 +36,14 @@ void cache_callback_del(cache_instance *cache, user_del_cb callback) {
 
 int find_in_cache(cache_instance *cache, const char *key) {
   struct CacheEntry *entry;
+  if (!key)
+    return -1;
   HASH_FIND_STR(cache->cache, key, entry);
   if (entry) {
-    // remove it (so the subsequent add will throw it on the front of the list)
-    if (entry != cache->cache) {
-      HASH_DELETE(hh, cache->cache, entry);
-      HASH_ADD_STR(cache->cache, key, entry);
-    }
+    /* SWIRL: always move the entry to the tail. The head is the next to be evicted, and the old code skipped
+       it, so the picture on screen could be evicted by a neighbour prefetch and re read every frame. */
+    HASH_DELETE(hh, cache->cache, entry);
+    HASH_ADD_STR(cache->cache, key, entry);
     return entry->value;
   }
   return -1;
@@ -53,13 +54,24 @@ void add_to_cache(cache_instance *cache, const char *key, int value) {
   struct CacheEntry *entry, *tmp_entry, *new_entry;
   unsigned int cb_return = 0xFFFFFFFF;
 
+  if (!key)
+    return;
+
   /* Call user function */
   if (cache->callback_add) {
     cb_return = (*cache->callback_add)(key, cache->callback_data);
   }
 
-  entry = malloc(sizeof(struct CacheEntry));
-  entry->key = strdup(key);
+  entry = calloc(1, sizeof(struct CacheEntry));
+  if (entry)
+    entry->key = strdup(key);
+  if (!entry || !entry->key) {
+    /* SWIRL: no memory; give the slot back so the pool and the cache stay in step */
+    if (cache->callback_del && cb_return != 0xFFFFFFFF)
+      (*cache->callback_del)(key, &cb_return, cache->callback_data);
+    free(entry);
+    return;
+  }
   if (cb_return != 0xFFFFFFFF) {
     value = cb_return;
   }
