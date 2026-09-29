@@ -437,25 +437,28 @@ func menuTypeFromIP(ip *ipInfo) string {
 	return "Game"
 }
 
+// iniEntry writes one game's lines. extra[0] is the type line (SWIRL reads it; stock openMenu ignores
+// unknown keys), extra[1] any lines carried over from the old menu's list, already terminated.
 func iniEntry(b *strings.Builder, slot int, name, disc string, vga bool, region, version, date, product string, extra ...string) {
 	v := "0"
 	if vga {
 		v = "1"
 	}
 	s := fmt.Sprintf("%02d", slot)
-	fmt.Fprintf(b, "%s.name=%s\r\n%s.disc=%s\r\n%s.vga=%s\r\n%s.region=%s\r\n%s.version=%s\r\n%s.date=%s\r\n%s.product=%s\r\n\r\n",
+	fmt.Fprintf(b, "%s.name=%s\r\n%s.disc=%s\r\n%s.vga=%s\r\n%s.region=%s\r\n%s.version=%s\r\n%s.date=%s\r\n%s.product=%s\r\n",
 		s, name, s, disc, s, v, s, region, s, version, s, date, s, product)
 	if len(extra) > 0 && extra[0] != "" {
-		// the type line goes with the entry (SWIRL reads it; stock openMenu ignores unknown keys)
-		out := b.String()
-		out = strings.TrimSuffix(out, "\r\n")
-		b.Reset()
-		b.WriteString(out)
-		fmt.Fprintf(b, "%s.type=%s\r\n\r\n", s, extra[0])
+		fmt.Fprintf(b, "%s.type=%s\r\n", s, extra[0])
 	}
+	if len(extra) > 1 {
+		b.WriteString(extra[1])
+	}
+	b.WriteString("\r\n")
 }
 
-func buildINI(c *Card, menuIP *ipInfo) string {
+// buildINI writes OPENMENU.INI. legacy, when the card had another menu before, holds the keys of that
+// menu's list SWIRL does not know; they are written back so nothing is lost.
+func buildINI(c *Card, menuIP *ipInfo, legacy *legacyINI) string {
 	var b strings.Builder
 	max := 1
 	for _, g := range c.Games {
@@ -463,11 +466,11 @@ func buildINI(c *Card, menuIP *ipInfo) string {
 			max = g.Slot
 		}
 	}
-	fmt.Fprintf(&b, "[OPENMENU]\r\nnum_items=%d\r\n\r\n[ITEMS]\r\n", max)
+	fmt.Fprintf(&b, "[OPENMENU]\r\nnum_items=%d\r\n%s\r\n[ITEMS]\r\n", max, legacy.headerLines())
 	iniEntry(&b, 1, "openMenu", "1/1", true, "JUE", menuIP.Version, menuIP.Date, openMenuProduct(menuIP.Product))
 	for _, g := range c.Games {
 		name := strings.ReplaceAll(strings.ReplaceAll(g.Name, "\r", " "), "\n", " ")
-		iniEntry(&b, g.Slot, name, g.Disc, g.VGA, g.Region, g.Version, g.Date, g.Product, g.Type)
+		iniEntry(&b, g.Slot, name, g.Disc, g.VGA, g.Region, g.Version, g.Date, g.Product, g.Type, legacy.legacyLines(fmt.Sprintf("%02d", g.Slot), g.Product))
 	}
 	return b.String()
 }
@@ -528,6 +531,14 @@ func buildMenuImageInto(root, datDir string, allowEmpty bool, log Logger) (strin
 		return "", "", nil, errors.New("no game folders (02, 03, ...) were found on this card")
 	}
 	log("Found %d games", len(c.Games))
+	// the first install over another menu keeps what that menu's list knew
+	if changed, err := importOldMenuList(root, c, log); err != nil {
+		log("The old menu's list could not be read: %v", err)
+	} else if changed {
+		if c, err = ScanCard(root); err != nil {
+			return "", "", nil, err
+		}
+	}
 
 	work, err := os.MkdirTemp("", "swirl_")
 	if err != nil {
@@ -574,6 +585,7 @@ func buildMenuImageInto(root, datDir string, allowEmpty bool, log Logger) (strin
 	} else {
 		log("No openMenu disc in 01 yet; building a fresh menu")
 	}
+	carryGDMENUFiles(root, c, data, log)
 	if datDir != "" {
 		for _, name := range []string{"BOX.DAT", "ICON.DAT", "META.DAT", "BOX_EX.DAT", "ICON_EX.DAT"} {
 			src := filepath.Join(datDir, name)
@@ -620,7 +632,7 @@ func buildMenuImageInto(root, datDir string, allowEmpty bool, log Logger) (strin
 	if err := os.WriteFile(filepath.Join(data, "1ST_READ.BIN"), bin, 0o644); err != nil {
 		return work, "", nil, err
 	}
-	ini := buildINI(c, menuIP)
+	ini := buildINI(c, menuIP, loadLegacyINI(root))
 	for _, f := range []struct{ path, text string }{
 		{filepath.Join(data, "OPENMENU.INI"), ini},
 		{filepath.Join(low, "OPENMENU.INI"), ini},
