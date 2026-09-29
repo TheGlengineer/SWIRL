@@ -189,6 +189,9 @@ func CheckCard(root string) (*HealthReport, error) {
 	if len(c.Dups) > 0 {
 		add("warn", "", "%d games are on the card more than once (see Remove extra copies)", len(c.Dups))
 	}
+	for _, p := range discDBProblems(root, c) {
+		add("warn", "", "%s", p)
+	}
 	if len(r.JunkFiles) > 0 {
 		add("warn", "", "%d leftover system files (like ._ files from a Mac). They can confuse GDEMU", len(r.JunkFiles))
 	}

@@ -623,6 +623,9 @@ func installSwirl(root, datDir string, allowEmpty bool, log Logger) error {
 		log("Backed up the old menu to %s", filepath.Join(backupDir, filepath.Base(backup)))
 	}
 	pruneMenuBackups(root, 3)
+	if err := syncDiscDB(root, c, log); err != nil {
+		log("%v", err)
+	}
 	log("SWIRL installed in folder 01. Game folders were not changed.")
 	return nil
 }
