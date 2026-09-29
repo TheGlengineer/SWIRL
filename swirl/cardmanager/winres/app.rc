@@ -13,12 +13,12 @@ BEGIN
     BEGIN
       VALUE "CompanyName", "Glen Huszar"
       VALUE "FileDescription", "SWIRL Card Manager"
-      VALUE "FileVersion", "2.14.0-preview.2"
+      VALUE "FileVersion", "2.14.0-preview.3"
       VALUE "InternalName", "SWIRL Card Manager"
       VALUE "LegalCopyright", "Glen Huszar (github.com/TheGlengineer). Built on openMenu."
       VALUE "OriginalFilename", "SWIRL Card Manager.exe"
       VALUE "ProductName", "SWIRL Card Manager"
-      VALUE "ProductVersion", "2.14.0-preview.2"
+      VALUE "ProductVersion", "2.14.0-preview.3"
     END
   END
   BLOCK "VarFileInfo"

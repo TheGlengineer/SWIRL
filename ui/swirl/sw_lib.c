@@ -575,19 +575,28 @@ int sw_lib_init(void) {
 }
 
 /* ---------- per game launch settings ---------- */
+/* Launch options live in sw_stat.flags: bits 0-1 region, bit 2 "do not force VGA", bits 3-4 the start mode, bit 5
+   "the start mode was chosen". Files written before 2.14 have bit 5 clear: a start mode of 1 to 3 there was chosen
+   and is kept; 0 was the old default (straight to the game) and now means the default, the full start. */
+#define SW_FLAG_BOOT_SET 0x20
+
 sw_launch sw_lib_launch_get(const sw_game *g) {
-  sw_launch l = {SW_REGION_AUTO, 1, SW_BOOT_NONE};
+  sw_launch l = {SW_REGION_AUTO, 1, SW_BOOT_DEFAULT};
   sw_stat *s = sw_stat_get(g, 0);
   if (s) {
     l.region = s->flags & 3;
     l.vga = !(s->flags & 4);
-    l.boot = (s->flags >> 3) & 3;
+    const int boot = (s->flags >> 3) & 3;
+    if ((s->flags & SW_FLAG_BOOT_SET) || boot != SW_BOOT_NONE)
+      l.boot = boot;
   }
   return l;
 }
 
 void sw_lib_launch_set(const sw_game *g, sw_launch l) {
-  uint8_t f = (uint8_t)((l.region & 3) | (l.vga ? 0 : 4) | ((l.boot & 3) << 3));
+  uint8_t f = 0;
+  if (l.region != SW_REGION_AUTO || !l.vga || l.boot != SW_BOOT_DEFAULT)
+    f = (uint8_t)((l.region & 3) | (l.vga ? 0 : 4) | ((l.boot & 3) << 3) | SW_FLAG_BOOT_SET);
   sw_stat *s = sw_stat_get(g, f != 0);
   if (s && s->flags != f) {
     s->flags = f;

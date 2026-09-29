@@ -50,23 +50,42 @@
 #define IN16(addr) *((volatile uint16_t *)addr)
 #define IN8(addr) *((volatile uint8_t *)addr)
 
-#define g1_ata_wait_interrupt() \
-  do {                          \
-  } while (!(IN32(EXT_INT_STAT) & 1));
+/* SWIRL: every wait has a limit. openMenu's loops spun for ever, so a drive that did not answer (a clone board
+   busy switching images, a wedged drive) froze the console with a blank screen. The GD-ROM lock is held while
+   a packet is exchanged, so KallistiOS's own drive status poll (it runs every screen refresh) cannot slip in
+   between the command bytes and the reply. A timed out exchange returns -1; the callers then say so instead
+   of handing the console to the loader. */
+#include <arch/timer.h>
+#include <dc/g1ata.h>
 
-#define g1_ata_wait_status(n) \
-  do {                        \
-  } while ((IN8(G1_ATA_ALTSTATUS) & (n)))
+#define G1_WAIT_MS 3000
 
-#define g1_ata_wait_nstatus(n) \
-  do {                         \
-  } while (!(IN8(G1_ATA_ALTSTATUS) & (n)))
+static int wait_status_clear(uint8_t mask) {
+  const uint64_t until = timer_ms_gettime64() + G1_WAIT_MS;
+  while (IN8(G1_ATA_ALTSTATUS) & mask)
+    if (timer_ms_gettime64() > until) return -1;
+  return 0;
+}
 
-#define g1_ata_wait_drq() g1_ata_wait_nstatus(ATA_SR_DRQ)
+static int wait_status_set(uint8_t mask) {
+  const uint64_t until = timer_ms_gettime64() + G1_WAIT_MS;
+  while (!(IN8(G1_ATA_ALTSTATUS) & mask))
+    if (timer_ms_gettime64() > until) return -1;
+  return 0;
+}
 
-#define g1_ata_wait_bsydrq() g1_ata_wait_status(ATA_SR_DRQ | ATA_SR_BSY)
+static int wait_interrupt(void) {
+  const uint64_t until = timer_ms_gettime64() + G1_WAIT_MS;
+  while (!(IN32(EXT_INT_STAT) & 1))
+    if (timer_ms_gettime64() > until) return -1;
+  return 0;
+}
 
-static int send_packet_command(uint16_t *cmd_buff) {
+#define g1_ata_wait_interrupt() do { if (wait_interrupt() < 0) return -1; } while (0)
+#define g1_ata_wait_drq() do { if (wait_status_set(ATA_SR_DRQ) < 0) return -1; } while (0)
+#define g1_ata_wait_bsydrq() do { if (wait_status_clear(ATA_SR_DRQ | ATA_SR_BSY) < 0) return -1; } while (0)
+
+static int send_packet_command_locked(uint16_t *cmd_buff) {
   g1_ata_wait_bsydrq();
   OUT8(G1_ATA_COMMAND_REG, ATAPI_CMD_PACKET);
   g1_ata_wait_drq();
@@ -84,7 +103,7 @@ static int send_packet_command(uint16_t *cmd_buff) {
   return (IN8(G1_ATA_ALTSTATUS) & ATA_SR_ERR);
 }
 
-static int send_packet_data_command(uint16_t *cmd_buff, uint16_t *buffer, uint32_t *size) {
+static int send_packet_data_command_locked(uint16_t *cmd_buff, uint16_t *buffer, uint32_t *size) {
   g1_ata_wait_bsydrq();
 
   OUT8(G1_ATA_FEATURES, 0);
@@ -109,13 +128,16 @@ static int send_packet_data_command(uint16_t *cmd_buff, uint16_t *buffer, uint32
 
   uint16_t len = (IN8(G1_ATA_LBA_MID) | (IN8(G1_ATA_LBA_HIGH) << 8));
 
-  *size = (uint32_t)len;
+  if (size) *size = (uint32_t)len;
 
   len >>= 1;
 
   (void)IN32(G1_ATA_STATUS_REG);
+  /* the only caller (gdemu_get_version) hands in a small buffer: 16 words at most land in it, the rest is read
+     and dropped so the drive finishes the transfer */
   for (i = 0; i < len; i++) {
-    buffer[i] = IN16(G1_ATA_DATA);
+    const uint16_t w = IN16(G1_ATA_DATA);
+    if (i < 16) buffer[i] = w;
   }
 
   g1_ata_wait_interrupt();
@@ -123,6 +145,20 @@ static int send_packet_data_command(uint16_t *cmd_buff, uint16_t *buffer, uint32
   (void)IN32(G1_ATA_STATUS_REG);
 
   return (IN8(G1_ATA_ALTSTATUS) & ATA_SR_ERR);
+}
+
+static int send_packet_command(uint16_t *cmd_buff) {
+  g1_ata_mutex_lock();
+  const int rv = send_packet_command_locked(cmd_buff);
+  g1_ata_mutex_unlock();
+  return rv;
+}
+
+static int send_packet_data_command(uint16_t *cmd_buff, uint16_t *buffer, uint32_t *size) {
+  g1_ata_mutex_lock();
+  const int rv = send_packet_data_command_locked(cmd_buff, buffer, size);
+  g1_ata_mutex_unlock();
+  return rv;
 }
 
 /* return 8 byte: 00 00 09 01 00 00 14 05
@@ -163,6 +199,10 @@ int gdemu_set_img_num(uint16_t img_num) {
   (void)img_num; /* emulator tests only: Flycast has no GDEMU, so the disc switch would never answer */
   return 0;
 #endif
+#ifdef SW_TEST_GDEMU_SILENT
+  if (img_num != 1)
+    return -1; /* emulator tests only: a drive that never answers a game switch (the menu disc still comes back) */
+#endif
   uint8_t cmd_buff[12] __attribute__((aligned(4)));
   ((uint32_t *)cmd_buff)[0] = 0;
   ((uint32_t *)cmd_buff)[1] = 0;
@@ -173,5 +213,7 @@ int gdemu_set_img_num(uint16_t img_num) {
   cmd_buff[2] = (uint8_t)(img_num);
   cmd_buff[3] = (uint8_t)(img_num >> 8);
 
-  return send_packet_command((uint16_t *)cmd_buff);
+  /* only a drive that never answered is a failure (-1). The error bit of the reply is ignored on purpose:
+     openMenu and GDMENU never looked at it and real drives are known to launch fine whatever it says. */
+  return send_packet_command((uint16_t *)cmd_buff) < 0 ? -1 : 0;
 }

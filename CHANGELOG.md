@@ -3,6 +3,21 @@
 SWIRL (the menu) and SWIRL Card Manager share one version number. Card Manager patch releases (2.11.1)
 may ship without menu changes; the menu then keeps its major.minor version (2.11).
 
+## [2.14.0-preview.3]
+
+**This is a preview for testing.** Card Manager offers it to anyone who chose **Try the preview**.
+
+### Game launches
+
+- Games now start with the boot animation and the SEGA screen, as they do from openMenu and GDMENU. SWIRL used to skip both by default, and some games (Hydro Thunder for one) stay on a black screen when the SEGA screen is skipped. **Start with** in a game's launch options still lets you skip them per game, and options you already set are kept
+- SWIRL no longer waits for ever on a GDEMU that does not answer. Every wait for the drive has a limit; if the image change is not answered or the game's disc does not become ready, SWIRL switches back to the menu disc and tells you why instead of leaving a blank screen
+- The drive is locked while SWIRL talks to the GDEMU, so the system's own drive status poll can no longer interrupt a command half way
+
+### What to test
+
+- Start Hydro Thunder and a few other games. Do they all reach the game?
+- In a game's launch options, set **Start with: Straight to the game** and start it: it should skip the animation and SEGA screen as before
+
 ## [2.14.0-preview.2]
 
 **This is a preview for testing.** Card Manager offers it to anyone who chose **Try the preview**.

@@ -28,7 +28,7 @@
 #include "gdemu_sdk.h"
 #include "gdmenu_binary.h"
 #include "ui/swirl/sw_trace.h"
-void run_game(const char *region, const char *product) __attribute__((noreturn));
+void run_game(const char *region, const char *product);
 
 /* called before handing the machine to another program (stops music and sound effects) */
 void (*gdemu_before_launch)(void) = NULL;
@@ -36,13 +36,30 @@ void (*gdemu_before_launch)(void) = NULL;
 void gd_reset_handles(void) {
 }
 
-/* Wait until the GD drive reports the newly selected image (up to ~10 s) */
-static void wait_cd_ready(void) {
+/* Wait until the GD drive reports the newly selected image (up to ~10 s); 0 when it did */
+static int wait_cd_ready(void) {
   for (int i = 0; i < 500; i++) {
     if (cdrom_reinit() == ERR_OK)
-      return;
+      return 0;
     thd_sleep(20);
   }
+  return -1;
+}
+
+/* SWIRL: why the last launch came back to the menu, or NULL. A launch used to hand the console to the loader
+   whatever the drive said; a game that never became ready was then a blank screen with nothing to report. */
+static const char *launch_error;
+const char *gdemu_launch_error(void) { return launch_error; }
+
+/* the drive did not switch or did not become ready: go back to the menu disc so the menu can carry on */
+static void launch_failed(const char *why) {
+  launch_error = why;
+  sw_trace("launch failed: %s", why);
+  if (gdemu_set_img_num(1) != 0 || wait_cd_ready() != 0) {
+    /* the menu disc is not back either: nothing more can be read from the card, so stop with the report */
+    sw_trace_fatal("GDEMU did not answer. Switch the console off and on.");
+  }
+  sw_trace("launch: back on the menu disc");
 }
 
 static int region_code(const char *region, int override) {
@@ -196,9 +213,9 @@ static void send_game_id(const gd_item *disc) {
     gameid_send(disc);
 }
 
-static void launch_loader(const char *region, int game_fix, const launch_opts *o) __attribute__((noreturn));
+static void launch_loader(const char *region, int game_fix, const launch_opts *o);
 static void launch_loader(const char *region, int game_fix, const launch_opts *o) {
-  static const launch_opts defaults = {LAUNCH_REGION_AUTO, 1, LAUNCH_BOOT_NONE};
+  static const launch_opts defaults = {LAUNCH_REGION_AUTO, 1, LAUNCH_BOOT_BOTH}; /* the full start, as openMenu */
   if (!o)
     o = &defaults;
   ldr_params_t param;
@@ -211,7 +228,10 @@ static void launch_loader(const char *region, int game_fix, const launch_opts *o
   param.game_region = region_code(region, o->region);
 
   sw_trace("launch: waiting for the disc");
-  wait_cd_ready();
+  if (wait_cd_ready() != 0) {
+    launch_failed("The game's disc did not become ready");
+    return;
+  }
   int status = 0, disc_type = 0;
   cdrom_get_status(&status, &disc_type);
   param.disc_type = (disc_type == CD_GDROM);
@@ -235,7 +255,6 @@ static void launch_loader(const char *region, int game_fix, const launch_opts *o
   memcpy((void *)0xACCFFF00, &param, 32);
 
   arch_exec(gdmenu_loader, gdmenu_loader_length);
-  __builtin_unreachable();
 }
 
 void run_game(const char *region, const char *product) {
@@ -249,8 +268,12 @@ static int needs_fix(const gd_item *disc) {
 
 void dreamcast_launch_disc_ex(gd_item *disc, const launch_opts *o) {
   quiet();
+  launch_error = NULL;
   sw_trace("launch: disc %u (%.12s)", disc->slot_num, disc->product);
-  gdemu_set_img_num((uint16_t)disc->slot_num);
+  if (gdemu_set_img_num((uint16_t)disc->slot_num) != 0) {
+    launch_failed("GDEMU did not answer the image change");
+    return;
+  }
   thd_sleep(200);
   sw_trace("launch: Game ID");
   send_game_id(disc);
@@ -326,10 +349,17 @@ void dreamcast_launch_cb(gd_item *disc) {
       cheat_size = 0;
   }
 
-  gdemu_set_img_num((uint16_t)disc->slot_num);
+  launch_error = NULL;
+  if (gdemu_set_img_num((uint16_t)disc->slot_num) != 0) {
+    launch_failed("GDEMU did not answer the image change");
+    return;
+  }
   thd_sleep(200);
   send_game_id(disc);
-  wait_cd_ready();
+  if (wait_cd_ready() != 0) {
+    launch_failed("The game's disc did not become ready");
+    return;
+  }
 
   ((uint16_t *)0xAC000198)[0] = 0xFF86;
 
@@ -384,10 +414,17 @@ void bleem_launch(gd_item *disc) {
   if (!buf)
     return;
   quiet();
-  gdemu_set_img_num((uint16_t)disc->slot_num);
+  launch_error = NULL;
+  if (gdemu_set_img_num((uint16_t)disc->slot_num) != 0) {
+    launch_failed("GDEMU did not answer the image change");
+    return;
+  }
   thd_sleep(200);
   send_game_id(disc);
-  wait_cd_ready();
+  if (wait_cd_ready() != 0) {
+    launch_failed("The game's disc did not become ready");
+    return;
+  }
 
   ((uint16_t *)0xAC000198)[0] = 0xFF86;
   for (int i = 0; i < altctrl_size; i++)

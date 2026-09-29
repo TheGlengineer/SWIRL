@@ -69,7 +69,7 @@ game that misbehaves or that you want to start differently:
 |---|---|
 | Region | Game default, Japan, USA, Europe |
 | Video | Force VGA, Game default |
-| Start with | Straight to the game, Boot animation, SEGA screen, Animation and SEGA |
+| Start with | Animation and SEGA (the default), Straight to the game, Boot animation, SEGA screen |
 | Reset to defaults | Clears the options for this game |
 
 Choices are saved per game on your VMU, and the game page then shows **Options (custom)**.

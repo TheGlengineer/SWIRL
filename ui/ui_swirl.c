@@ -1222,11 +1222,12 @@ static void tick_launch(void) {
     case KIND_BLEEM: bleem_launch((gd_item *)launch_item); break;
     default: dreamcast_launch_disc_ex((gd_item *)launch_item, &launch_o); break;
   }
-  /* only returns when a launcher file was missing */
+  /* only returns when the drive did not switch, the disc did not become ready, or a launcher file was missing */
   sw_vmu_freeze(0);
+  sw_vmu_init(); /* the VMU thread was ended for the hand over */
   mode = MODE_TABS;
   sw_audio_init();
-  show_toast("That launcher is not on the menu disc");
+  show_toast(gdemu_launch_error() ? gdemu_launch_error() : "That launcher is not on the menu disc");
 }
 
 /* ---------- surprise me ---------- */
@@ -1379,7 +1380,7 @@ static void input_options(unsigned int btn, int pressed) {
     case OPT_BOOT: l.boot = (l.boot + d + 4) % 4; break;
     case OPT_RESET:
       if (btn != A) return;
-      l.region = SW_REGION_AUTO; l.vga = 1; l.boot = SW_BOOT_NONE;
+      l.region = SW_REGION_AUTO; l.vga = 1; l.boot = SW_BOOT_DEFAULT;
       show_toast("Launch options reset");
       break;
   }
@@ -1389,7 +1390,7 @@ static void input_options(unsigned int btn, int pressed) {
 
 static int launch_is_custom(const sw_game *g) {
   sw_launch l = sw_lib_launch_get(g);
-  return l.region != SW_REGION_AUTO || !l.vga || l.boot != SW_BOOT_NONE;
+  return l.region != SW_REGION_AUTO || !l.vga || l.boot != SW_BOOT_DEFAULT;
 }
 
 /* ---------- VMU save manager ---------- */

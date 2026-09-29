@@ -82,6 +82,9 @@ int sw_lib_early_quality(void); /* before the screen is set up: 1 for high */
 /* per game launch settings, kept in sw_stat.flags */
 enum { SW_REGION_AUTO = 0, SW_REGION_JAPAN, SW_REGION_USA, SW_REGION_EUROPE };
 enum { SW_BOOT_NONE = 0, SW_BOOT_ANIMATION, SW_BOOT_LICENSE, SW_BOOT_BOTH };
+/* The default start: boot animation and SEGA screen, the way the console, GDMENU and openMenu start a game.
+   Some games need what the BIOS does during the SEGA screen and do not start without it (Hydro Thunder). */
+#define SW_BOOT_DEFAULT SW_BOOT_BOTH
 typedef struct sw_launch {
   int region; /* SW_REGION_* */
   int vga;    /* 1 force VGA (default), 0 leave it to the game */

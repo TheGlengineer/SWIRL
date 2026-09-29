@@ -58,7 +58,8 @@ to disappear before switching off.
 finds gaps; removing games in Card Manager renumbers folders for you.
 
 **A game will not start, or shows a black screen.** Open its game page, press **X** for launch options and try
-**Video: Game default**, then a specific **Region**. Some games also need **Start with: Boot animation**.
+**Video: Game default**, then a specific **Region**. Make sure **Start with** is **Animation and SEGA**: some games
+stay on a black screen when the SEGA screen is skipped.
 If a game has never worked, test the image itself in an emulator.
 
 **No music.** Check **System > Menu music** and **Music volume**. Music comes from `BGM.ADP` on the menu disc;

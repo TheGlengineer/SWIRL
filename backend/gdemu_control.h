@@ -15,6 +15,8 @@ typedef struct launch_opts {
 extern void (*gdemu_before_launch)(void);
 
 void dreamcast_launch_disc_ex(struct gd_item *disc, const launch_opts *o);
+/* why the last launch came back to the menu (the drive did not switch or become ready), or NULL */
+const char *gdemu_launch_error(void);
 void dreamcast_launch_cb(struct gd_item *disc);
 void bleem_launch(struct gd_item *disc);
 int codebreaker_available(void);
