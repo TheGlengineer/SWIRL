@@ -168,7 +168,15 @@ static int init(void) {
   return ret;
 }
 
+/* set while a frame is being built: a blocking wait that starts inside the draw (the launch save runs from
+   the dashboard's own draw) must not start a second frame on top of it. KallistiOS keeps one scene open at a
+   time; a nested pvr_scene_begin leaves the outer frame drawing into a closed list, and every primitive after
+   that costs a serial warning. On a console with no serial cable those warnings go out at 57600 baud, which
+   turned a two second save into a launch that never came. */
+static int in_draw;
+
 static void draw(void) {
+  in_draw = 1;
   pvr_wait_ready();
   pvr_scene_begin();
 
@@ -187,11 +195,18 @@ static void draw(void) {
   pvr_list_finish();
 
   pvr_scene_finish();
+  in_draw = 0;
 }
 
-/* one frame, for SWIRL to keep the screen moving while a memory card save finishes */
+/* one frame, for SWIRL to keep the screen moving while a memory card save finishes. Called from inside a
+   frame, it only waits: the frame on screen stays up and the save worker carries on. */
 void main_draw_frame(void);
 void main_draw_frame(void) {
+  if (in_draw) {
+    thd_sleep(10);
+    sw_trace_alive(); /* the save worker is making progress; its card operations have their own limits */
+    return;
+  }
   z_reset();
   draw();
   sw_trace_alive();

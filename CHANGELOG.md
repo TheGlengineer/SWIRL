@@ -48,6 +48,7 @@ may ship without menu changes; the menu then keeps its major.minor version (2.11
 - A game marked `type=other` (an audio CD, a demo disc) goes to the console's own menu
 - A launch that would write over the loader's memory stops with a message instead of corrupting it; CodeBreaker, Bleem and cheat files are checked for size before loading
 - A disc change under a read no longer freezes the menu; the sort choice and an older SWIRL.DAT are saved on their own
+- Games start about seven seconds sooner. The save before a launch used to draw a second frame inside the frame being drawn, which left the menu drawing into a closed list for seconds (that was the black screen between **Starting** and the game). On a console without a serial cable the warnings this produced went out at 57600 baud, so with the new hang watchdog a launch ended in a hang report instead of a game. Found by the first report photographed off a real console
 
 ### Report a problem
 
