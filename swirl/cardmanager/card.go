@@ -235,6 +235,7 @@ func ScanCard(root string) (*Card, error) {
 		return nil, err
 	}
 	vfbDB := readVFBDatabase(root)
+	editsMoved := false
 	var nums []int
 	for _, e := range entries {
 		if !e.IsDir() || !folderRe.MatchString(e.Name()) {
@@ -260,8 +261,12 @@ func ScanCard(root string) (*Card, error) {
 		if err != nil {
 			g.Error = err.Error()
 		}
+		raw := ""
 		if ip != nil {
 			g.Name, g.Product, g.Region, g.Disc, g.Version, g.Date, g.VGA = ip.Name, openMenuProduct(ip.Product), ip.Region, ip.Disc, ip.Version, ip.Date, ip.VGA
+			// the code the menu will use (a few discs carry another game's code, see assets/serials.tsv)
+			raw = g.Product
+			g.Product = fixSerial(g.Product, ip.Date, ip.Name)
 			if e := vgaPatchFor(ip.Product, ip.Version); e != nil {
 				g.VGABy = e.Author
 				g.VGAState = "patch"
@@ -277,7 +282,13 @@ func ScanCard(root string) (*Card, error) {
 			g.Name = folder
 		}
 		if s := readText(filepath.Join(dir, "serial.txt")); s != "" {
-			g.Product = openMenuProduct(s)
+			raw = openMenuProduct(s)
+			g.Product = fixSerial(raw, g.Date, g.Name)
+		}
+		// edits saved under the raw code by an older Card Manager belong to this game
+		if e := edits.Games[folder]; e != nil && raw != "" && e.Product == raw && raw != g.Product {
+			e.Product = g.Product
+			editsMoved = true
 		}
 		if name := readText(filepath.Join(dir, "name.txt")); name != "" {
 			g.Name, g.Custom = name, true
@@ -332,6 +343,12 @@ func ScanCard(root string) (*Card, error) {
 		}
 		if sg := suggestedName(g); sg != "" && sg != g.Name {
 			g.Suggested = sg
+		}
+	}
+	if editsMoved { // written when the card is not being written to; the next scan tries again otherwise
+		if unlock, ok := tryLockCard(root, "Scan"); ok {
+			edits.save()
+			unlock()
 		}
 	}
 	c.Sets = findDiscSets(c.Games)

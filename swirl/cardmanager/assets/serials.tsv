@@ -1,0 +1,19 @@
+# Serial fixes: discs whose IP.BIN product code clashes with another game's, matched on the product and
+# the release date (or a word of the title). openMenu fixes these at boot (backend/gd_list.c,
+# fix_sega_serials) and the Virtual Folder Bundle's card manager does the same (its "Table 1"), so the
+# card must use the fixed code everywhere or art and edits never match on the console.
+# Columns: product, date, title contains, fixed product, title
+T15117N	20010423		T15112D05	Alone in the Dark: The New Nightmare (PAL)
+MK51035	20000120		MK5103550	Crazy Taxi (PAL)
+T17714D50	20001116		T17719N	Donald Duck: Goin' Quackers (USA)
+MK51114	20010920		MK5111450	Floigan Bros. (PAL)
+T36802N	19991220		T36803D05	Legacy of Kain: Soul Reaver (PAL)
+MK51178	20011129		MK5117850	NBA 2K2 (PAL)
+T9706D50	19991201		T9705D50	NBA Showtime: NBA on NBC (PAL)
+T9504M	20000407		T9504N	Nightmare Creatures II (USA)
+T7005D	20000711		T7003D	Plasma Sword: Nightmare of Bilstein (PAL)
+MK51052	20010306		MK5105250	Skies of Arcadia (PAL)
+T13008N	20010402		T13011D50	Spider-Man (PAL)
+T0000M	19990813		T13701N	TNN Motorsports Hardcore Heat (USA)
+T0006M	20030609		T0010M	Maximum Speed (Atomiswave)
+T0009M		orth	T0026M	Fist of the North Star (Atomiswave)
