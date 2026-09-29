@@ -1917,6 +1917,7 @@ void ui_swirl_settings_changed(void) {
   lib_sort = sw_lib_prefs()->sort % SW_SORT_COUNT;
   apply_theme();
   rebuild_all();
+  if (sw_lib_dirty() && save_countdown <= 0) save_countdown = 180; /* an older file taken in is written back */
   show_toast("Memory card found: your settings are back");
 }
 
@@ -1978,10 +1979,10 @@ FUNCTION(UI_NAME, init) {
   sw_trace("SWIRL: library and SWIRL.DAT");
   sw_lib_init();
   sw_lib_set_idle(idle_frame);
-  if (settings_boot_reset_take()) {
+  if (settings_boot_reset_take())
     sw_lib_settings_dirty(); /* Y at start up: save the SWIRL style, or the Classic style comes back next time */
-    save_countdown = 180;
-  }
+  if (sw_lib_dirty())
+    save_countdown = 180; /* also an older SWIRL.DAT taken in: it is written back in today's form */
   lib_sort = sw_lib_prefs()->sort % SW_SORT_COUNT;
   srand((unsigned)rtc_unix_secs());
   sw_trace("SWIRL: music");
