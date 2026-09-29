@@ -501,9 +501,15 @@ func buildMenuImageInto(root, datDir string, allowEmpty bool, log Logger) (strin
 		return work, "", nil, err
 	}
 	ini := buildINI(c, menuIP)
-	os.WriteFile(filepath.Join(data, "OPENMENU.INI"), []byte(ini), 0o644)
-	os.WriteFile(filepath.Join(low, "OPENMENU.INI"), []byte(ini), 0o644)
-	os.WriteFile(filepath.Join(low, "GDEMUNFO.TXT"), []byte("Generated using SWIRL Card Manager"), 0o644)
+	for _, f := range []struct{ path, text string }{
+		{filepath.Join(data, "OPENMENU.INI"), ini},
+		{filepath.Join(low, "OPENMENU.INI"), ini},
+		{filepath.Join(low, "GDEMUNFO.TXT"), "Generated using SWIRL Card Manager"},
+	} {
+		if err := os.WriteFile(f.path, []byte(f.text), 0o644); err != nil {
+			return work, "", nil, fmt.Errorf("writing the menu's %s: %w", filepath.Base(f.path), err)
+		}
+	}
 
 	log("Building the menu disc")
 	if err := buildMenuDisc(data, low, out, ipBytes); err != nil {

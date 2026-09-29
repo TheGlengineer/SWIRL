@@ -55,7 +55,7 @@ func (s *editStore) save() error {
 		return err
 	}
 	b, _ := json.MarshalIndent(s, "", "  ")
-	return os.WriteFile(filepath.Join(s.root, editsDir, "games.json"), b, 0o644)
+	return writeCardFile(filepath.Join(s.root, editsDir, "games.json"), b)
 }
 
 func artPath(root, folder, kind string) string {

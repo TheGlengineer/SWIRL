@@ -1061,3 +1061,62 @@ func TestAddThroughPart(t *testing.T) {
 		t.Fatal("name.txt was not written into the new folder")
 	}
 }
+
+// A6: every file written to the card is flushed, and so is its folder, before the step that depends on it.
+func TestCardWritesAreFlushed(t *testing.T) {
+	count := func(root string) (*fault, *fault) {
+		return &fault{op: "SyncFile", path: root, n: 1 << 30}, &fault{op: "SyncDir", path: root, n: 1 << 30}
+	}
+	root := txnCard(t, "swirl", 3)
+	files, dirs := count(root)
+	_, done := useFaults(t, files, dirs)
+	if err := InstallSwirl(root, "", quiet); err != nil {
+		t.Fatal(err)
+	}
+	done()
+	if files.seen != 6 || dirs.seen < 2 {
+		t.Errorf("install flushed %d files and %d folders; want the 6 menu files, the stage and the card root", files.seen, dirs.seen)
+	}
+	src := t.TempDir()
+	writeTestGDI(t, filepath.Join(src, "New Game"), "NEW GAME", "T-00077N")
+	files, dirs = count(root)
+	_, done = useFaults(t, files, dirs)
+	if err := StartAddGames(root, []string{filepath.Join(src, "New Game")}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := waitJobErr(t); err != nil {
+		t.Fatal(err)
+	}
+	done()
+	if files.seen < 4+1+6 || dirs.seen < 2 { // 4 game files, name.txt, the rebuilt menu
+		t.Errorf("add flushed %d files and %d folders", files.seen, dirs.seen)
+	}
+	files, dirs = count(root)
+	_, done = useFaults(t, files, dirs)
+	if err := StartRemoveGames(root, []string{"02"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := waitJobErr(t); err != nil {
+		t.Fatal(err)
+	}
+	done()
+	if files.seen < 3 || dirs.seen < 4 { // journal writes, games.json; the folders they are in
+		t.Errorf("remove flushed %d files and %d folders", files.seen, dirs.seen)
+	}
+}
+
+// A6: a flush that fails is a failed write like any other
+func TestCardFaultsSync(t *testing.T) {
+	var rows []txnRow
+	for _, op := range []string{"SyncFile", "SyncDir"} {
+		for n := 1; n <= 3; n++ {
+			op, n := op, n
+			fl := func(root string) []*fault { return []*fault{{op: op, path: root, n: n, err: syscall.ENOSPC}} }
+			rows = append(rows,
+				txnRow{name: fmt.Sprintf("install_%s_fails_at_%d", op, n), fixed: true, menu: "openMenu", games: 3, faults: fl, run: opInstall, extra: keepsOriginal},
+				txnRow{name: fmt.Sprintf("remove_%s_fails_at_%d", op, n), fixed: true, menu: "swirl", games: 4, faults: fl, run: opRemove("03")},
+			)
+		}
+	}
+	runTxnRows(t, rows)
+}

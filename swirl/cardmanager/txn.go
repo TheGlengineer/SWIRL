@@ -82,6 +82,14 @@ func swapMenu(root, stage, backup string) error {
 			moved = true
 		}
 	}
+	if moved {
+		if err := cardfs.SyncDir(filepath.Dir(backup)); err != nil {
+			if uerr := undoMove(root, stage, backup); uerr != nil {
+				return errors.Join(fmt.Errorf("flushing %s: %w", backupDir, err), uerr)
+			}
+			return fmt.Errorf("flushing %s: %w; the old menu was put back", backupDir, err)
+		}
+	}
 	if err := cardfs.Rename(stage, menuDir); err != nil {
 		if !moved {
 			return errors.Join(fmt.Errorf("the new menu could not be moved into folder 01: %w", err), removeStage(root))
@@ -97,11 +105,21 @@ func swapMenu(root, stage, backup string) error {
 		}
 		return errors.Join(fmt.Errorf("the new menu could not be moved into folder 01 (%w); the old menu was put back", err), removeStage(root))
 	}
-	cardfs.SyncDir(root)
+	if err := cardfs.SyncDir(root); err != nil {
+		return fmt.Errorf("the new menu is in folder 01 but the card could not be flushed (%w); eject the card safely before removing it", err)
+	}
 	return nil
 }
 
-// writeCardFile writes a small file on the card and flushes it.
+// undoMove puts the menu moved to backup back into 01 and removes the stage (before the stage was swapped in).
+func undoMove(root, stage, backup string) error {
+	if err := cardfs.Rename(backup, filepath.Join(root, "01")); err != nil {
+		return fmt.Errorf("putting the old menu back from %s: %w", backup, err)
+	}
+	return removeStage(root)
+}
+
+// writeCardFile writes a small file on the card and flushes it and its folder.
 func writeCardFile(p string, b []byte) error {
 	if err := cardfs.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err
@@ -118,7 +136,10 @@ func writeCardFile(p string, b []byte) error {
 		f.Close()
 		return err
 	}
-	return f.Close()
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return cardfs.SyncDir(filepath.Dir(p))
 }
 
 // menuBackupPrefix names the backup of the menu in 01. The first backup of a menu SWIRL did not build is
@@ -222,7 +243,10 @@ func (j *renumberJournal) write(root string) error {
 	if err := writeCardFile(tmp, b); err != nil {
 		return err
 	}
-	return cardfs.Rename(tmp, journalPath(root))
+	if err := cardfs.Rename(tmp, journalPath(root)); err != nil {
+		return err
+	}
+	return cardfs.SyncDir(filepath.Join(root, editsDir))
 }
 
 func cardPath(root, rel string) string { return filepath.Join(root, filepath.FromSlash(rel)) }
@@ -235,6 +259,7 @@ func runRenames(root string, j *renumberJournal, finish func() error) error {
 	}
 	if err := j.write(root); err != nil {
 		cardfs.Remove(journalPath(root))
+		cardfs.Remove(journalPath(root) + ".tmp")
 		return fmt.Errorf("writing %s/%s: %w; nothing was changed", editsDir, journalName, err)
 	}
 	fail := func(err error) error {
@@ -261,7 +286,19 @@ func runRenames(root string, j *renumberJournal, finish func() error) error {
 	if err := finish(); err != nil {
 		return fail(err)
 	}
-	cardfs.SyncDir(root)
+	// every rename must be on the card before the journal goes
+	dirs := []string{root, filepath.Join(root, editsDir, "art")}
+	if j.Made != "" {
+		dirs = append(dirs, cardPath(root, j.Made), filepath.Dir(cardPath(root, j.Made)))
+	}
+	for _, d := range dirs {
+		if _, err := cardfs.Stat(d); err != nil {
+			continue
+		}
+		if err := cardfs.SyncDir(d); err != nil {
+			return fail(fmt.Errorf("flushing the card: %w", err))
+		}
+	}
 	if err := cardfs.Remove(journalPath(root)); err != nil {
 		// the next scan would undo the move; undo it now so the card and its menu stay in step
 		return fail(fmt.Errorf("removing %s/%s: %w", editsDir, journalName, err))

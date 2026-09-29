@@ -259,7 +259,9 @@ func copyWithProgress(src, dst string, onBytes func(int64)) error {
 }
 
 func copyStream(in io.Reader, dst string, onBytes func(int64)) error {
-	cardfs.MkdirAll(filepath.Dir(dst), 0o755)
+	if err := cardfs.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
 	out, err := cardfs.Create(dst)
 	if err != nil {
 		return err
@@ -281,6 +283,10 @@ func copyStream(in io.Reader, dst string, onBytes func(int64)) error {
 			out.Close()
 			return rerr
 		}
+	}
+	if err := cardfs.SyncFile(out); err != nil {
+		out.Close()
+		return err
 	}
 	return out.Close()
 }
@@ -321,7 +327,7 @@ func runCopy(p *copyPlan, root string, onPct func(float64)) error {
 	}
 	for i, top := range tops {
 		part := filepath.Join(root, top+".part")
-		if err := cardfs.SyncDir(part); err != nil {
+		if err := syncTree(part); err != nil {
 			return cleanup(err)
 		}
 		if err := cardfs.Rename(part, filepath.Join(root, top)); err != nil {
@@ -329,8 +335,17 @@ func runCopy(p *copyPlan, root string, onPct func(float64)) error {
 			return cleanup(fmt.Errorf("renaming %s.part to %s: %w", top, top, err))
 		}
 	}
-	cardfs.SyncDir(root)
-	return nil
+	return cardfs.SyncDir(root)
+}
+
+// syncTree flushes the entries of a folder and of every folder inside it.
+func syncTree(dir string) error {
+	return filepath.Walk(dir, func(p string, info os.FileInfo, err error) error {
+		if err != nil || !info.IsDir() {
+			return err
+		}
+		return cardfs.SyncDir(p)
+	})
 }
 
 // partPath is where a plan item is written: inside NN.part for a numbered folder.
@@ -402,8 +417,7 @@ func copyItems(p *copyPlan, root string, onPct func(float64)) error {
 		label := strings.TrimPrefix(it.Src, "text:")
 		ip, _, _ := readImageIP(filepath.Dir(dst))
 		name := properName(ip, label)
-		os.MkdirAll(filepath.Dir(dst), 0o755)
-		if err := os.WriteFile(dst, []byte(asciiOnly(name)), 0o644); err != nil {
+		if err := writeCardFile(dst, []byte(asciiOnly(name))); err != nil {
 			return err
 		}
 		if name != label {
