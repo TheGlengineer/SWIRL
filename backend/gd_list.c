@@ -36,9 +36,31 @@ typedef FILE *FD_TYPE;
 #include "../ui/global_settings.h"
 #endif
 
+/* SWIRL: skipped INI entries go to the start up trace on the Dreamcast, to stdout in the host tools */
+#if defined(_arch_dreamcast) && !defined(STANDALONE_BINARY)
+#include "../ui/swirl/sw_trace.h"
+#else
+#define sw_trace(...)        \
+  do {                       \
+    printf(__VA_ARGS__);     \
+    printf("\n");            \
+  } while (0)
+#endif
+
+/* SWIRL: bounds for what the INI may claim. Slots are at most 4 digits (VFB card manager INIs use 4), the INI
+   itself is small (1000 games are about 150 KB), and a few slots past num_items are kept so a card manager that
+   under reports the count still lists every game. */
+#define INI_MAX_ITEMS (9999)
+#define INI_MAX_SIZE (4 * 1024 * 1024)
+#define INI_SLOT_HEADROOM (16)
+#define INI_MAX_SKIPPED_TRACED (8)
+
 /* Base internal original */
 static int num_items_BASE = -1;
 static int num_items_read = 0;
+static int num_items_capacity = 0; /* SWIRL: entries allocated in gd_slots_BASE */
+static int num_items_skipped = 0;  /* SWIRL: INI slots dropped for a bad slot number */
+static int last_skipped_slot = -1;
 static gd_item *gd_slots_BASE = NULL;
 
 /* Current client facing pointer copy, may be sorted/filtered */
@@ -46,7 +68,7 @@ static int num_items_temp = -1;
 static gd_item **list_temp = NULL;
 
 /* Temporary list for holding all multidisc games in a set */
-#define MULTIDISC_MAX_GAMES_PER_SET (4)
+#define MULTIDISC_MAX_GAMES_PER_SET (10) /* SWIRL: was 4 and unbounded; VFB sets go up to 10 */
 static int num_items_multidisc = -1;
 static gd_item *list_multidisc[MULTIDISC_MAX_GAMES_PER_SET] = {NULL};
 
@@ -64,23 +86,72 @@ static int read_openmenu_ini(void *user, const char *section, const char *name, 
   (void)user;
 
   if ((strcmp(section, "OPENMENU") == 0) && (strcmp(name, "num_items") == 0)) {
-    num_items_BASE = atoi(value) /* It can occur that GDMenuCardManager under reports by 1 */;
+    /* SWIRL: the count is bounded and checked, and only the first one counts */
+    if (gd_slots_BASE) {
+      sw_trace("OPENMENU.INI: second num_items ignored");
+      return 1;
+    }
+    int claimed = atoi(value) /* It can occur that GDMenuCardManager under reports by 1 */;
+    if (claimed < 0 || claimed > INI_MAX_ITEMS) {
+      sw_trace("OPENMENU.INI: num_items %d out of range, using 0", claimed);
+      claimed = 0;
+    }
+    num_items_BASE = claimed;
     num_items_temp = num_items_BASE - 1;
-    gd_slots_BASE = malloc((num_items_BASE + 1) * sizeof(struct gd_item));
-    list_temp = malloc((num_items_BASE + 1) * sizeof(struct gd_item *));
+    num_items_capacity = num_items_BASE + 1 + INI_SLOT_HEADROOM;
+    gd_slots_BASE = calloc(num_items_capacity, sizeof(struct gd_item));
+    list_temp = calloc(num_items_capacity, sizeof(struct gd_item *));
+    if (!gd_slots_BASE || !list_temp) {
+      sw_trace("OPENMENU.INI: no memory for %d slots", num_items_capacity);
+      free(gd_slots_BASE);
+      free(list_temp);
+      gd_slots_BASE = NULL;
+      list_temp = NULL;
+      num_items_capacity = 0;
+      return 0; /* stops the parse, list_read reports the failure */
+    }
 
-    memset(gd_slots_BASE, '\0', (num_items_BASE + 1) * sizeof(struct gd_item));
-    memset(list_temp, '\0', (num_items_BASE + 1) * sizeof(struct gd_item *));
     memset(list_multidisc, '\0', MULTIDISC_MAX_GAMES_PER_SET * sizeof(struct gd_item *));
   } else {
     /* Parsing games */
-    char slot_string[4] = {0, 0, 0, 0};
+    /* SWIRL: the slot number is 1 to 4 digits and must land inside the table; anything else is skipped and traced,
+       the entries after it are still read */
+    char slot_string[5] = {0, 0, 0, 0, 0};
     uintptr_t seperator = (uintptr_t)strchr(name, '.');
     if (seperator) {
       size_t temp_len = (size_t)(seperator - (uintptr_t)name);
-      memcpy(slot_string, name, temp_len);
-      int slot = atoi(slot_string);
-      num_items_read = slot;
+      const char *why = NULL;
+      int slot = 0;
+      if (temp_len < 1 || temp_len > sizeof(slot_string) - 1) {
+        why = "slot number";
+      } else {
+        for (size_t i = 0; i < temp_len; i++) {
+          if (name[i] < '0' || name[i] > '9')
+            why = "slot number";
+        }
+      }
+      if (!why) {
+        memcpy(slot_string, name, temp_len);
+        slot = atoi(slot_string);
+        if (!gd_slots_BASE)
+          why = "before [OPENMENU] num_items";
+        else if (slot < 1)
+          why = "slot 0";
+        else if (slot > num_items_capacity)
+          why = "slot past num_items";
+      }
+      if (why) {
+        /* one trace line per slot (each slot has several keys), and only the first few */
+        if (slot != last_skipped_slot || slot == 0) {
+          if (num_items_skipped < INI_MAX_SKIPPED_TRACED)
+            sw_trace("OPENMENU.INI: skipped [%s] %.24s (%s)", section, name, why);
+          num_items_skipped++;
+          last_skipped_slot = slot;
+        }
+        return 1;
+      }
+      if (slot > num_items_read)
+        num_items_read = slot;
 
       gd_item *item = &gd_slots_BASE[slot - 1];
       if (!item->slot_num) {
@@ -274,6 +345,11 @@ void list_set_multidisc(const char *product_id) {
     if (strcmp(gd_slots_BASE[base_idx].product, product_id))
       continue;
 
+    /* SWIRL: the set is bounded; the rest of the entries stay in the library but not in the chooser */
+    if (temp_idx >= MULTIDISC_MAX_GAMES_PER_SET) {
+      sw_trace("multidisc: more than %d entries for %.12s, rest not shown", MULTIDISC_MAX_GAMES_PER_SET, product_id);
+      break;
+    }
     list_multidisc[temp_idx++] = &gd_slots_BASE[base_idx];
   }
   num_items_multidisc = temp_idx;
@@ -355,6 +431,24 @@ static void fix_sega_serials(void) {
   }
 }
 
+/* SWIRL: an INI that cannot be used leaves a valid, empty list (the menu itself in slot 1) rather than NULL */
+static void list_set_empty(void) {
+  list_destroy();
+  num_items_capacity = 1;
+  gd_slots_BASE = calloc(num_items_capacity, sizeof(struct gd_item));
+  list_temp = calloc(num_items_capacity, sizeof(struct gd_item *));
+  if (!gd_slots_BASE || !list_temp) {
+    free(gd_slots_BASE);
+    free(list_temp);
+    gd_slots_BASE = NULL;
+    list_temp = NULL;
+    num_items_capacity = 0;
+    return;
+  }
+  num_items_BASE = 0;
+  num_items_temp = 0;
+}
+
 int list_read(const char *filename) {
   /* Always LD/cdrom */
   FD_TYPE ini = fopen(filename, "rb");
@@ -362,30 +456,63 @@ int list_read(const char *filename) {
     printf("INI:Error opening %s!\n", filename);
     fflush(stdout);
     /*exit or something */
+    list_set_empty();
     return -1;
   }
 
   printf("INI:Open %s\n", filename);
 
-  size_t ini_size = filelength(ini);
-  char *ini_buffer = malloc(ini_size + 2) /* adjust for adding newline at end always */;
-  fread(ini_buffer, ini_size, 1, ini);
+  /* SWIRL: the size, the allocation and the read are checked; a failure leaves the list empty, not half read */
+  long int ini_size = filelength(ini);
+  if (ini_size < 0 || ini_size > INI_MAX_SIZE) {
+    sw_trace("OPENMENU.INI: size %ld out of range", ini_size);
+    fclose(ini);
+    list_set_empty();
+    return -1;
+  }
+  char *ini_buffer = malloc((size_t)ini_size + 2) /* adjust for adding newline at end always */;
+  if (!ini_buffer) {
+    sw_trace("OPENMENU.INI: no memory for %ld bytes", ini_size);
+    fclose(ini);
+    list_set_empty();
+    return -1;
+  }
+  size_t got = fread(ini_buffer, 1, (size_t)ini_size, ini);
   fclose(ini);
+  if (got != (size_t)ini_size) {
+    sw_trace("OPENMENU.INI: short read (%u of %ld)", (unsigned)got, ini_size);
+    free(ini_buffer);
+    list_set_empty();
+    return -1;
+  }
   /* Add newline */
   ini_buffer[ini_size + 0] = '\n';
   ini_buffer[ini_size + 1] = '\0';
 
-  if (ini_parse_string(ini_buffer, read_openmenu_ini, NULL) < 0) {
+  num_items_read = 0;
+  num_items_skipped = 0;
+  last_skipped_slot = -1;
+  int parse_ret = ini_parse_string(ini_buffer, read_openmenu_ini, NULL);
+  free(ini_buffer);
+  if (parse_ret < 0 || !gd_slots_BASE) {
+    /* out of memory, or no [OPENMENU] num_items at all */
     printf("INI:Error Parsing %s!\n", filename);
+    sw_trace("OPENMENU.INI: not usable (%d)", parse_ret);
     fflush(stdout);
-    /*exit or something */
+    list_set_empty();
     return -1;
   }
-  free(ini_buffer);
+  if (parse_ret > 0) {
+    /* SWIRL: inih returns the first bad line; with INI_STOP_ON_FIRST_ERROR off the lines after it were still read */
+    sw_trace("OPENMENU.INI: bad line %d skipped", parse_ret);
+  }
+  if (num_items_skipped)
+    sw_trace("OPENMENU.INI: %d slots skipped", num_items_skipped);
 
   printf("Info: Loaded %d items from %d\n", num_items_read, num_items_BASE);
-  /* Trim list if over reported */
+  /* Trim list if over reported, grow it if under reported (the table has room past num_items) */
   if (num_items_read != num_items_BASE) {
+    sw_trace("OPENMENU.INI: num_items %d, highest slot %d", num_items_BASE, num_items_read);
     num_items_BASE = num_items_read;
     num_items_temp = num_items_read - 1;
   }
@@ -406,6 +533,9 @@ int list_read_default(void) {
 void list_destroy(void) {
   num_items_BASE = -1;
   num_items_temp = -1;
+  num_items_read = 0;
+  num_items_capacity = 0;
+  num_items_multidisc = -1;
   free(gd_slots_BASE);
   free(list_temp);
   gd_slots_BASE = NULL;
