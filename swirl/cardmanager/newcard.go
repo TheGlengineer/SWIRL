@@ -259,8 +259,8 @@ func copyWithProgress(src, dst string, onBytes func(int64)) error {
 }
 
 func copyStream(in io.Reader, dst string, onBytes func(int64)) error {
-	os.MkdirAll(filepath.Dir(dst), 0o755)
-	out, err := os.Create(dst)
+	cardfs.MkdirAll(filepath.Dir(dst), 0o755)
+	out, err := cardfs.Create(dst)
 	if err != nil {
 		return err
 	}

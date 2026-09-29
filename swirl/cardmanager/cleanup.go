@@ -127,7 +127,7 @@ func moveFolders(root string, order []string, log Logger) (int, error) {
 	}
 	// two steps so a rename never lands on a folder that has not moved yet
 	for _, p := range plan {
-		if err := os.Rename(filepath.Join(root, p.from), filepath.Join(root, "_swirl_mv_"+p.from)); err != nil {
+		if err := cardfs.Rename(filepath.Join(root, p.from), filepath.Join(root, "_swirl_mv_"+p.from)); err != nil {
 			return moved, fmt.Errorf("renaming folder %s: %w", p.from, err)
 		}
 	}
@@ -139,7 +139,7 @@ func moveFolders(root string, order []string, log Logger) (int, error) {
 		delete(newGames, p.from)
 	}
 	for _, p := range plan {
-		if err := os.Rename(filepath.Join(root, "_swirl_mv_"+p.from), filepath.Join(root, p.to)); err != nil {
+		if err := cardfs.Rename(filepath.Join(root, "_swirl_mv_"+p.from), filepath.Join(root, p.to)); err != nil {
 			return moved, fmt.Errorf("renaming folder %s to %s: %w", p.from, p.to, err)
 		}
 		if e := edits.Games[p.from]; e != nil {
@@ -176,13 +176,13 @@ func RemoveDuplicates(root string, log Logger) error {
 		return errors.New("no duplicate games found")
 	}
 	dest := filepath.Join(root, backupDir, "removed_"+time.Now().Format("20060102_150405"))
-	if err := os.MkdirAll(dest, 0o755); err != nil {
+	if err := cardfs.MkdirAll(dest, 0o755); err != nil {
 		return err
 	}
 	edits := loadEdits(root)
 	for _, d := range dups {
 		for _, f := range d.Extras {
-			if err := os.Rename(filepath.Join(root, f), filepath.Join(dest, f)); err != nil {
+			if err := cardfs.Rename(filepath.Join(root, f), filepath.Join(dest, f)); err != nil {
 				return fmt.Errorf("moving folder %s: %w", f, err)
 			}
 			delete(edits.Games, f)

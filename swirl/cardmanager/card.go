@@ -357,10 +357,10 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	defer in.Close()
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+	if err := cardfs.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
-	out, err := os.Create(dst)
+	out, err := cardfs.Create(dst)
 	if err != nil {
 		return err
 	}
@@ -514,24 +514,24 @@ func installSwirl(root, datDir string, allowEmpty bool, log Logger) error {
 	backup := ""
 	if entries, err := os.ReadDir(menuDir); err == nil && len(entries) > 0 {
 		backup = filepath.Join(root, backupDir, "01_"+time.Now().Format("20060102_150405"))
-		if err := os.MkdirAll(backup, 0o755); err != nil {
+		if err := cardfs.MkdirAll(backup, 0o755); err != nil {
 			return err
 		}
 		for _, e := range entries {
-			if err := os.Rename(filepath.Join(menuDir, e.Name()), filepath.Join(backup, e.Name())); err != nil {
+			if err := cardfs.Rename(filepath.Join(menuDir, e.Name()), filepath.Join(backup, e.Name())); err != nil {
 				return fmt.Errorf("backing up 01: %w", err)
 			}
 		}
 		log("Backed up the old menu to %s", filepath.Join(backupDir, filepath.Base(backup)))
 	}
-	os.MkdirAll(menuDir, 0o755)
+	cardfs.MkdirAll(menuDir, 0o755)
 	for _, name := range []string{"disc.gdi", "track01.iso", "track02.raw", "track03.iso", "track04.raw", "track05.iso"} {
 		if err := copyFile(filepath.Join(out, name), filepath.Join(menuDir, name)); err != nil {
 			// put the backup back
 			if backup != "" {
 				entries, _ := os.ReadDir(menuDir)
 				for _, e := range entries {
-					os.Remove(filepath.Join(menuDir, e.Name()))
+					cardfs.Remove(filepath.Join(menuDir, e.Name()))
 				}
 				restoreFrom(backup, menuDir)
 			}
@@ -549,11 +549,11 @@ func restoreFrom(src, dst string) error {
 		return err
 	}
 	for _, e := range entries {
-		if err := os.Rename(filepath.Join(src, e.Name()), filepath.Join(dst, e.Name())); err != nil {
+		if err := cardfs.Rename(filepath.Join(src, e.Name()), filepath.Join(dst, e.Name())); err != nil {
 			return err
 		}
 	}
-	return os.Remove(src)
+	return cardfs.Remove(src)
 }
 
 // RestoreBackup puts a saved menu back into 01, keeping the current one as another backup.
@@ -571,15 +571,15 @@ func RestoreBackup(root, name string, log Logger) error {
 	menuDir := filepath.Join(root, "01")
 	if entries, err := os.ReadDir(menuDir); err == nil && len(entries) > 0 {
 		keep := filepath.Join(root, backupDir, "01_replaced_"+time.Now().Format("20060102_150405"))
-		os.MkdirAll(keep, 0o755)
+		cardfs.MkdirAll(keep, 0o755)
 		for _, e := range entries {
-			if err := os.Rename(filepath.Join(menuDir, e.Name()), filepath.Join(keep, e.Name())); err != nil {
+			if err := cardfs.Rename(filepath.Join(menuDir, e.Name()), filepath.Join(keep, e.Name())); err != nil {
 				return err
 			}
 		}
 		log("Current menu saved as %s", filepath.Base(keep))
 	}
-	os.MkdirAll(menuDir, 0o755)
+	cardfs.MkdirAll(menuDir, 0o755)
 	if err := restoreFrom(src, menuDir); err != nil {
 		return err
 	}
@@ -1065,7 +1065,7 @@ func pruneMenuBackups(root string, keep int) {
 		}
 	}
 	for i := keep; i < len(auto); i++ {
-		os.RemoveAll(filepath.Join(root, backupDir, auto[i]))
+		cardfs.RemoveAll(filepath.Join(root, backupDir, auto[i]))
 	}
 }
 

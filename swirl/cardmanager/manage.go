@@ -348,12 +348,12 @@ func StartRemoveGames(root string, folders []string) error {
 	}
 	return runJob("Removing games", "Done. The removed games are in SWIRL_BACKUP until you delete them.", func() error {
 		dest := filepath.Join(root, backupDir, "removed_"+time.Now().Format("20060102_150405"))
-		if err := os.MkdirAll(dest, 0o755); err != nil {
+		if err := cardfs.MkdirAll(dest, 0o755); err != nil {
 			return err
 		}
 		edits := loadEdits(root)
 		for _, f := range folders {
-			if err := os.Rename(filepath.Join(root, f), filepath.Join(dest, f)); err != nil {
+			if err := cardfs.Rename(filepath.Join(root, f), filepath.Join(dest, f)); err != nil {
 				return fmt.Errorf("moving folder %s: %w", f, err)
 			}
 			delete(edits.Games, f)
