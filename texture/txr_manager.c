@@ -82,7 +82,7 @@ int txr_load_DATs(void) {
 int txr_create_small_pool(void) {
   void *buffer = pvr_mem_malloc(SM_POOL_SIZE);
   if (!buffer) {
-    sw_trace("no video memory for the icon pool (%d KB)", SM_POOL_SIZE / 1024);
+    sw_warn(SW_WARN_VRAM, "no video memory for the icon pool (%d KB)", SM_POOL_SIZE / 1024);
     return -1;
   }
   pool_create(&icon_system.pool, buffer, SM_POOL_SIZE, SM_SLOT_NUM);
@@ -100,7 +100,7 @@ int txr_create_small_pool(void) {
 int txr_create_large_pool(void) {
   void *buffer = pvr_mem_malloc(LG_POOL_SIZE);
   if (!buffer) {
-    sw_trace("no video memory for the cover pool (%d KB)", LG_POOL_SIZE / 1024);
+    sw_warn(SW_WARN_VRAM, "no video memory for the cover pool (%d KB)", LG_POOL_SIZE / 1024);
     return -1;
   }
   pool_create(&box_system.pool, buffer, LG_POOL_SIZE, LG_SLOT_NUM);

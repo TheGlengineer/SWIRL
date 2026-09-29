@@ -188,13 +188,13 @@ pvr_ptr_t load_pvr_from_buffer_to_buffer(const void* input, size_t input_size, u
   uint32_t txr_size = pvr_get_texture_size(input, input_size, w, h, txrFormat, &data_offset, &why);
 
   if (!txr_size) {
-    sw_trace("picture: %s, not loaded", why);
+    sw_warn(SW_WARN_PICTURE, "picture: %s, not loaded", why);
     return NULL;
   }
   /* SWIRL: the destination is a fixed slot in video memory (32 KB icon, 128 KB cover, or what is left of the
      scratch); a picture larger than it used to spill into the slots after it */
   if (txr_size > buffer_size) {
-    sw_trace("picture: %ux%u (%u bytes) does not fit its %u byte slot, not loaded", (unsigned)*w, (unsigned)*h,
+    sw_warn(SW_WARN_PICTURE, "picture: %ux%u (%u bytes) does not fit its %u byte slot, not loaded", (unsigned)*w, (unsigned)*h,
              (unsigned)txr_size, (unsigned)buffer_size);
     *w = *h = 0;
     return NULL;
@@ -213,7 +213,7 @@ pvr_ptr_t load_pvr_from_buffer(const void* input, size_t input_size, uint32_t* w
   uint32_t txr_size = pvr_get_texture_size(input, input_size, w, h, txrFormat, &data_offset, &why);
 
   if (!txr_size) {
-    sw_trace("picture: %s, not loaded", why);
+    sw_warn(SW_WARN_PICTURE, "picture: %s, not loaded", why);
     return NULL;
   }
 

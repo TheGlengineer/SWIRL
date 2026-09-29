@@ -285,7 +285,7 @@ int settings_late_card(void) {
   savefile_details.savefile_slot = slot;
   crayon_savefile_load(&savefile_details);
   cfg_missing = 0;
-  sw_trace("OPENMENU.CFG: read from %c%d, attached late (style %d)", 'A' + port, slot, savedata.ui);
+  sw_warn(SW_WARN_LATE_CARD, "OPENMENU.CFG read from %c%d after start up (style %d)", 'A' + port, slot, savedata.ui);
   settings_validate();
   settings_swirl_once();
   if (savedata.ui != before.ui && !settings_style_ready(savedata.ui))
@@ -419,6 +419,10 @@ void settings_boot_guard(void) {
   }
   sw_trace("Y samples: %s", seen[0] ? seen : "(first one held)");
   {
+    extern void main_note_boot_x(int held);
+    main_note_boot_x(sw_trace_x_held());
+  }
+  {
     maple_device_t *dev;
     for (int i = 0; (dev = maple_enum_type(i, MAPLE_FUNC_CONTROLLER)); i++) {
       cont_state_t *st = (cont_state_t *)maple_dev_status(dev);
@@ -434,7 +438,7 @@ void settings_boot_guard(void) {
     savedata.ui = UI_SWIRL;
     boot_reset = 1; /* the owner asked for SWIRL: keep it (a style that only can't run now is not saved over) */
   } else if (!settings_style_ready(savedata.ui)) {
-    printf("SWIRL: the saved style needs openMenu's theme files, using the SWIRL style\n");
+    sw_warn(SW_WARN_STYLE, "style %d needs openMenu's theme files, using SWIRL", savedata.ui);
     savedata.ui = UI_SWIRL;
   }
 }

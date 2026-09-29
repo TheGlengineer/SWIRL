@@ -54,10 +54,10 @@ const char *gdemu_launch_error(void) { return launch_error; }
 /* the drive did not switch or did not become ready: go back to the menu disc so the menu can carry on */
 static void launch_failed(const char *why) {
   launch_error = why;
-  sw_trace("launch failed: %s", why);
+  sw_warn(strstr(why, "GDEMU") ? SW_WARN_GDEMU : SW_WARN_LAUNCH, "launch failed: %s", why);
   if (gdemu_set_img_num(1) != 0 || wait_cd_ready() != 0) {
     /* the menu disc is not back either: nothing more can be read from the card, so stop with the report */
-    sw_trace_fatal("GDEMU did not answer. Switch the console off and on.");
+    sw_trace_fatal_reason(SW_REPORT_LAUNCH, "GDEMU did not answer. Switch the console off and on.");
   }
   sw_trace("launch: back on the menu disc");
 }
@@ -242,8 +242,8 @@ static int memory_fits(void) {
   }
 #endif
   if (heap_end() > LOADER_DATA) {
-    sw_trace("launch: memory ends at %08lx, past the loader data at %08lx", (unsigned long)heap_end(),
-             (unsigned long)LOADER_DATA);
+    sw_warn(SW_WARN_MEMORY, "launch: memory ends at %08lx, past the loader data at %08lx", (unsigned long)heap_end(),
+            (unsigned long)LOADER_DATA);
     return 0;
   }
   (void)end;
@@ -320,9 +320,13 @@ static void launch_bios_exit(gd_item *disc) {
   arch_menu();
 }
 
+/* every wait for the drive (image change 3 s, disc ready 10 s, back to the menu disc 13 s) is inside this */
+#define LAUNCH_EXPECT_MS 30000
+
 void dreamcast_launch_disc_ex(gd_item *disc, const launch_opts *o) {
   quiet();
   launch_error = NULL;
+  sw_watchdog_expect(LAUNCH_EXPECT_MS);
   if (is_other_disc(disc)) {
     launch_bios_exit(disc);
     return;
@@ -406,7 +410,7 @@ void dreamcast_launch_cb(gd_item *disc) {
     return;
   if (cb_size < PELICAN_MIN_SIZE) {
     /* a different CodeBreaker version: the patches below would land outside it */
-    sw_trace("launch: PELICAN.BIN is %lu bytes, at least %lu needed", (unsigned long)cb_size, (unsigned long)PELICAN_MIN_SIZE);
+    sw_warn(SW_WARN_LAUNCH, "launch: PELICAN.BIN is %lu bytes, at least %lu needed", (unsigned long)cb_size, (unsigned long)PELICAN_MIN_SIZE);
     launch_error = "PELICAN.BIN is not a version SWIRL can start";
     free(cb_raw);
     return;
@@ -434,8 +438,8 @@ void dreamcast_launch_cb(gd_item *disc) {
   }
   if (cheat_size > CB_LOADER_AREA - CHEAT_AREA) {
     /* the cheats would run into the CD loader's place */
-    sw_trace("launch: cheat file is %lu bytes, at most %lu fit", (unsigned long)cheat_size,
-             (unsigned long)(CB_LOADER_AREA - CHEAT_AREA));
+    sw_warn(SW_WARN_LAUNCH, "launch: cheat file is %lu bytes, at most %lu fit", (unsigned long)cheat_size,
+            (unsigned long)(CB_LOADER_AREA - CHEAT_AREA));
     launch_error = "The cheat file is too large for CodeBreaker";
     free(cb_raw);
     free(cheat_raw);
@@ -448,6 +452,7 @@ void dreamcast_launch_cb(gd_item *disc) {
     return;
   }
 
+  sw_watchdog_expect(LAUNCH_EXPECT_MS);
   if (gdemu_set_img_num((uint16_t)disc->slot_num) != 0) {
     launch_failed("GDEMU did not answer the image change");
     free(cb_raw);
@@ -518,7 +523,7 @@ void bleem_launch(gd_item *disc) {
   if (!buf)
     return;
   if (size < BLEEM_MIN_SIZE || (uint32_t)altctrl_size > 256) {
-    sw_trace("launch: BLEEM.BIN is %lu bytes, at least %lu needed", (unsigned long)size, (unsigned long)BLEEM_MIN_SIZE);
+    sw_warn(SW_WARN_LAUNCH, "launch: BLEEM.BIN is %lu bytes, at least %lu needed", (unsigned long)size, (unsigned long)BLEEM_MIN_SIZE);
     launch_error = "BLEEM.BIN is not a version SWIRL can start";
     free(raw);
     return;
@@ -529,6 +534,7 @@ void bleem_launch(gd_item *disc) {
     return;
   }
   quiet();
+  sw_watchdog_expect(LAUNCH_EXPECT_MS);
   if (gdemu_set_img_num((uint16_t)disc->slot_num) != 0) {
     launch_failed("GDEMU did not answer the image change");
     free(raw);

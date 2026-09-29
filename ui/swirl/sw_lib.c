@@ -277,7 +277,7 @@ static int take_in_file(int merge) {
     return load_state;
   }
   if (damaged)
-    sw_trace("SWIRL.DAT: one copy damaged, using %s", save_names[best]);
+    sw_warn(SW_WARN_DAT_DAMAGED, "SWIRL.DAT: one copy damaged, using %s", save_names[best]);
   cur_copy = best;
   cur_seq = best_seq;
   if (!merge) {
@@ -317,6 +317,8 @@ static void load_stats(void) {
   const int st = take_in_file(0);
   if (st == LOAD_OK)
     sw_trace("SWIRL.DAT: ok (%s, write %lu)", save_names[cur_copy], (unsigned long)cur_seq);
+  else if (st == LOAD_DAMAGED)
+    sw_warn(SW_WARN_DAT_DAMAGED, "SWIRL.DAT: damaged, replaced at the next save");
   else
     sw_trace("SWIRL.DAT: %s", st >= 0 && st <= 4 ? names[st] : "?");
 }
@@ -488,6 +490,10 @@ int sw_lib_save_result(int *rv) {
   *rv = last_rv = async_rv;
   if (async_rv != 0) {
     dirty = 1;
+    if (async_rv == -2 || async_rv == -8)
+      sw_warn(SW_WARN_VMU_FULL, "save: %s", async_rv == -2 ? "no VMU with room" : "no room on the VMU that holds SWIRL.DAT");
+    else
+      sw_warn(SW_WARN_SAVE_FAILED, "save: result %d", async_rv);
   } else {
     memcpy(saved_on, async_where, sizeof(saved_on));
   }
@@ -583,7 +589,7 @@ int sw_lib_late_card(void) {
     sw_trace("SWIRL.DAT: memory card attached late, %s", st == LOAD_NO_FILE ? "no file on it" : st == LOAD_DAMAGED ? "damaged" : "no answer");
     return 0;
   }
-  sw_trace("SWIRL.DAT: read from %s, attached late (write %lu)", save_names[cur_copy], (unsigned long)cur_seq);
+  sw_warn(SW_WARN_LATE_CARD, "SWIRL.DAT read from %s after start up (write %lu)", save_names[cur_copy], (unsigned long)cur_seq);
   return 1;
 }
 
@@ -712,9 +718,10 @@ int sw_lib_init(void) {
   }
   /* SWIRL.DAT was already read at power on (for the picture quality); read it again only if that didn't work,
      for example a memory card that answered late. Each read takes about half a second. */
-  if (!loaded)
+  if (!loaded && load_state != LOAD_DAMAGED) /* a damaged file does not heal; it is replaced by the first save */
     load_stats();
   load_custom();
+  sw_trace_games(num_games);
   return 0;
 }
 

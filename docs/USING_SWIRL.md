@@ -110,6 +110,7 @@ It saves straight away.
 | Save settings to VMU | Saves now (SWIRL also saves on its own). Shows where your settings are saved, for example "Saved on VMU A1", or why they aren't yet |
 | Controller test | Shows every button and stick |
 | Exit to Dreamcast BIOS | Leaves SWIRL |
+| Diagnostics | The warnings since power on, in plain words with a code, and **A** for the whole report as QR codes (see [DIAGNOSTICS.md](DIAGNOSTICS.md)) |
 
 The panel on the right shows how many games, favorites and launches you have, and **About SWIRL** with the version.
 

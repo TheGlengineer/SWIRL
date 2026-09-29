@@ -35,13 +35,13 @@ int db_load_DAT(void) {
   if (DAT_load_parse(&dat_meta, "META.DAT") != 0)
     return 0;
   if (dat_meta.num_chunks == 0) {
-    sw_trace("META.DAT: no entries");
+    sw_warn(SW_WARN_META, "META.DAT: no entries");
     fclose((FD_TYPE)dat_meta.handle);
     dat_meta.handle = NULL;
     return 0;
   }
   if (dat_meta.chunk_size != sizeof(db_item)) {
-    sw_trace("META.DAT: record size %u, expected %u, not used", (unsigned)dat_meta.chunk_size, (unsigned)sizeof(db_item));
+    sw_warn(SW_WARN_META, "META.DAT: record size %u, expected %u, not used", (unsigned)dat_meta.chunk_size, (unsigned)sizeof(db_item));
     fclose((FD_TYPE)dat_meta.handle);
     dat_meta.handle = NULL;
     dat_meta.num_chunks = 0;
@@ -52,7 +52,7 @@ int db_load_DAT(void) {
   /* Read DAT to db, but use Hash table to quickly search */
   db = malloc(dat_meta.num_chunks * sizeof(db_item));
   if (!db) {
-    sw_trace("META.DAT: no memory for %u records", (unsigned)dat_meta.num_chunks);
+    sw_warn(SW_WARN_META, "META.DAT: no memory for %u records", (unsigned)dat_meta.num_chunks);
     fclose((FD_TYPE)dat_meta.handle);
     dat_meta.handle = NULL;
     dat_meta.num_chunks = 0;
@@ -62,7 +62,7 @@ int db_load_DAT(void) {
   fclose((FD_TYPE)dat_meta.handle);
   dat_meta.handle = NULL;
   if (db_count != dat_meta.num_chunks)
-    sw_trace("META.DAT: %u of %u records read", (unsigned)db_count, (unsigned)dat_meta.num_chunks);
+    sw_warn(SW_WARN_META, "META.DAT: %u of %u records read", (unsigned)db_count, (unsigned)dat_meta.num_chunks);
 
   /* every description gets a NUL, whatever the file holds */
   for (uint32_t i = 0; i < db_count; i++)

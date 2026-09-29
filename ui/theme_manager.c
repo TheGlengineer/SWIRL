@@ -152,7 +152,7 @@ static int theme_read(const char *filename, theme_custom *theme) {
   /* SWIRL: the size, the allocation and the read are checked, and the buffer gets the NUL inih needs */
   long ini_size = filelength(ini);
   if (ini_size < 0 || ini_size > THEME_INI_MAX_SIZE) {
-    sw_trace("theme: %s is %ld bytes, not read", filename, ini_size);
+    sw_warn(SW_WARN_THEME, "theme: %s is %ld bytes, not read", filename, ini_size);
     fclose(ini);
     return -1;
   }
@@ -169,7 +169,7 @@ static int theme_read(const char *filename, theme_custom *theme) {
   free(ini_buffer);
   if (ret != 0) {
     /* a bad line is skipped (inih carries on); the name and colours read so far are kept */
-    sw_trace("theme: %s line %d not understood", filename, ret);
+    sw_warn(SW_WARN_THEME, "theme: %s line %d not understood", filename, ret);
     return ret < 0 ? -1 : 0;
   }
 
@@ -195,7 +195,7 @@ static void load_themes(const char *basePath) {
     if (strcmp(dp->d_name, ".") != 0 && strcmp(dp->d_name, "..") != 0) {
       if (strncasecmp(dp->d_name, "CUST_", 5) == 0) {
         if (num_custom_themes >= MAX_CUSTOM_THEMES) {
-          sw_trace("theme: more than %d custom themes, %s not listed", MAX_CUSTOM_THEMES, dp->d_name);
+          sw_warn(SW_WARN_THEME, "theme: more than %d custom themes, %s not listed", MAX_CUSTOM_THEMES, dp->d_name);
           continue;
         }
         theme_custom *theme = &custom_themes[num_custom_themes];
@@ -206,7 +206,7 @@ static void load_themes(const char *basePath) {
         /* the picture paths must fit their fields (a long folder name used to overflow bg_left) */
         int n = snprintf(theme->bg_left, sizeof(theme->bg_left), "%s/%s/BG_L.PVR", basePath, dp->d_name);
         if (n < 0 || n >= (int)sizeof(theme->bg_left)) {
-          sw_trace("theme: folder name %.24s too long, not listed", dp->d_name);
+          sw_warn(SW_WARN_THEME, "theme: folder name %.24s too long, not listed", dp->d_name);
           theme->bg_left[0] = '\0';
           continue;
         }

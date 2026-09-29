@@ -30,6 +30,7 @@
     printf(__VA_ARGS__); \
     printf("\n");        \
   } while (0)
+#define sw_warn(code, ...) sw_trace(__VA_ARGS__)
 #endif
 
 /* SWIRL: what a DAT may claim (the biggest shipped DAT is BOX.DAT, 128 KB chunks, one per game) */
@@ -95,7 +96,7 @@ int DAT_load_parse(dat_file *bin, const char *path) {
   if (file_size < 0 || file_header.chunk_size == 0 || file_header.chunk_size > DAT_MAX_CHUNK_SIZE ||
       file_header.num_chunks > DAT_MAX_CHUNKS ||
       (long)(sizeof(bin_header) + (size_t)file_header.num_chunks * sizeof(bin_item_raw)) > file_size) {
-    sw_trace("%s: %u chunks of %u bytes do not fit a %ld byte file, not used", path, (unsigned)file_header.num_chunks,
+    sw_warn(SW_WARN_DAT_FILE, "%s: %u chunks of %u bytes do not fit a %ld byte file, not used", path, (unsigned)file_header.num_chunks,
              (unsigned)file_header.chunk_size, file_size);
     fclose(bin_fd);
     return 1;
@@ -108,7 +109,7 @@ int DAT_load_parse(dat_file *bin, const char *path) {
   bin->items = file_header.num_chunks ? malloc(file_header.num_chunks * sizeof(bin_item)) : NULL;
   bin->hash = NULL;
   if (file_header.num_chunks && !bin->items) {
-    sw_trace("%s: no memory for %u entries", path, (unsigned)file_header.num_chunks);
+    sw_warn(SW_WARN_DAT_FILE, "%s: no memory for %u entries", path, (unsigned)file_header.num_chunks);
     fclose(bin_fd);
     bin->handle = NULL;
     return 1;
@@ -143,7 +144,7 @@ int DAT_load_parse(dat_file *bin, const char *path) {
     bin->num_chunks++;
   }
   if (dropped)
-    sw_trace("%s: %u entries dropped (chunk outside the file, empty or repeated ID)", path, dropped);
+    sw_warn(SW_WARN_DAT_FILE, "%s: %u entries dropped (chunk outside the file, empty or repeated ID)", path, dropped);
 
   /* Leave our handle in a handy place in case we need to read after */
   if (bin->num_chunks)

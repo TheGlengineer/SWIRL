@@ -25,3 +25,5 @@ void ui_swirl_settings_changed(void);
 void ui_swirl_leave(void);
 /* SWIRL: openMenu's settings file needs writing; the save banner counts down to it */
 void ui_swirl_save_settings_soon(void);
+/* SWIRL: X was held at power on: show the boot log as QR codes (blocking, B returns) */
+void ui_swirl_boot_log(void);

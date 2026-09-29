@@ -67,7 +67,7 @@ static uint32_t accent_col = 0xFFF28C28;
 enum tab { TAB_HOME = 0, TAB_LIBRARY, TAB_COLLECTIONS, TAB_SYSTEM, TAB_COUNT };
 static const char *tab_names[TAB_COUNT] = {"Home", "Library", "Collections", "System"};
 
-enum mode { MODE_TABS = 0, MODE_DETAIL, MODE_LAUNCH, MODE_PADTEST, MODE_OPTIONS, MODE_VMU, MODE_RESUME };
+enum mode { MODE_TABS = 0, MODE_DETAIL, MODE_LAUNCH, MODE_PADTEST, MODE_OPTIONS, MODE_VMU, MODE_RESUME, MODE_DIAG };
 
 #define MAX_LIST 1024
 #define MAX_COLS 40
@@ -934,7 +934,7 @@ static void draw_collections(float slide) {
 enum {
   SYS_STYLE = 0, SYS_ACCENT, SYS_BACKDROP, SYS_QUALITY, SYS_MUSIC, SYS_MUSIC_VOL, SYS_SFX, SYS_SFX_VOL, SYS_RESUME, SYS_CLOCK,
   SYS_RUMBLE, SYS_BEEP, SYS_GAMEID, SYS_ATTRACT, SYS_SAVER_STYLE, SYS_SAVER_TIME, SYS_SAVER_TEST, SYS_VMU, SYS_SAVE, SYS_PADTEST,
-  SYS_BIOS, SYS_COUNT
+  SYS_BIOS, SYS_DIAG, SYS_COUNT
 };
 #define SYS_ROWS 9
 static int sys_top;
@@ -973,6 +973,10 @@ static const char *sys_value(int i, char *buf, int len) {
     case SYS_SAVER_TIME: snprintf(buf, len, "After %d min", p->saver_min); return buf;
     case SYS_SAVER_TEST: return "Press A";
     case SYS_SAVE: return sw_lib_save_status(buf, len);
+    case SYS_DIAG:
+      if (!sw_warn_count()) return "No warnings";
+      snprintf(buf, len, "%d warning%s", sw_warn_count(), sw_warn_count() == 1 ? "" : "s");
+      return buf;
     default: return "";
   }
 }
@@ -981,7 +985,7 @@ static const char *sys_names[SYS_COUNT] = {"Menu style", "Accent colour", "Backd
                                            "Navigation sounds", "Sound volume", "Start on", "Clock",
                                            "Rumble on launch", "VMU beep on save", "VM2 / VMU Pro game cards", "Screen saver", "Screen saver style",
                                            "Start screen saver", "Preview screen saver", "VMU saves",
-                                           "Save settings to VMU", "Controller test", "Exit to Dreamcast BIOS"};
+                                           "Save settings to VMU", "Controller test", "Exit to Dreamcast BIOS", "Diagnostics"};
 
 static void show_logo_on_vmu(void) {
   sw_vmu_show_logo();
@@ -1049,8 +1053,15 @@ static void draw_system(float slide) {
   sw_text_right(SWF_SMALL, x + 212, 324, 12, C_DIM, "Version " SWIRL_VERSION);
   sw_text(SWF_SMALL, x + 16, 344, 12, C_TEXT, "Created by Glen Huszar");
   sw_text(SWF_SMALL, x + 16, 360, 12, C_ORANGE, "github.com/TheGlengineer");
-  sw_text_wrap(SWF_SMALL, x + 16, 382, 11, C_DIM,
-               "Built on openMenu by mrneo240. Fonts: Sora and Barlow (OFL).", 196, 14, 3);
+  sw_text_wrap(SWF_SMALL, x + 16, 380, 11, C_DIM,
+               "Built on openMenu by mrneo240. Fonts: Sora and Barlow (OFL).", 196, 13, 2);
+  {
+    char db[40];
+    const int n = sw_warn_count();
+    if (n) snprintf(db, sizeof(db), "Diagnostics: %d warning%s", n, n == 1 ? "" : "s");
+    else snprintf(db, sizeof(db), "Diagnostics: no warnings");
+    sw_text(SWF_SMALL, x + 16, 416, 11, n ? C_ORANGE : C_DIM, db);
+  }
 
   const char *foot[] = {"L / R  Tabs", "Left / Right  Change", "A  Select"};
   draw_footer(foot, 3, NULL);
@@ -1646,6 +1657,80 @@ static void draw_padtest(void) {
   sw_text_center(SWF_SMALL, 320, 360, 12, C_DIM, "Hold B and Start together to leave");
 }
 
+/* ---------- diagnostics ---------- */
+/* The warnings collected since power on, in plain words, and the whole report as QR codes on A (the same
+   screen a crash shows, with reason "Diagnostics"), so "my settings do not save" can come with a code. */
+static int diag_top;
+#define DIAG_ROWS 6
+
+static void draw_diag(void) {
+  sw_rrect(60, 56, 520, 356, 12, 0xF00C1222);
+  sw_text(SWF_HEAD, 84, 72, 20, C_WHITE, "Diagnostics");
+  char vb[48];
+  snprintf(vb, sizeof(vb), "SWIRL %s, build %s", SWIRL_VERSION, sw_build_id());
+  sw_text_right(SWF_SMALL, 556, 78, 12, C_DIM, vb);
+  const int n = sw_warn_count();
+  if (!n) {
+    sw_text(SWF_BODY, 84, 112, 15, C_TEXT, "No warnings since power on.");
+    sw_text_wrap(SWF_SMALL, 84, 140, 12, C_DIM,
+                 "A warning is a problem SWIRL got past: a save that failed, a picture it could not use, a line in "
+                 "OPENMENU.INI it skipped. They are listed here with a code.",
+                 470, 16, 4);
+  } else {
+    if (diag_top > n - DIAG_ROWS) diag_top = n - DIAG_ROWS;
+    if (diag_top < 0) diag_top = 0;
+    for (int r = 0; r < DIAG_ROWS && diag_top + r < n; r++) {
+      int code = 0, count = 0;
+      const char *detail = "";
+      sw_warn_get(diag_top + r, &code, &count, &detail);
+      const float y = 104 + r * 44;
+      char cb[8];
+      snprintf(cb, sizeof(cb), "W%02d", code);
+      sw_text(SWF_UI, 84, y, 14, C_ORANGE, cb);
+      sw_text_clip(SWF_UI, 128, y, 14, C_WHITE, sw_code_words(code), 340);
+      if (count > 1) {
+        char nb[12];
+        snprintf(nb, sizeof(nb), "x%d", count);
+        sw_text_right(SWF_SMALL, 556, y + 2, 12, C_DIM, nb);
+      }
+      sw_text_clip(SWF_SMALL, 128, y + 20, 11, C_DIM, detail, 428);
+    }
+    if (n > DIAG_ROWS) {
+      char more[32];
+      snprintf(more, sizeof(more), "%d to %d of %d", diag_top + 1, diag_top + DIAG_ROWS < n ? diag_top + DIAG_ROWS : n, n);
+      sw_text_right(SWF_SMALL, 556, 340, 11, C_DIM, more);
+    }
+  }
+  sw_text_wrap(SWF_SMALL, 84, 356, 11, C_DIM,
+               "A shows the full report as QR codes to photograph for a bug report. It holds no game names beyond "
+               "the last few steps.",
+               470, 14, 2);
+  sw_text(SWF_SMALL, 84, 392, 12, C_TEXT, "Up / Down  Scroll");
+  sw_text(SWF_SMALL, 230, 392, 12, C_TEXT, "A  Show as QR codes");
+  sw_text_right(SWF_SMALL, 556, 392, 12, C_TEXT, "B  Back");
+}
+
+static void input_diag(unsigned int btn, int pressed) {
+  if (btn == UP && dir_pressed(btn) && diag_top > 0) diag_top--;
+  if (btn == DOWN && dir_pressed(btn) && diag_top + DIAG_ROWS < sw_warn_count()) diag_top++;
+  if (btn == B && pressed) mode = MODE_TABS;
+  if (btn == A && pressed) {
+    /* the report screen writes the picture itself and waits on the buttons: nothing of the menu runs meanwhile */
+    sw_lib_finish();
+    sw_audio_shutdown();
+    sw_report_show(SW_REPORT_USER);
+    sw_audio_init();
+    prev_btn = B; /* the B that closed the report is not a press here */
+  }
+}
+
+/* X held at power on: the boot log as QR codes, once the menu is up (main.c) */
+void ui_swirl_boot_log(void) {
+  sw_audio_shutdown();
+  sw_report_show(SW_REPORT_BOOT);
+  sw_audio_init();
+}
+
 /* ---------- input ---------- */
 static int dir_pressed(unsigned int btn) {
   /* initial press, then auto repeat after 16 frames every 4 frames */
@@ -1872,6 +1957,10 @@ static void input_tabs(unsigned int btn, int pressed) {
             changed_pref = 0;
             if (btn == A) mode = MODE_PADTEST;
             break;
+          case SYS_DIAG:
+            changed_pref = 0;
+            if (btn == A) { mode = MODE_DIAG; diag_top = 0; }
+            break;
           case SYS_BIOS:
             changed_pref = 0;
             if (btn == A) {
@@ -1883,6 +1972,7 @@ static void input_tabs(unsigned int btn, int pressed) {
               while (save_hold > 0) { idle_frame(); save_hold--; }
               sw_vmu_shutdown();
               sw_trace("leaving for the BIOS");
+              sw_watchdog_expect(60000);
               arch_menu();
             }
             break;
@@ -2067,6 +2157,9 @@ FUNCTION_INPUT(UI_NAME, handle_input) {
       else if (btn == B && pressed) { mode = MODE_TABS; show_toast("Welcome back"); }
       break;
     case MODE_LAUNCH:
+      break;
+    case MODE_DIAG:
+      input_diag(btn, pressed);
       break;
     case MODE_PADTEST: {
       maple_device_t *dev = maple_enum_type(0, MAPLE_FUNC_CONTROLLER);
@@ -2534,6 +2627,7 @@ FUNCTION(UI_NAME, drawTR) {
   sw_set_fade(1.f);
 
   if (mode == MODE_PADTEST) draw_padtest();
+  if (mode == MODE_DIAG) draw_diag();
   if (mode == MODE_OPTIONS) draw_options();
   if (mode == MODE_RESUME) draw_resume();
   if (mode == MODE_LAUNCH) draw_launch();

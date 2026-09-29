@@ -45,6 +45,7 @@ typedef FILE *FD_TYPE;
     printf(__VA_ARGS__);     \
     printf("\n");            \
   } while (0)
+#define sw_warn(code, ...) sw_trace(__VA_ARGS__)
 #endif
 
 /* SWIRL: bounds for what the INI may claim. Slots are at most 4 digits (VFB card manager INIs use 4), the INI
@@ -88,12 +89,12 @@ static int read_openmenu_ini(void *user, const char *section, const char *name, 
   if ((strcmp(section, "OPENMENU") == 0) && (strcmp(name, "num_items") == 0)) {
     /* SWIRL: the count is bounded and checked, and only the first one counts */
     if (gd_slots_BASE) {
-      sw_trace("OPENMENU.INI: second num_items ignored");
+      sw_warn(SW_WARN_INI, "OPENMENU.INI: second num_items ignored");
       return 1;
     }
     int claimed = atoi(value) /* It can occur that GDMenuCardManager under reports by 1 */;
     if (claimed < 0 || claimed > INI_MAX_ITEMS) {
-      sw_trace("OPENMENU.INI: num_items %d out of range, using 0", claimed);
+      sw_warn(SW_WARN_INI, "OPENMENU.INI: num_items %d out of range, using 0", claimed);
       claimed = 0;
     }
     num_items_BASE = claimed;
@@ -102,7 +103,7 @@ static int read_openmenu_ini(void *user, const char *section, const char *name, 
     gd_slots_BASE = calloc(num_items_capacity, sizeof(struct gd_item));
     list_temp = calloc(num_items_capacity, sizeof(struct gd_item *));
     if (!gd_slots_BASE || !list_temp) {
-      sw_trace("OPENMENU.INI: no memory for %d slots", num_items_capacity);
+      sw_warn(SW_WARN_INI, "OPENMENU.INI: no memory for %d slots", num_items_capacity);
       free(gd_slots_BASE);
       free(list_temp);
       gd_slots_BASE = NULL;
@@ -144,7 +145,7 @@ static int read_openmenu_ini(void *user, const char *section, const char *name, 
         /* one trace line per slot (each slot has several keys), and only the first few */
         if (slot != last_skipped_slot || slot == 0) {
           if (num_items_skipped < INI_MAX_SKIPPED_TRACED)
-            sw_trace("OPENMENU.INI: skipped [%s] %.24s (%s)", section, name, why);
+            sw_warn(SW_WARN_INI, "OPENMENU.INI: skipped [%s] %.24s (%s)", section, name, why);
           num_items_skipped++;
           last_skipped_slot = slot;
         }
@@ -347,7 +348,7 @@ void list_set_multidisc(const char *product_id) {
 
     /* SWIRL: the set is bounded; the rest of the entries stay in the library but not in the chooser */
     if (temp_idx >= MULTIDISC_MAX_GAMES_PER_SET) {
-      sw_trace("multidisc: more than %d entries for %.12s, rest not shown", MULTIDISC_MAX_GAMES_PER_SET, product_id);
+      sw_warn(SW_WARN_MULTIDISC, "multidisc: more than %d entries for %.12s, rest not shown", MULTIDISC_MAX_GAMES_PER_SET, product_id);
       break;
     }
     list_multidisc[temp_idx++] = &gd_slots_BASE[base_idx];
@@ -465,14 +466,14 @@ int list_read(const char *filename) {
   /* SWIRL: the size, the allocation and the read are checked; a failure leaves the list empty, not half read */
   long int ini_size = filelength(ini);
   if (ini_size < 0 || ini_size > INI_MAX_SIZE) {
-    sw_trace("OPENMENU.INI: size %ld out of range", ini_size);
+    sw_warn(SW_WARN_INI, "OPENMENU.INI: size %ld out of range", ini_size);
     fclose(ini);
     list_set_empty();
     return -1;
   }
   char *ini_buffer = malloc((size_t)ini_size + 2) /* adjust for adding newline at end always */;
   if (!ini_buffer) {
-    sw_trace("OPENMENU.INI: no memory for %ld bytes", ini_size);
+    sw_warn(SW_WARN_INI, "OPENMENU.INI: no memory for %ld bytes", ini_size);
     fclose(ini);
     list_set_empty();
     return -1;
@@ -480,7 +481,7 @@ int list_read(const char *filename) {
   size_t got = fread(ini_buffer, 1, (size_t)ini_size, ini);
   fclose(ini);
   if (got != (size_t)ini_size) {
-    sw_trace("OPENMENU.INI: short read (%u of %ld)", (unsigned)got, ini_size);
+    sw_warn(SW_WARN_INI, "OPENMENU.INI: short read (%u of %ld)", (unsigned)got, ini_size);
     free(ini_buffer);
     list_set_empty();
     return -1;
@@ -497,14 +498,14 @@ int list_read(const char *filename) {
   if (parse_ret < 0 || !gd_slots_BASE) {
     /* out of memory, or no [OPENMENU] num_items at all */
     printf("INI:Error Parsing %s!\n", filename);
-    sw_trace("OPENMENU.INI: not usable (%d)", parse_ret);
+    sw_warn(SW_WARN_INI, "OPENMENU.INI: not usable (%d)", parse_ret);
     fflush(stdout);
     list_set_empty();
     return -1;
   }
   if (parse_ret > 0) {
     /* SWIRL: inih returns the first bad line; with INI_STOP_ON_FIRST_ERROR off the lines after it were still read */
-    sw_trace("OPENMENU.INI: bad line %d skipped", parse_ret);
+    sw_warn(SW_WARN_INI, "OPENMENU.INI: bad line %d skipped", parse_ret);
   }
   if (num_items_skipped)
     sw_trace("OPENMENU.INI: %d slots skipped", num_items_skipped);

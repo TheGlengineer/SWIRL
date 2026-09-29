@@ -135,7 +135,7 @@ static int init(void) {
   do {                                               \
     sw_trace("%s", #call);                           \
     if ((r = (call)) != 0) {                         \
-      sw_trace("  %s failed (%d)", #call, r);        \
+      sw_warn(SW_WARN_STEP, "%s failed (%d)", #call, r);  \
       ret++;                                         \
     }                                                \
   } while (0)
@@ -366,7 +366,7 @@ void __wrap_maple_wait_scan(void) {
   const uint64_t start = timer_ms_gettime64();
   while (maple_state.scan_ready_mask != 0xf) {
     if (timer_ms_gettime64() - start > SWIRL_SCAN_WAIT_MS) {
-      sw_trace("controller scan incomplete after %d ms (ports %x)", SWIRL_SCAN_WAIT_MS, maple_state.scan_ready_mask);
+      sw_warn(SW_WARN_SCAN, "controller scan incomplete after %d ms (ports %x)", SWIRL_SCAN_WAIT_MS, maple_state.scan_ready_mask);
       return;
     }
     thd_pass();
@@ -402,6 +402,10 @@ static void late_card_check(void) {
   }
 }
 
+/* SWIRL: X held at power on asks for the boot log (sampled with the Y check in settings_boot_guard) */
+static int boot_x;
+void main_note_boot_x(int held) { boot_x = held; }
+
 int main(int argc, char *argv[]) {
   /* unused */
   (void)argc;
@@ -419,6 +423,15 @@ int main(int argc, char *argv[]) {
   if (init())
     sw_trace("start up had errors (carrying on)");
   sw_trace_done();
+  if (boot_x) {
+    /* X held at power on: the boot log as QR codes, before the first picture (any style) */
+    sw_trace("X held at start: boot log");
+    if (settings_get()->ui == UI_SWIRL)
+      ui_swirl_boot_log();
+    else
+      sw_report_show(SW_REPORT_BOOT);
+    input_latched = 1; /* the X still down is not a press for the menu */
+  }
 #ifdef SW_TEST_CRASH
   { void (*volatile bad)(void) = (void (*)(void))0x8c000002; bad(); } /* test only: an early crash */
 #endif

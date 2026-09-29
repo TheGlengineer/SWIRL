@@ -94,3 +94,10 @@ the first save, so nothing is written over it.
 Open an [issue](https://github.com/TheGlengineer/SWIRL/issues/new/choose). In Card Manager, **About > Copy
 details** gives the versions and paths to paste in. For the Dreamcast, **System > About SWIRL** shows the
 menu version.
+
+**A report from the Dreamcast.** **System > Diagnostics** lists the warnings since power on (a save that
+failed, a picture or an INI line SWIRL could not use, a launch that came back) in plain words with a code.
+Press **A** there for the whole report as QR codes: photograph or scan each one and paste the text into the
+issue. If SWIRL stops on a report screen by itself (a crash, or no progress for 12 seconds), the codes take
+turns on their own. Holding **X** while the Dreamcast starts shows the start up log the same way. The report
+holds no game names beyond the last few steps. The format is in [DIAGNOSTICS.md](DIAGNOSTICS.md).

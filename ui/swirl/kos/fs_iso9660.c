@@ -32,6 +32,7 @@ ISO9660 systems, as these were used as references as well.
 #include <dc/fs_iso9660.h>
 #include <dc/cdrom.h>
 #include <arch/timer.h>
+#include "../sw_trace.h" /* SWIRL: a disc that goes away is a warning in the report */
 #include <dc/vblank.h>
 
 #include <kos/thread.h>
@@ -291,6 +292,8 @@ static int bread_cache(cache_block_t **cache, uint32 sector) {
         //dbglog(DBG_ERROR, "fs_iso9660: can't read_sectors for %d: %d\n",
         //  sector+150, j);
         if(j == ERR_DISC_CHG || j == ERR_NO_DISC) {
+            sw_warn(SW_WARN_DISC, "fs_iso9660: read of sector %lu: %s", (unsigned long)sector,
+                    j == ERR_NO_DISC ? "no disc" : "disc changed");
             /* SWIRL: init_percd() clears the caches, which takes cache_mutex, already held here: the thread
                locked itself out and the menu froze. The disc is marked for a fresh look at the next open
                (percd_done, as the vblank handler does); this read fails. Same defect in KallistiOS 2.2.1. */

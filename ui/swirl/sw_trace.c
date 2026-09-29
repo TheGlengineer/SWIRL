@@ -1,13 +1,20 @@
-/* SWIRL start up trace (see sw_trace.h) */
+/* SWIRL trace, warnings, hang watchdog and the report screen (see sw_trace.h and docs/DIAGNOSTICS.md) */
 #include "sw_trace.h"
 #include "sw_version.h"
 #define SWIRL_REPORT_VERSION SWIRL_VERSION
+#ifndef SWIRL_BUILD
+#define SWIRL_BUILD "dev" /* swirl/build.sh passes the short git hash */
+#endif
+#ifndef SWIRL_VERSION_STR
+#define SWIRL_VERSION_STR SWIRL_VERSION /* the full version (2.14.0-preview.3) comes from swirl/build.sh */
+#endif
 
 #include <arch/arch.h>
 #include <arch/irq.h>
 #include <arch/timer.h>
 #include <assert.h>
 #include <dc/biosfont.h>
+#include <dc/flashrom.h>
 #include <dc/maple.h>
 #include <dc/maple/controller.h>
 #include <dc/pvr.h>
@@ -57,11 +64,13 @@ static void draw_line(int row, const char *s, uint32_t fg) {
         break;
       }
       case PM_RGB888P: {
-        uint8_t *d = shown + (y + yy) * 640 * 3;
-        for (int x = 0; x < 640; x++) {
-          d[3 * x] = src[x];
-          d[3 * x + 1] = src[x] >> 8;
-          d[3 * x + 2] = src[x] >> 16;
+        /* whole 32 bit words: video memory takes no byte writes */
+        uint32_t *d = (uint32_t *)(shown + (y + yy) * 640 * 3);
+        for (int x = 0; x < 640; x += 4, d += 3) {
+          const uint32_t a = src[x], b = src[x + 1], c = src[x + 2], e = src[x + 3];
+          d[0] = (a & 0xFFFFFF) | (b << 24);
+          d[1] = ((b >> 8) & 0xFFFF) | (c << 16);
+          d[2] = ((c >> 16) & 0xFF) | (e << 8);
         }
         break;
       }
@@ -89,25 +98,76 @@ void sw_trace_redraw(void) {
 }
 
 static volatile uint64_t last_alive; /* when the menu last showed signs of life (a step or a picture) */
+static uint32_t x_pc, x_pr, x_stack[16]; /* where a crash or hang was: the x= line of the report */
+static int x_n;
+static volatile uint64_t expect_until; /* a known long wait: the watchdog stands down until then */
+static kthread_t *main_thd;            /* the menu's thread, whose place is reported when it hangs */
 
 void sw_trace_alive(void) { last_alive = timer_ms_gettime64(); }
 
-#ifdef SWIRL_TRACE_SCREEN
-/* diagnostic build: a start up or menu that stops making progress for 8 s is stopped on the report screen,
-   so a hang shows where it happened instead of just freezing */
+void sw_watchdog_expect(unsigned ms) {
+  const uint64_t until = timer_ms_gettime64() + ms;
+  if (until > expect_until)
+    expect_until = until;
+  last_alive = timer_ms_gettime64();
+}
+
+/* the code addresses found on a stack, as trace lines (with the build's symbol file they name the functions) */
+static void trace_stack(uint32_t sp) {
+  extern char start[]; /* the linker's _start; _etext (KallistiOS's arch.h) is the end of the code */
+  const uintptr_t lo = (uintptr_t)start, hi = (uintptr_t)&_etext;
+  if (sp < 0x8c000000u || sp > 0x8d000000u - 4 * 128 || (sp & 3))
+    return;
+  char line[96];
+  int n = 0, len = 0;
+  line[0] = 0;
+  x_n = 0;
+  for (int i = 0; i < 128 && n < 16; i++) {
+    const uint32_t v = ((const uint32_t *)sp)[i];
+    if (v >= lo && v < hi && !(v & 1)) {
+      x_stack[x_n++] = v;
+      len += snprintf(line + len, sizeof(line) - len, "%s%08lx", len ? " " : "", (unsigned long)v);
+      if (++n % 8 == 0) {
+        sw_trace("stack %s", line);
+        len = 0;
+        line[0] = 0;
+      }
+    }
+  }
+  if (len)
+    sw_trace("stack %s", line);
+}
+
+/* Every build: a menu that stops making progress for 12 s is stopped on the report screen, so a hang shows
+   where it happened instead of just freezing. Progress is a trace line or a picture drawn (sw_trace_alive,
+   called from every frame and from every wait loop that draws frames); a known long wait (a launch, the BIOS)
+   says so with sw_watchdog_expect. The longest legitimate wait measured in Flycast is a 3.5 s double save
+   on a slow card and a 10 s wait for a disc that never becomes ready, which is inside a launch's expect
+   window. A hang with interrupts off cannot be caught here; that is only the hand over to a game. */
+#define WATCHDOG_MS 12000
 static void *watchdog(void *arg) {
   (void)arg;
   for (;;) {
     thd_sleep(500);
-    if (last_alive && timer_ms_gettime64() - last_alive > 8000) {
-      char why[80];
-      snprintf(why, sizeof(why), "no progress for 8 s after: %s", num_lines ? lines[num_lines - 1] : "?");
-      sw_trace_fatal(why);
+    const uint64_t now = timer_ms_gettime64();
+    if (!last_alive || now < expect_until || now - last_alive <= WATCHDOG_MS)
+      continue;
+    char why[96];
+    snprintf(why, sizeof(why), "no progress for %d s after: %s", WATCHDOG_MS / 1000,
+             num_lines ? lines[num_lines - 1] + 6 : "?");
+    if (main_thd) {
+      /* the menu thread's saved place: exact when it waits, its last time slice end when it spins */
+      sw_trace("hang: menu thread state %d%s%s pc=%08lx pr=%08lx", (int)main_thd->state,
+               main_thd->wait_msg ? " waiting on " : "", main_thd->wait_msg ? main_thd->wait_msg : "",
+               (unsigned long)main_thd->context.pc, (unsigned long)main_thd->context.pr);
+      x_pc = main_thd->context.pc;
+      x_pr = main_thd->context.pr;
+      trace_stack(main_thd->context.r[15]);
     }
+    sw_trace_fatal_reason(SW_REPORT_HANG, why);
   }
   return NULL;
 }
-#endif
 
 void sw_trace(const char *fmt, ...) {
   char buf[128];
@@ -144,6 +204,69 @@ const char *sw_trace_text(void) {
   return text;
 }
 
+/* ---------- warnings ----------
+   A problem that does not stop the menu (a save that failed, a picture skipped, an INI line ignored) used to
+   be a trace line at best. Each is now a code from sw_codes.h with a count and the first detail, shown in
+   System > Diagnostics and in every report's w= line, so "my settings do not save" comes with a code. */
+#define MAX_WARN 16
+typedef struct sw_warning {
+  uint8_t code;
+  uint16_t count;
+  char detail[64];
+} sw_warning;
+static sw_warning warns[MAX_WARN];
+static int num_warns;
+
+static const struct {
+  int code;
+  const char *key, *words;
+} code_table[] = {
+#define X(name, num, key, words) {num, key, words},
+    SW_CODES(X)
+#undef X
+};
+
+const char *sw_code_words(int code) {
+  for (unsigned i = 0; i < sizeof(code_table) / sizeof(code_table[0]); i++)
+    if (code_table[i].code == code) return code_table[i].words;
+  return "Unknown warning";
+}
+
+void sw_warn(int code, const char *fmt, ...) {
+  char buf[96];
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(buf, sizeof(buf), fmt, ap);
+  va_end(ap);
+  sw_trace("W%02d %s", code, buf);
+  for (int i = 0; i < num_warns; i++)
+    if (warns[i].code == code) {
+      if (warns[i].count < 65535) warns[i].count++;
+      return;
+    }
+  if (num_warns < MAX_WARN) {
+    warns[num_warns].code = (uint8_t)code;
+    warns[num_warns].count = 1;
+    snprintf(warns[num_warns].detail, sizeof(warns[num_warns].detail), "%s", buf);
+    num_warns++;
+  }
+}
+
+int sw_warn_count(void) { return num_warns; }
+
+int sw_warn_get(int i, int *code, int *count, const char **detail) {
+  if (i < 0 || i >= num_warns)
+    return 0;
+  *code = warns[i].code;
+  *count = warns[i].count;
+  *detail = warns[i].detail;
+  return 1;
+}
+
+static int num_games;
+void sw_trace_games(int n) { num_games = n; }
+const char *sw_build_id(void) { return SWIRL_BUILD; }
+
 static int x_pressed(void) {
   maple_device_t *dev;
   for (int i = 0; (dev = maple_enum_type(i, MAPLE_FUNC_CONTROLLER)); i++) {
@@ -163,6 +286,8 @@ static int a_pressed(void) {
   }
   return 0;
 }
+
+int sw_trace_x_held(void) { return x_pressed(); }
 
 void sw_trace_done(void) {
   sw_trace("start up done");
@@ -304,20 +429,72 @@ void sw_trace_report(void) {
 /* ---------- the report screen, in every build ----------
    It must work however SWIRL stopped: in the middle of handing over to a game the graphics chip, the controllers
    and the timer may already be shut down. So it writes straight into the picture being shown (no graphics chip),
-   needs no button, and times its pages by counting. The log is cut into parts, each a QR code that a phone
-   camera reads (or send a photo of each); the codes take turns, a few seconds each, for ever. */
-static uint16_t *fb565(void) {
-  return (uint16_t *)((uint8_t *)PVR_RAM_BASE + (PVR_GET(PVR_FB_ADDR) & (PVR_RAM_SIZE - 1)));
+   and when nothing can be pressed it times its pages by counting. The report is cut into parts, each a QR code
+   that a phone camera reads (or send a photo of each); the codes take turns, a few seconds each. Asked for from
+   the menu (Diagnostics, or X held at power on) the same screen is left with B, and A turns the page. */
+static uint8_t *fb_base(void) {
+  return (uint8_t *)PVR_RAM_BASE + (PVR_GET(PVR_FB_ADDR) & (PVR_RAM_SIZE - 1));
 }
 
-static void fb_text(int y, const char *s, uint16_t fg, uint16_t bg) {
-  static uint16_t row[640 * (BFONT_HEIGHT + 1)];
+/* a run of one colour on one line of the picture, in whatever pixel mode is set (0xRRGGBB) */
+static void fb_run(int x, int y, int w, uint32_t rgb) {
+  if (!vid_mode || x < 0 || y < 0 || x + w > 640 || y >= 480)
+    return;
+  uint8_t *base = fb_base();
+  switch (vid_mode->pm) {
+    case PM_RGB565: {
+      uint16_t *d = (uint16_t *)base + y * 640 + x;
+      const uint16_t c = (uint16_t)(((rgb >> 8) & 0xF800) | ((rgb >> 5) & 0x07E0) | ((rgb >> 3) & 0x001F));
+      for (int i = 0; i < w; i++) d[i] = c;
+      break;
+    }
+    case PM_RGB888P: {
+      /* three bytes a pixel, but video memory takes no byte writes (they are lost, on the console and in
+         Flycast): the run is written as whole 32 bit words, the two at the ends read first */
+      const uint32_t first = (uint32_t)(y * 640 + x) * 3, last = first + (uint32_t)w * 3; /* [first, last) */
+      volatile uint32_t *word = (volatile uint32_t *)(base + (first & ~3u));
+      const uint8_t b[3] = {(uint8_t)rgb, (uint8_t)(rgb >> 8), (uint8_t)(rgb >> 16)};
+      for (uint32_t at = first & ~3u; at < last; at += 4, word++) {
+        uint32_t v = (at < first || at + 4 > last) ? *word : 0;
+        for (int k = 0; k < 4; k++) {
+          const uint32_t pos = at + k;
+          if (pos < first || pos >= last) continue;
+          v = (v & ~(0xFFu << (8 * k))) | ((uint32_t)b[(pos - first) % 3] << (8 * k));
+        }
+        *word = v;
+      }
+      break;
+    }
+    case PM_RGB0888: {
+      uint32_t *d = (uint32_t *)base + y * 640 + x;
+      for (int i = 0; i < w; i++) d[i] = rgb;
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+static void fb_fill(uint32_t rgb) {
+  for (int y = 0; y < 480; y++) fb_run(0, y, 640, rgb);
+}
+
+static void fb_text(int y, const char *s, uint32_t fg, uint32_t bg) {
+  static uint32_t row[640 * (BFONT_HEIGHT + 1)]; /* a spare row: bfont may touch one past the end */
   for (int i = 0; i < 640 * BFONT_HEIGHT; i++) row[i] = bg;
   char cut[SCREEN_CHARS + 1];
   snprintf(cut, sizeof(cut), "%s", s);
-  bfont_draw_str_ex(row + 8, 640, fg, bg, 16, true, cut);
-  uint16_t *d = fb565() + y * 640;
-  memcpy(d, row, 640 * BFONT_HEIGHT * 2);
+  bfont_draw_str_ex(row + 8, 640, fg, bg, 32, true, cut);
+  for (int yy = 0; yy < BFONT_HEIGHT; yy++) {
+    const uint32_t *src = row + yy * 640;
+    int x = 0;
+    while (x < 640) {
+      int e = x + 1;
+      while (e < 640 && src[e] == src[x]) e++;
+      fb_run(x, y + yy, e - x, src[x] & 0xFFFFFF);
+      x = e;
+    }
+  }
 }
 
 /* waits by counting TV pictures: the video chip's own signal, read from its register, works even when the timer
@@ -327,19 +504,100 @@ static void wait_frames(int n) {
     vid_waitvbl();
 }
 
-static void report_loop(void) {
-  static char all[MAX_LINES * LINE_LEN + 64];
-  all[0] = 0;
+/* the report text (docs/DIAGNOSTICS.md): a header, then the trace */
+static int report_reason;
+static char all[MAX_LINES * LINE_LEN + 512];
+
+static const char *reason_word(int reason) {
+  switch (reason) {
+    case SW_REPORT_CRASH: return "crash";
+    case SW_REPORT_HANG: return "hang";
+    case SW_REPORT_USER: return "Diagnostics";
+    case SW_REPORT_BOOT: return "boot log";
+    case SW_REPORT_ASSERT: return "assert";
+    case SW_REPORT_ABORT: return "abort";
+    case SW_REPORT_LAUNCH: return "launch";
+    default: return "?";
+  }
+}
+
+static void build_report(int reason, int live) {
+  int len = 0;
+  const int stopped = reason != SW_REPORT_USER && reason != SW_REPORT_BOOT;
+  len += snprintf(all + len, sizeof(all) - len, "SWIRL %s %s R%d\n", SWIRL_VERSION_STR, SWIRL_BUILD, reason);
+  {
+    char bios[6];
+    memcpy(bios, (const char *)0x8c0007CC, 5);
+    bios[5] = 0;
+    for (int i = 0; i < 5; i++)
+      if (bios[i] < ' ' || bios[i] > '~') bios[i] = '?';
+    unsigned free_kb = 0, arena_kb = 0;
+    if (live && !stopped) {
+      /* the allocator's lists are walked here: only while the menu is known to be sound */
+      struct mallinfo mi = mallinfo();
+      free_kb = (unsigned)mi.fordblks / 1024;
+      arena_kb = (unsigned)mi.arena / 1024;
+    } else {
+      extern void *sbrk(intptr_t);
+      extern char end[]; /* the linker's end of the program's data */
+      arena_kb = (unsigned)((uintptr_t)sbrk(0) - (uintptr_t)end) / 1024;
+    }
+    len += snprintf(all + len, sizeof(all) - len, "b=%s r=%d c=%d v=%dx%d/%d m=%u/%u u=%u n=%d\n", bios,
+                    flashrom_get_region(), vid_check_cable(), vid_mode ? vid_mode->width : 0,
+                    vid_mode ? vid_mode->height : 0, vid_mode ? vid_mode->pm : 0, free_kb, arena_kb,
+                    (unsigned)(timer_ms_gettime64() / 1000), num_games);
+  }
+  len += snprintf(all + len, sizeof(all) - len, "d=");
+  {
+    int n = 0;
+    for (int p = 0; p < MAPLE_PORT_COUNT; p++)
+      for (int u = 0; u < MAPLE_UNIT_COUNT; u++) {
+        maple_device_t *d = maple_enum_dev(p, u);
+        if (!d || !d->valid) continue;
+        char name[21];
+        snprintf(name, sizeof(name), "%.20s", d->info.product_name);
+        for (int i = (int)strlen(name) - 1; i >= 0 && name[i] == ' '; i--) name[i] = 0;
+        len += snprintf(all + len, sizeof(all) - len, "%s%c%d:%s", n++ ? "," : "", 'A' + p, u, name);
+      }
+  }
+  len += snprintf(all + len, sizeof(all) - len, "\nw=");
+  for (int i = 0; i < num_warns; i++)
+    len += snprintf(all + len, sizeof(all) - len, "%sW%02dx%u", i ? "," : "", warns[i].code, warns[i].count);
+  if (x_n || x_pc) {
+    len += snprintf(all + len, sizeof(all) - len, "\nx=%08lx %08lx", (unsigned long)x_pc, (unsigned long)x_pr);
+    for (int i = 0; i < x_n; i++) len += snprintf(all + len, sizeof(all) - len, " %08lx", (unsigned long)x_stack[i]);
+  }
+  len += snprintf(all + len, sizeof(all) - len, "\nt=\n");
+  /* the first line (the version) and the latest 39 */
+  const int keep = 40;
   for (int i = 0; i < num_lines; i++) {
+    if (num_lines > keep && i > 0 && i < num_lines - (keep - 1))
+      continue;
     const char *l = lines[i];
     while (*l == ' ') l++;
-    strcat(all, l);
-    strcat(all, "\n");
+    const int room = (int)sizeof(all) - len - 2;
+    if (room <= 0) break;
+    len += snprintf(all + len, sizeof(all) - len, "%.*s\n", room, l);
   }
+}
+
+static int a_pressed(void);
+static int b_pressed(void) {
+  maple_device_t *dev;
+  for (int i = 0; (dev = maple_enum_type(i, MAPLE_FUNC_CONTROLLER)); i++) {
+    cont_state_t *st = (cont_state_t *)maple_dev_status(dev);
+    if (st && (st->buttons & CONT_B))
+      return 1;
+  }
+  return 0;
+}
+
+/* shows the report; with can_leave the pages turn on A (or by themselves) and B returns */
+static void show_report(int reason, int can_leave) {
   enum { PART = 500, MAX_PARTS = 12 };
   static int starts[MAX_PARTS + 1];
   int parts = 0, len = (int)strlen(all), at = 0;
-  /* the end of the log matters most: if it is too long, keep the first line and the latest steps */
+  /* the end of the log matters most: if it is too long, keep the header and the latest steps */
   while (len - at > PART * MAX_PARTS) {
     char *nl = strchr(all + at, '\n');
     if (!nl) break;
@@ -355,31 +613,78 @@ static void report_loop(void) {
   starts[parts] = at;
   static uint8_t qr[qrcodegen_BUFFER_LEN_FOR_VERSION(25)], tmp[qrcodegen_BUFFER_LEN_FOR_VERSION(25)];
   static char text[PART + 48];
-  for (;;) {
-    for (int p = 0; p < parts; p++) {
-      const int n = starts[p + 1] - starts[p];
-      snprintf(text, sizeof(text), "SWIRL %s report %d/%d\n", SWIRL_REPORT_VERSION, p + 1, parts);
-      strncat(text, all + starts[p], n);
-      uint16_t *fb = fb565();
-      for (int i = 0; i < 640 * 480; i++) fb[i] = 0xFFFF; /* white: a QR code needs a light border */
-      if (qrcodegen_encodeText(text, tmp, qr, qrcodegen_Ecc_MEDIUM, 1, 25, qrcodegen_Mask_AUTO, true)) {
-        const int size = qrcodegen_getSize(qr);
-        int scale = 400 / (size + 8);
-        if (scale < 1) scale = 1;
-        const int x0 = (640 - size * scale) / 2, y0 = 20 + (410 - size * scale) / 2;
-        for (int y = 0; y < size; y++)
-          for (int x = 0; x < size; x++)
-            if (qrcodegen_getModule(qr, x, y))
-              for (int yy = 0; yy < scale; yy++)
-                for (int xx = 0; xx < scale; xx++) fb[(y0 + y * scale + yy) * 640 + x0 + x * scale + xx] = 0x0000;
-      }
-      char line[80];
-      snprintf(line, sizeof(line), "SWIRL stopped. Photo each code: %d of %d", p + 1, parts);
-      fb_text(4, line, 0xF800, 0xFFFF);
-      fb_text(480 - BFONT_HEIGHT - 4, "Then switch off. Hold Y at power on for SWIRL.", 0x0000, 0xFFFF);
+  const char *first_warn = num_warns ? warns[0].detail : NULL;
+  for (int p = 0;; p = (p + 1) % parts) {
+    const int n = starts[p + 1] - starts[p];
+    snprintf(text, sizeof(text), "SWIRL %s %d/%d\n", SWIRL_REPORT_VERSION, p + 1, parts);
+    strncat(text, all + starts[p], n);
+    /* From the menu the graphics chip may still finish the last frame and switch pictures after this page was
+       drawn; the page is drawn again into whichever picture is shown until it stays. */
+    for (int tries = 0; tries < 4; tries++) {
+    const uint32_t drawn = PVR_GET(PVR_FB_ADDR);
+    fb_fill(0xFFFFFF); /* white: a QR code needs a light border */
+    if (qrcodegen_encodeText(text, tmp, qr, qrcodegen_Ecc_MEDIUM, 1, 25, qrcodegen_Mask_AUTO, true)) {
+      const int size = qrcodegen_getSize(qr);
+      int scale = 380 / (size + 8);
+      if (scale < 1) scale = 1;
+      const int x0 = (640 - size * scale) / 2, y0 = 44 + (380 - size * scale) / 2;
+      for (int y = 0; y < size; y++)
+        for (int yy = 0; yy < scale; yy++) {
+          int x = 0;
+          while (x < size) {
+            if (!qrcodegen_getModule(qr, x, y)) {
+              x++;
+              continue;
+            }
+            int e = x + 1;
+            while (e < size && qrcodegen_getModule(qr, e, y)) e++;
+            fb_run(x0 + x * scale, y0 + y * scale + yy, (e - x) * scale, 0x000000);
+            x = e;
+          }
+        }
+    }
+    char line[80];
+    /* the first line as plain text too: a photo without a scan still says something */
+    snprintf(line, sizeof(line), "SWIRL %s %s: %s%s%s", SWIRL_REPORT_VERSION, SWIRL_BUILD, reason_word(reason),
+             first_warn ? ". " : "", first_warn ? first_warn : "");
+    fb_text(4, line, can_leave ? 0x000000 : 0xFF0000, 0xFFFFFF);
+    snprintf(line, sizeof(line), "%s. Photo or scan each code: %d of %d", can_leave ? "Report" : "SWIRL stopped", p + 1, parts);
+    fb_text(4 + BFONT_HEIGHT, line, 0x000000, 0xFFFFFF);
+    fb_text(480 - BFONT_HEIGHT - 4,
+            can_leave ? "A: next code   B: back to the menu" : "Then switch off. Hold Y at power on for SWIRL.", 0x000000,
+            0xFFFFFF);
+    if (!can_leave)
+      break;
+    vid_waitvbl();
+    vid_waitvbl();
+    if (PVR_GET(PVR_FB_ADDR) == drawn)
+      break;
+    }
+    if (!can_leave) {
       wait_frames(parts > 1 ? 6 * 60 : 60 * 60);
+      continue;
+    }
+    /* wait for the buttons to be let go, then for A (next), B (leave) or 8 s */
+    for (int t = 0; t < 300 && (a_pressed() || b_pressed()); t++) thd_sleep(10);
+    for (int t = 0; t < 800; t++) {
+      sw_trace_alive();
+      if (b_pressed()) {
+        for (int k = 0; k < 300 && b_pressed(); k++) thd_sleep(10);
+        return;
+      }
+      if (a_pressed()) break;
+      thd_sleep(10);
     }
   }
+}
+
+void sw_report_show(int reason) {
+  sw_trace("report shown: %s", reason_word(reason));
+  build_report(reason, 1);
+  /* the frame the menu submitted last is still being drawn and shown: let that finish first */
+  pvr_wait_ready();
+  wait_frames(10);
+  show_report(reason, 1);
 }
 
 void sw_trace_fatal(const char *why) {
@@ -391,16 +696,23 @@ void sw_trace_fatal(const char *why) {
     inside = 1;
     irq_disable(); /* nothing else runs from here on */
     sw_trace("STOPPED: %s", why);
+    if (!report_reason) report_reason = SW_REPORT_CRASH;
     vid_set_mode(DM_640x480, PM_RGB565);
-    report_loop();
+    build_report(report_reason, 0);
+    show_report(report_reason, 0);
   }
   for (;;) {
   }
 }
 
+void sw_trace_fatal_reason(int reason, const char *why) {
+  report_reason = reason;
+  sw_trace_fatal(why);
+}
+
 /* KallistiOS's ways out: an assert, a panic (crash) or abort. The linker's --wrap sends them here. */
 void __wrap_arch_abort(void) __attribute__((noreturn));
-void __wrap_arch_abort(void) { sw_trace_fatal("abort"); }
+void __wrap_arch_abort(void) { sw_trace_fatal_reason(SW_REPORT_ABORT, "abort"); }
 
 void __wrap_arch_panic(const char *msg) __attribute__((noreturn));
 void __wrap_arch_panic(const char *msg) {
@@ -417,7 +729,7 @@ static void on_assert(const char *file, int line, const char *expr, const char *
   (void)func;
   const char *f = strrchr(file, '/');
   sw_trace("assert %s:%d %s", f ? f + 1 : file, line, msg ? msg : expr);
-  sw_trace_fatal("assert");
+  sw_trace_fatal_reason(SW_REPORT_ASSERT, "assert");
 }
 
 /* a crash (CPU exception): note where it happened; KallistiOS then panics, which ends in sw_trace_fatal */
@@ -427,27 +739,9 @@ static void on_exception(irq_t code, irq_context_t *ctx, void *data) {
            ctx ? (unsigned long)ctx->pr : 0UL);
   if (!ctx)
     return;
-  /* the code addresses on the stack: with the build's symbol file they show which functions led here */
-  extern char start[]; /* the linker's _start; _etext (KallistiOS's arch.h) is the end of the code */
-  const uintptr_t lo = (uintptr_t)start, hi = (uintptr_t)&_etext, sp = ctx->r[15];
-  if (sp < 0x8c000000u || sp > 0x8d000000u - 4 * 128 || (sp & 3))
-    return;
-  char line[96];
-  int n = 0, len = 0;
-  line[0] = 0;
-  for (int i = 0; i < 128 && n < 16; i++) {
-    const uint32_t v = ((const uint32_t *)sp)[i];
-    if (v >= lo && v < hi && !(v & 1)) {
-      len += snprintf(line + len, sizeof(line) - len, "%s%08lx", len ? " " : "", (unsigned long)v);
-      if (++n % 8 == 0) {
-        sw_trace("stack %s", line);
-        len = 0;
-        line[0] = 0;
-      }
-    }
-  }
-  if (len)
-    sw_trace("stack %s", line);
+  x_pc = ctx->pc;
+  x_pr = ctx->pr;
+  trace_stack(ctx->r[15]);
 }
 
 /* walks the memory allocator's lists: damage shows up here (a crash in mallinfo) instead of later, somewhere
@@ -462,9 +756,8 @@ void sw_mem_check(const char *when) {
 void sw_trace_init(void) {
   assert_set_handler(on_assert);
   irq_set_handler(EXC_UNHANDLED_EXC, on_exception, NULL);
-#ifdef SWIRL_TRACE_SCREEN
+  main_thd = thd_get_current();
   thd_create(1, watchdog, NULL);
-#endif
   if (screen_on)
     vid_clear(0, 0, 0);
 }

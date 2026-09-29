@@ -65,7 +65,7 @@ void draw_init(void) {
   pvr_scratch_buf = pvr_mem_malloc(TEXMAN_BUFFER_SIZE);
   if (!pvr_scratch_buf) {
     /* SWIRL: no room for the scratch; the allocator stays empty and every scratch picture is refused */
-    sw_trace("draw_init: no video memory for the %d KB scratch", TEXMAN_BUFFER_SIZE / 1024);
+    sw_warn(SW_WARN_VRAM, "draw_init: no video memory for the %d KB scratch", TEXMAN_BUFFER_SIZE / 1024);
     texman_reset(NULL, 0);
   } else {
     texman_reset(pvr_scratch_buf, TEXMAN_BUFFER_SIZE);
@@ -138,7 +138,7 @@ void* draw_load_texture_from_DAT_to_buffer(const struct dat_file* bin, const cha
       img->texture = txr;
       return user;
     }
-    sw_trace("picture: %.12s in a DAT not loaded", ID);
+    sw_warn(SW_WARN_PICTURE, "picture: %.12s in a DAT not loaded", ID);
   }
   img->texture = img_empty_boxart.texture;
   img->width = img_empty_boxart.width;
