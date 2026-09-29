@@ -13,8 +13,11 @@
 #include <stdio.h>
 
 #include "../inc/dat_format.h"
+#include "../texture/simple_texture_allocator.h"
+#include "dc/pvr_texture.h"
 #include "draw_prototypes.h"
 #include "font_prototypes.h"
+#include "swirl/sw_trace.h"
 
 extern int round(float x);
 
@@ -60,7 +63,13 @@ static void* pvr_scratch_buf;
 /* Called only once at start */
 void draw_init(void) {
   pvr_scratch_buf = pvr_mem_malloc(TEXMAN_BUFFER_SIZE);
-  texman_reset(pvr_scratch_buf, TEXMAN_BUFFER_SIZE);
+  if (!pvr_scratch_buf) {
+    /* SWIRL: no room for the scratch; the allocator stays empty and every scratch picture is refused */
+    sw_trace("draw_init: no video memory for the %d KB scratch", TEXMAN_BUFFER_SIZE / 1024);
+    texman_reset(NULL, 0);
+  } else {
+    texman_reset(pvr_scratch_buf, TEXMAN_BUFFER_SIZE);
+  }
 
   z_reset();
 }
@@ -101,7 +110,9 @@ void* draw_load_texture_buffer(const char* filename, void* user, void* buffer) {
 
   pvr_ptr_t txr;
 
-  if (!(txr = load_pvr_to_buffer(filename, &img->width, &img->height, &img->format, buffer))) {
+  /* SWIRL: the buffer is a place in the scratch (texman); the picture may use what is left after it */
+  size_t room = texman_space_after(buffer);
+  if (!(txr = load_pvr_to_buffer(filename, &img->width, &img->height, &img->format, buffer, room))) {
     img->texture = img_empty_boxart.texture;
     img->width = img_empty_boxart.width;
     img->height = img_empty_boxart.height;
@@ -113,23 +124,27 @@ void* draw_load_texture_buffer(const char* filename, void* user, void* buffer) {
   return user;
 }
 
-void* draw_load_texture_from_DAT_to_buffer(const struct dat_file* bin, const char* ID, void* user, void* buffer) {
+void* draw_load_texture_from_DAT_to_buffer(const struct dat_file* bin, const char* ID, void* user, void* buffer,
+                                           size_t buffer_size) {
   image* img = (image*)user;
   pvr_ptr_t txr;
   /* SWIRL: an entry larger than the buffer would be read past its end */
   int ret = bin->chunk_size <= pvr_internal_buffer_size() ? DAT_read_file_by_ID(bin, ID, pvr_get_internal_buffer()) : 0;
-  if (!ret) {
-    img->texture = img_empty_boxart.texture;
-    img->width = img_empty_boxart.width;
-    img->height = img_empty_boxart.height;
-    img->format = img_empty_boxart.format;
-    return img;
-  } else {
-    txr = load_pvr_from_buffer_to_buffer(pvr_get_internal_buffer(), &img->width, &img->height, &img->format, buffer);
-    img->texture = txr;
-
-    return user;
+  if (ret) {
+    /* SWIRL: the picture must fit its slot in video memory (buffer_size) and its chunk on the card */
+    txr = load_pvr_from_buffer_to_buffer(pvr_get_internal_buffer(), bin->chunk_size, &img->width, &img->height,
+                                         &img->format, buffer, buffer_size);
+    if (txr) {
+      img->texture = txr;
+      return user;
+    }
+    sw_trace("picture: %.12s in a DAT not loaded", ID);
   }
+  img->texture = img_empty_boxart.texture;
+  img->width = img_empty_boxart.width;
+  img->height = img_empty_boxart.height;
+  img->format = img_empty_boxart.format;
+  return img;
 }
 
 /* draws an image at coords of a given size */
@@ -142,7 +157,8 @@ void draw_draw_image(int x, int y, float width, float height, uint32_t color, vo
 void draw_draw_sub_image(int x, int y, float width, float height, uint32_t color, void* user, const dimen_RECT* rect) {
   image* img = (image*)user;
 
-  if (img->width == 0 || img->height == 0) {
+  /* SWIRL: KOS asserts on a size the PowerVR cannot draw; such a picture is skipped instead */
+  if (!img->texture || !pvr_texture_size_ok(img->width, img->height)) {
     return;
   }
 

@@ -14,27 +14,27 @@
 #include <dc/maple.h>
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 #include <kos/thread.h>
 #include <dc/maple/controller.h>
 #include <external/libcrayonvmu/savefile.h>
 #include <external/libcrayonvmu/setup.h>
 
 #include "theme_manager.h"
+#include "dc/pvr_texture.h"
 
 /* Images and such */
 #include "swirl/sw_vmu.h"
-#if __has_include("openmenu_lcd.h") && __has_include("openmenu_pal.h") && __has_include("openmenu_vmu.h")
-#include "openmenu_lcd.h"
+/* SWIRL draws its own VMU screen, so openmenu_lcd.h (the LCD picture) is not included */
+#if __has_include("openmenu_pal.h") && __has_include("openmenu_vmu.h")
 #include "openmenu_pal.h"
 #include "openmenu_vmu.h"
 
 #define OPENMENU_ICON (openmenu_icon)
-#define OPENMENU_LCD (openmenu_lcd)
 #define OPENMENU_PAL (openmenu_pal)
 #define OPENMENU_ICONS (1)
 #else
 #define OPENMENU_ICON (NULL)
-#define OPENMENU_LCD (NULL)
 #define OPENMENU_PAL (NULL)
 #define OPENMENU_ICONS (0)
 #endif
@@ -150,7 +150,7 @@ void settings_validate(void) {
   }
 
   if ((savedata.custom_theme < THEME_START) || (savedata.custom_theme > THEME_END)) {
-    savedata.custom_theme_num = THEME_OFF;
+    savedata.custom_theme = THEME_OFF; /* SWIRL: used to reset custom_theme_num instead */
   }
 
   if ((savedata.custom_theme_num < THEME_NUM_START) || (savedata.custom_theme_num > THEME_NUM_END)) {
@@ -204,6 +204,20 @@ static int disc_has(const char *rel) {
   file_t f = fs_open(path, O_RDONLY);
   if (f == FILEHND_INVALID)
     return 0;
+  /* a picture must also have a usable header and be long enough for its size, or the style would start on a
+     missing picture (a damaged theme file used to end on the crash report screen) */
+  size_t len = strlen(rel);
+  if (len > 4 && strcasecmp(rel + len - 4, ".PVR") == 0) {
+    unsigned char hdr[32];
+    ssize_t total = fs_total(f);
+    ssize_t got = fs_read(f, hdr, sizeof(hdr));
+    fs_close(f);
+    if (total <= 0 || got != (ssize_t)sizeof(hdr) || !pvr_header_usable(hdr, sizeof(hdr), (size_t)total)) {
+      printf("SWIRL: %s is not a usable picture\n", rel);
+      return 0;
+    }
+    return 1;
+  }
   fs_close(f);
   return 1;
 }

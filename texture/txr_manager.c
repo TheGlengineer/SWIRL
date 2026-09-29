@@ -20,6 +20,7 @@
 #include "block_pool.h"
 #include "lru.h"
 #include "serial_sanitize.h"
+#include "../ui/swirl/sw_trace.h"
 
 /* CFG for small pvr pool (128x128 16bit, 16 spaces) */
 #define SM_SLOT_NUM (48) /* SWIRL: carousel + grids show up to ~30 icons */
@@ -80,6 +81,10 @@ int txr_load_DATs(void) {
 
 int txr_create_small_pool(void) {
   void *buffer = pvr_mem_malloc(SM_POOL_SIZE);
+  if (!buffer) {
+    sw_trace("no video memory for the icon pool (%d KB)", SM_POOL_SIZE / 1024);
+    return -1;
+  }
   pool_create(&icon_system.pool, buffer, SM_POOL_SIZE, SM_SLOT_NUM);
   icon_system.cache.cache = NULL;
   cache_set_size(&icon_system.cache, SM_SLOT_NUM);
@@ -94,6 +99,10 @@ int txr_create_small_pool(void) {
 
 int txr_create_large_pool(void) {
   void *buffer = pvr_mem_malloc(LG_POOL_SIZE);
+  if (!buffer) {
+    sw_trace("no video memory for the cover pool (%d KB)", LG_POOL_SIZE / 1024);
+    return -1;
+  }
   pool_create(&box_system.pool, buffer, LG_POOL_SIZE, LG_SLOT_NUM);
   box_system.cache.cache = NULL;
   cache_set_size(&box_system.cache, LG_SLOT_NUM);
@@ -129,7 +138,7 @@ static int txr_get_from_dat_set(const char *id, struct image *img, dat_system *s
   }
 
   /* check if exists in DAT and if not, return missing image */
-  if (!dat_source) {
+  if (!dat_source || !system->pool.base) {
     draw_load_missing_icon(img);
     return 0;
   }
@@ -137,13 +146,26 @@ static int txr_get_from_dat_set(const char *id, struct image *img, dat_system *s
   if (slot_num == -1) {
     add_to_cache(&system->cache, id_santized, 0);
     slot_num = find_in_cache(&system->cache, id_santized);
+    if (slot_num < 0 || (unsigned)slot_num >= system->pool.slots) {
+      draw_load_missing_icon(img);
+      return 0;
+    }
     txr_ptr = pool_get_slot_addr(&system->pool, slot_num);
 
-    /* now load the texture into vram */
-    draw_load_texture_from_DAT_to_buffer(dat_source, id_santized, img, txr_ptr);
-    pool_set_slot_format(&system->pool, slot_num, img->width, img->height, img->format);
+    /* now load the texture into vram, bounded by the slot */
+    draw_load_texture_from_DAT_to_buffer(dat_source, id_santized, img, txr_ptr, system->pool.slot_size);
+    if (img->texture == txr_ptr) {
+      pool_set_slot_format(&system->pool, slot_num, img->width, img->height, img->format);
+    } else {
+      /* SWIRL: the picture was refused; the slot is marked empty so later hits show the missing image too */
+      pool_set_slot_format(&system->pool, slot_num, 0, 0, 0);
+    }
   } else {
     const slot_format *fmt = pool_get_slot_format(&system->pool, slot_num);
+    if (fmt->width == 0) {
+      draw_load_missing_icon(img);
+      return 0;
+    }
     img->width = fmt->width;
     img->height = fmt->height;
     img->format = fmt->format;
