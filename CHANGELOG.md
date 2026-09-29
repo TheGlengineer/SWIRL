@@ -9,13 +9,14 @@ may ship without menu changes; the menu then keeps its major.minor version (2.11
 
 ### Game launches
 
-- Games now start with the boot animation and the SEGA screen, as they do from openMenu and GDMENU. SWIRL used to skip both by default, and some games (Hydro Thunder for one) stay on a black screen when the SEGA screen is skipped. **Start with** in a game's launch options still lets you skip them per game, and options you already set are kept
+- Games now start with the boot animation and the SEGA screen, as they do from openMenu and GDMENU. SWIRL used to skip both by default, which is not how any game was tested by its makers. **Start with** in a game's launch options still lets you skip them per game, and options you already set are kept
 - SWIRL no longer waits for ever on a GDEMU that does not answer. Every wait for the drive has a limit; if the image change is not answered or the game's disc does not become ready, SWIRL switches back to the menu disc and tells you why instead of leaving a blank screen
 - The drive is locked while SWIRL talks to the GDEMU, so the system's own drive status poll can no longer interrupt a command half way
 
 ### What to test
 
-- Start Hydro Thunder and a few other games. Do they all reach the game?
+- Start a few games. Do they all reach the game, with the animation and SEGA screen first?
+- A game that shows the SEGA screen and then gives your display **no signal** is running in a video mode your display can't show, not a launch problem. Hydro Thunder is the known case: its original release has no VGA mode, and the All Stars re release outputs an unstable VGA picture that many monitors and scalers refuse. Try **Video: Game default** in its launch options, or a TV connection
 - In a game's launch options, set **Start with: Straight to the game** and start it: it should skip the animation and SEGA screen as before
 
 ## [2.14.0-preview.2]

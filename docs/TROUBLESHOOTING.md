@@ -58,8 +58,14 @@ to disappear before switching off.
 finds gaps; removing games in Card Manager renumbers folders for you.
 
 **A game will not start, or shows a black screen.** Open its game page, press **X** for launch options and try
-**Video: Game default**, then a specific **Region**. Make sure **Start with** is **Animation and SEGA**: some games
-stay on a black screen when the SEGA screen is skipped.
+**Video: Game default**, then a specific **Region**. Make sure **Start with** is **Animation and SEGA**: a game may
+rely on what the BIOS sets up during the SEGA screen.
+
+**The SEGA screen shows, then the display says "no signal".** The game is running, in a video mode your display
+can't show. Some games have no VGA mode (the BIOS normally refuses them on a VGA cable; **Force VGA** gets past
+that check, and the game then outputs a picture a VGA display can't lock to), and a few output an unstable VGA
+signal that monitors and scalers reject (Hydro Thunder is the known one). Set **Video: Game default** for that
+game, or play it over a TV connection. GDMENU and openMenu behave the same way; it is the game, not the menu.
 If a game has never worked, test the image itself in an emulator.
 
 **No music.** Check **System > Menu music** and **Music volume**. Music comes from `BGM.ADP` on the menu disc;
