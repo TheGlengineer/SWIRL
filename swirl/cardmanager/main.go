@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -893,6 +894,12 @@ func main() {
 	quiet := flag.Bool("quiet", false, "with -uninstall: no questions, remove everything")
 	waitPID := flag.Int("wait-pid", 0, "internal: wait for this process to exit before starting")
 	applyUpd := flag.Bool("apply-update", false, "internal: install this downloaded update and start it")
+	patch := flag.String("patch", "", "apply a .dcp patch (VGA patches and the like) in place: -root <card> -folder <NN> -patch <file.dcp> [-dry-run]")
+	folder := flag.String("folder", "", "game folder on the card, for -patch and -unpatch")
+	unpatch := flag.String("unpatch", "", "take a patch off again from its undo file: -root <card> -folder <NN> -unpatch <file.undo>")
+	dryRun := flag.Bool("dry-run", false, "with -patch or -vga-patch: only report what would change")
+	vgaPatch := flag.Bool("vga-patch", false, "apply the catalog's VGA patch to a game that has one: -root <card> -folder <NN> -vga-patch [-dry-run]")
+	vgaStatus := flag.Bool("vga-status", false, "list every game's VGA support and whether a patch is available or applied: -root <card> -vga-status")
 	flag.Parse()
 	if *waitPID > 0 {
 		waitForPID(*waitPID)
@@ -960,6 +967,39 @@ func main() {
 			fmt.Println("error:", err)
 			os.Exit(1)
 		}
+	case *root != "" && *folder != "" && *patch != "":
+		rep, err := applyDCP(*root, filepath.Join(*root, *folder), *patch, *dryRun)
+		if err != nil {
+			fmt.Println("error:", err)
+			os.Exit(1)
+		}
+		out, _ := json.MarshalIndent(rep, "", "  ")
+		fmt.Println(string(out))
+	case *root != "" && *folder != "" && *vgaPatch:
+		rep, err := applyCatalogVGAPatch(*root, filepath.Join(*root, *folder), *dryRun)
+		if err != nil {
+			fmt.Println("error:", err)
+			os.Exit(1)
+		}
+		out, _ := json.MarshalIndent(rep, "", "  ")
+		fmt.Println(string(out))
+	case *root != "" && *vgaStatus:
+		rows, err := vgaStatusReport(*root)
+		if err != nil {
+			fmt.Println("error:", err)
+			os.Exit(1)
+		}
+		for _, r := range rows {
+			fmt.Println(r)
+		}
+	case *root != "" && *folder != "" && *unpatch != "":
+		rep, err := undoDCP(*root, filepath.Join(*root, *folder), *unpatch)
+		if err != nil {
+			fmt.Println("error:", err)
+			os.Exit(1)
+		}
+		out, _ := json.MarshalIndent(rep, "", "  ")
+		fmt.Println(string(out))
 	default:
 		serve()
 	}

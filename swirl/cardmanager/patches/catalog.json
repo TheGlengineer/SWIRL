@@ -1,0 +1,12 @@
+[
+  {
+    "product": "T-9702N",
+    "version": "V1.020",
+    "name": "Hydro Thunder (USA)",
+    "author": "TapamN",
+    "file": "Hydro Thunder (T-9702N V1.020) VGA patch by TapamN.dcp",
+    "url": "https://consolemods.org/wiki/File:Hydro_Thunder_(VGA_Patch_-_TapamN).dcp",
+    "sha256": "ca334d870d6a2504851f895e2c359d462a0e84a4a058fe8aff882b3c54c2f791",
+    "notes": "The original release has no VGA mode: with Force VGA it reaches the SEGA screen and then the display loses the signal. This patch adds VGA output to the game itself."
+  }
+]
