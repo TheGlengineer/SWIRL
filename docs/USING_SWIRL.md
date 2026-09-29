@@ -138,6 +138,8 @@ and how many warnings Diagnostics holds.
 
 ## Diagnostics
 
+![Diagnostics](images/swirl-diagnostics.png)
+
 SWIRL keeps a log of what it does from power on and counts anything that goes wrong without stopping it.
 **System > Diagnostics** lists those warnings in plain words with a code, the count and the first detail. With
 nothing to report it says **No warnings since power on**. The codes are:

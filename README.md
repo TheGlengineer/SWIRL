@@ -92,6 +92,8 @@ from .zip, .7z and .rar), fixes their names, fetches art, backs the card up and 
 | ![Game page](docs/images/swirl-detail.png) | ![Launch options](docs/images/swirl-launch-options.png) |
 | **Collections** | **System settings** |
 | ![Collections](docs/images/swirl-collections.png) | ![System settings](docs/images/swirl-system.png) |
+| **Diagnostics** | |
+| ![Diagnostics](docs/images/swirl-diagnostics.png) | |
 
 ![Screen savers](docs/images/swirl-screensavers.png)
 
@@ -106,6 +108,8 @@ from .zip, .7z and .rar), fixes their names, fetches art, backs the card up and 
 | ![Add games](docs/images/cm-browser.png) | ![New card](docs/images/cm-newcard.png) |
 | **Look and sound** | **Backups** |
 | ![Look and sound](docs/images/cm-look.png) | ![Backups](docs/images/cm-backups.png) |
+| **Report a problem** | **Card health check** |
+| ![Report a problem](docs/images/cm-report.png) | ![Card health check](docs/images/cm-health.png) |
 
 More screens are in the [Card Manager guide](docs/CARD_MANAGER.md).
 

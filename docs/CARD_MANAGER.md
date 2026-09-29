@@ -123,6 +123,8 @@ file are kept.
 - **Card health check**: checks the format (GDEMU needs FAT32), free space, that folder `01` holds a menu, that folder numbers have no gaps (GDEMU stops at the first gap), that every disc image is complete, that the art and info files are readable and of a known version, that `DISCDB.JSON` matches the folders, and finds leftover system files. **Close the gaps** renumbers the folders and rebuilds the menu; it is journaled, so a failure part way undoes itself.
 - **Preview in Flycast**: boots the exact menu your card would get, in an emulator on your PC. The preview bar has a **Report a problem** button.
 
+![Card health check](images/cm-health.png)
+
 ## Backups
 
 ![Backups](images/cm-backups.png)
