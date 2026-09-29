@@ -134,7 +134,8 @@ codes. If SWIRL stops on a report screen by itself (a crash, or no progress for 
 turns on their own. Holding **X** while the Dreamcast starts shows the start up log the same way. The report
 holds no game names beyond the last few steps. The format is in [DIAGNOSTICS.md](DIAGNOSTICS.md).
 
-Then open **Report a problem** in Card Manager (in the list on the left, or the button on the preview bar). Scan
+Then open **Report a problem** in Card Manager (in the list on the left; the bar shown while you test a
+preview version has the same button). Scan
 the codes with your phone and paste the text, in any order, or drop photos of the screen on the page. It shows
 the report in plain words and **Copy for GitHub** puts a ready to paste issue on the clipboard. Nothing is sent
 anywhere by itself. A photo needs to be sharp with the whole code in the frame; if it does not read, scan the
