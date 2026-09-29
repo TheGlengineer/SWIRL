@@ -250,7 +250,7 @@ func StartManualCapture(root, folder string) error {
 		return errors.New("no .gdi or .cdi found for this game")
 	}
 	game := *g
-	return runJob("Capture by playing: "+game.Name, "", func() error {
+	return runJob(root, "Capture by playing: "+game.Name, "", func() error {
 		dir, err := os.MkdirTemp("", "swirl_vmucap_")
 		if err != nil {
 			return err
@@ -330,7 +330,7 @@ func StartVMUCapture(root string, onlyMissing bool) error {
 	if _, err := vmucapExe(); err != nil {
 		return err
 	}
-	return runJob("Capturing VMU screens", "", func() error {
+	return runJob(root, "Capturing VMU screens", "", func() error {
 		var todo []Game
 		seen := map[string]bool{}
 		for _, g := range c.Games {

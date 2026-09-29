@@ -10,7 +10,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type DupGroup struct {
@@ -175,7 +174,7 @@ func RemoveDuplicates(root string, log Logger) error {
 	if len(dups) == 0 {
 		return errors.New("no duplicate games found")
 	}
-	dest := filepath.Join(root, backupDir, "removed_"+time.Now().Format("20060102_150405"))
+	dest := uniqueBackupPath(root, "removed_")
 	if err := cardfs.MkdirAll(dest, 0o755); err != nil {
 		return err
 	}

@@ -448,6 +448,14 @@ func runNewCard(req NewCardRequest, info *DiskInfo, plan *copyPlan) {
 		fail(err)
 		return
 	}
+	if cardKey(root) != cardKey(req.Root) { // the card came back under another name
+		unlock, err := lockCard(root, "New card")
+		if err != nil {
+			fail(err)
+			return
+		}
+		defer unlock()
+	}
 	jobLog("Formatted. The card is now %s (label SWIRL)", root)
 	jobUpdate(func(j *jobState) { j.Root, j.Pct = root, 0.10 })
 
@@ -523,20 +531,32 @@ func runNewCard(req NewCardRequest, info *DiskInfo, plan *copyPlan) {
 }
 
 func startNewCard(req NewCardRequest) error {
+	// the job is claimed before the checks, so a second window cannot start a second format meanwhile
 	jobMu.Lock()
 	if job.Running {
 		jobMu.Unlock()
 		return errors.New("a card is already being prepared")
 	}
+	job = jobState{Running: true, Stage: "Starting"}
 	jobMu.Unlock()
-	info, plan, err := checkNewCard(req)
+	release := func() { jobUpdate(func(j *jobState) { *j = jobState{} }) }
+	unlock, err := lockCard(req.Root, "New card")
 	if err != nil {
+		release()
 		return err
 	}
-	jobUpdate(func(j *jobState) { *j = jobState{Running: true, Stage: "Starting"} })
+	info, plan, err := checkNewCard(req)
+	if err != nil {
+		unlock()
+		release()
+		return err
+	}
 	if plan.Games > 0 {
 		jobLog("Found %d games to copy from %s", plan.Games, req.Source)
 	}
-	go runNewCard(req, info, plan)
+	go func() {
+		defer unlock()
+		runNewCard(req, info, plan)
+	}()
 	return nil
 }

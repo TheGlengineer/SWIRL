@@ -545,7 +545,7 @@ func TestCardFaultsInstall(t *testing.T) {
 			return []*fault{{op: "Create", path: filepath.Join(root, "01"), n: 3, sticky: true, err: syscall.ENOSPC}}
 		}, run: opInstall})
 	// L13: two installs in one second share one backup folder
-	rows = append(rows, txnRow{name: "L13_two_installs_in_one_second", menu: "GDMENU", games: 2,
+	rows = append(rows, txnRow{name: "L13_two_installs_in_one_second", fixed: true, menu: "GDMENU", games: 2,
 		run: func(t *testing.T, root string) error {
 			time.Sleep(time.Until(time.Now().Truncate(time.Second).Add(time.Second)))
 			if err := InstallSwirl(root, "", quiet); err != nil {
@@ -685,16 +685,22 @@ func TestCardFaultsAdd(t *testing.T) {
 // CM-6: an install and a remove started at the same time
 func TestCardConcurrentInstallRemove(t *testing.T) {
 	const iters = 20
-	fixed := false
+	fixed := true
 	broken := 0
 	for it := 0; it < iters; it++ {
 		root := txnCard(t, "swirl", 5)
 		s := snapCard(root)
 		var errA, errB error
 		done := make(chan struct{})
-		go func() {
+		go func() { // what /api/install does
+			defer close(done)
+			unlock, err := lockCard(root, "Update SWIRL")
+			if err != nil {
+				errA = err
+				return
+			}
+			defer unlock()
 			errA = InstallSwirl(root, "", quiet)
-			close(done)
 		}()
 		time.Sleep(time.Duration(it) * 15 * time.Millisecond)
 		if errB = StartRemoveGames(root, []string{"03"}); errB == nil {
@@ -714,4 +720,76 @@ func TestCardConcurrentInstallRemove(t *testing.T) {
 		}
 	}
 	t.Logf("%d of %d runs left a broken card", broken, iters)
+}
+
+// A1: a second writer is turned away with a clear message; reading goes on.
+func TestCardLock(t *testing.T) {
+	old := cardLockWait
+	cardLockWait = 50 * time.Millisecond
+	defer func() { cardLockWait = old }()
+	root := txnCard(t, "swirl", 3)
+	unlock, err := lockCard(root, "Update SWIRL")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !anyCardBusy() {
+		t.Error("busy() would let the app quit during a write")
+	}
+	// the same card under another spelling of its path
+	if _, err := lockCard(root+string(filepath.Separator), "Names"); err == nil || err.Error() != "Another operation is running on this card. Wait for it to finish." {
+		t.Fatalf("second writer: %v", err)
+	}
+	if err := StartRemoveGames(root, []string{"03"}); err != errCardBusy {
+		t.Fatalf("job while the card is busy: %v", err)
+	}
+	if j := jobSnapshot(); j.Running {
+		t.Fatal("a refused job left the job slot taken")
+	}
+	if err := startNewCard(NewCardRequest{Root: root}); err != errCardBusy {
+		t.Fatalf("new card while the card is busy: %v", err)
+	}
+	if j := jobSnapshot(); j.Running {
+		t.Fatal("a refused new card left the job slot taken")
+	}
+	if c, err := ScanCard(root); err != nil || len(c.Games) != 3 {
+		t.Fatalf("scan while busy: %v", err)
+	}
+	unlock()
+	unlock() // a second release is harmless
+	if anyCardBusy() {
+		t.Error("card still busy after release")
+	}
+	// a job holds the lock for its whole run
+	release := make(chan struct{})
+	if err := runJob(root, "Test job", "", func() error { <-release; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := lockCard(root, "Update SWIRL"); err != errCardBusy {
+		t.Fatalf("writer during a job: %v", err)
+	}
+	close(release)
+	if err := waitJobErr(t); err != nil {
+		t.Fatal(err)
+	}
+	u, err := lockCard(root, "Update SWIRL")
+	if err != nil {
+		t.Fatalf("lock after the job: %v", err)
+	}
+	u()
+}
+
+// L13: backup folders made in the same second get their own names
+func TestUniqueBackupNames(t *testing.T) {
+	root := t.TempDir()
+	a := uniqueBackupPath(root, "01_")
+	os.MkdirAll(a, 0o755)
+	b := uniqueBackupPath(root, "01_")
+	os.MkdirAll(b, 0o755)
+	c := uniqueBackupPath(root, "01_")
+	if !strings.HasPrefix(c, a) {
+		t.Skip("the clock moved to the next second")
+	}
+	if b != a+"_2" || c != a+"_3" {
+		t.Fatalf("names %s %s %s", a, b, c)
+	}
 }

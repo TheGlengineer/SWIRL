@@ -513,7 +513,7 @@ func installSwirl(root, datDir string, allowEmpty bool, log Logger) error {
 	// back up the current 01, then write the new one
 	backup := ""
 	if entries, err := os.ReadDir(menuDir); err == nil && len(entries) > 0 {
-		backup = filepath.Join(root, backupDir, "01_"+time.Now().Format("20060102_150405"))
+		backup = uniqueBackupPath(root, "01_")
 		if err := cardfs.MkdirAll(backup, 0o755); err != nil {
 			return err
 		}
@@ -570,7 +570,7 @@ func RestoreBackup(root, name string, log Logger) error {
 	}
 	menuDir := filepath.Join(root, "01")
 	if entries, err := os.ReadDir(menuDir); err == nil && len(entries) > 0 {
-		keep := filepath.Join(root, backupDir, "01_replaced_"+time.Now().Format("20060102_150405"))
+		keep := uniqueBackupPath(root, "01_replaced_")
 		cardfs.MkdirAll(keep, 0o755)
 		for _, e := range entries {
 			if err := cardfs.Rename(filepath.Join(menuDir, e.Name()), filepath.Join(keep, e.Name())); err != nil {

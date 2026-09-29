@@ -17,7 +17,7 @@ func StartPreview(root, dats string) error {
 	if err != nil {
 		return err
 	}
-	return runJob("Building the preview", "", func() error {
+	return runJob(root, "Building the preview", "", func() error {
 		work, out, _, err := buildMenuImage(root, dats, true, jobLog)
 		if work != "" {
 			defer os.RemoveAll(work)

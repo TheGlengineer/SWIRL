@@ -53,6 +53,17 @@ func guard(h http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// lockOrFail takes the card's lock for a request that writes to it. On a busy card it answers the request
+// with the reason and returns nil.
+func lockOrFail(w http.ResponseWriter, root, op string) func() {
+	unlock, err := lockCard(root, op)
+	if err != nil {
+		fail(w, err)
+		return nil
+	}
+	return unlock
+}
+
 type logBuf struct{ lines []string }
 
 func (l *logBuf) log(format string, args ...any) {
@@ -99,6 +110,11 @@ func serve() {
 			fail(w, err)
 			return
 		}
+		unlock := lockOrFail(w, req.Root, "Update SWIRL")
+		if unlock == nil {
+			return
+		}
+		defer unlock()
 		mu.Lock()
 		defer mu.Unlock()
 		l := &logBuf{lines: []string{}}
@@ -120,6 +136,11 @@ func serve() {
 			fail(w, err)
 			return
 		}
+		unlock := lockOrFail(w, req.Root, "Restore")
+		if unlock == nil {
+			return
+		}
+		defer unlock()
 		mu.Lock()
 		defer mu.Unlock()
 		l := &logBuf{lines: []string{}}
@@ -136,6 +157,11 @@ func serve() {
 				fail(w, err)
 				return
 			}
+			unlock := lockOrFail(w, req.Root, "Save game")
+			if unlock == nil {
+				return
+			}
+			defer unlock()
 			mu.Lock()
 			err := SaveGame(req)
 			mu.Unlock()
@@ -197,6 +223,11 @@ func serve() {
 			fail(w, err)
 			return
 		}
+		unlock := lockOrFail(w, req.Root, "Fill art")
+		if unlock == nil {
+			return
+		}
+		defer unlock()
 		mu.Lock()
 		defer mu.Unlock()
 		l := &logBuf{lines: []string{}}
@@ -213,6 +244,11 @@ func serve() {
 			fail(w, err)
 			return
 		}
+		unlock := lockOrFail(w, req.Root, "Remove duplicates")
+		if unlock == nil {
+			return
+		}
+		defer unlock()
 		mu.Lock()
 		defer mu.Unlock()
 		l := &logBuf{lines: []string{}}
@@ -228,6 +264,11 @@ func serve() {
 			fail(w, err)
 			return
 		}
+		unlock := lockOrFail(w, req.Root, "Delete removed games")
+		if unlock == nil {
+			return
+		}
+		defer unlock()
 		mu.Lock()
 		defer mu.Unlock()
 		if err := DeleteRemoved(req.Root, req.Name); err != nil {
@@ -318,7 +359,11 @@ func serve() {
 			Rebuild bool   `json:"rebuild"`
 		}
 		json.NewDecoder(r.Body).Decode(&req)
-		err := runJob("Downloading box art and info", "", func() error {
+		lockRoot := "" // the download alone does not touch the card
+		if req.Rebuild {
+			lockRoot = req.Root
+		}
+		err := runJob(lockRoot, "Downloading box art and info", "", func() error {
 			if err := DownloadDB(jobLog, func(f float64) { setPct(0.8 * f) }); err != nil {
 				return err
 			}
@@ -348,7 +393,13 @@ func serve() {
 				fail(w, err)
 				return
 			}
-			if err := SaveGDEMU(req.Root, req.Settings); err != nil {
+			unlock := lockOrFail(w, req.Root, "GDEMU settings")
+			if unlock == nil {
+				return
+			}
+			err := SaveGDEMU(req.Root, req.Settings)
+			unlock()
+			if err != nil {
 				fail(w, err)
 				return
 			}
@@ -398,6 +449,11 @@ func serve() {
 		for f, n := range req.Names {
 			req.Names[f] = asciiOnly(n)
 		}
+		unlock := lockOrFail(w, req.Root, "Names")
+		if unlock == nil {
+			return
+		}
+		defer unlock()
 		l := &logBuf{lines: []string{}}
 		if err := SaveNames(req.Root, req.Names, l.log); err != nil {
 			fail(w, err)
@@ -488,6 +544,11 @@ func serve() {
 			fail(w, err)
 			return
 		}
+		unlock := lockOrFail(w, req.Root, "VMU screen")
+		if unlock == nil {
+			return
+		}
+		defer unlock()
 		if err := ChooseVMU(req.Root, req.Folder, req.Index); err != nil {
 			fail(w, err)
 			return
@@ -520,7 +581,13 @@ func serve() {
 				fail(w, err)
 				return
 			}
-			if err := SaveCollections(req.Root, req.Collections); err != nil {
+			unlock := lockOrFail(w, req.Root, "Collections")
+			if unlock == nil {
+				return
+			}
+			err := SaveCollections(req.Root, req.Collections)
+			unlock()
+			if err != nil {
 				fail(w, err)
 				return
 			}
@@ -545,6 +612,10 @@ func serve() {
 				return
 			}
 			root = req.Root
+			unlock := lockOrFail(w, root, "Menu music")
+			if unlock == nil {
+				return
+			}
 			l := &logBuf{lines: []string{}}
 			var err error
 			if req.Remove {
@@ -552,6 +623,7 @@ func serve() {
 			} else {
 				_, err = SetMusic(root, req.File, l.log)
 			}
+			unlock()
 			if err != nil {
 				fail(w, err)
 				return
@@ -571,6 +643,10 @@ func serve() {
 				return
 			}
 			root = req.Root
+			unlock := lockOrFail(w, root, "CodeBreaker")
+			if unlock == nil {
+				return
+			}
 			l := &logBuf{lines: []string{}}
 			var err error
 			if req.Remove {
@@ -578,6 +654,7 @@ func serve() {
 			} else {
 				err = SetCodeBreaker(root, req.File, l.log)
 			}
+			unlock()
 			if err != nil {
 				fail(w, err)
 				return
@@ -594,6 +671,11 @@ func serve() {
 			fail(w, err)
 			return
 		}
+		unlock := lockOrFail(w, req.Root, "Screenshots")
+		if unlock == nil {
+			return
+		}
+		defer unlock()
 		res, err := FetchGameShots(req.Root, req.Product, req.Names)
 		if err != nil {
 			fail(w, err)
@@ -618,6 +700,12 @@ func serve() {
 				fail(w, errors.New("bad screenshot slot"))
 				return
 			}
+			unlock := lockOrFail(w, req.Root, "Screenshots")
+			if unlock == nil {
+				return
+			}
+			defer unlock()
+
 			if req.Image == "" {
 				os.Remove(shotPath(req.Root, req.Product, req.Slot))
 			} else {
@@ -660,6 +748,11 @@ func serve() {
 		writeJSON(w, rep)
 	}))
 	mux.HandleFunc("/api/health/junk", post(func(m map[string]any) (any, error) {
+		unlock, err := lockCard(str(m, "root"), "Remove junk")
+		if err != nil {
+			return nil, err
+		}
+		defer unlock()
 		n, err := RemoveJunk(str(m, "root"))
 		return map[string]any{"moved": n}, err
 	}))
@@ -678,11 +771,17 @@ func serve() {
 				return
 			}
 			root = req.Root
+			unlock := lockOrFail(w, root, "VMU logo")
+			if unlock == nil {
+				return
+			}
 			var bits []byte
 			if !req.Reset {
 				bits = req.Bits
 			}
-			if err := SaveLogo(root, bits); err != nil {
+			err := SaveLogo(root, bits)
+			unlock()
+			if err != nil {
 				fail(w, err)
 				return
 			}

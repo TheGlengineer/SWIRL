@@ -274,7 +274,7 @@ func StartShotDownload(root string) error {
 	if err != nil {
 		return err
 	}
-	return runJob("Getting screenshots", "", func() error {
+	return runJob(root, "Getting screenshots", "", func() error {
 		jobLog("Reading the libretro Dreamcast picture list")
 		idx, err := thumbIndex()
 		if err != nil {

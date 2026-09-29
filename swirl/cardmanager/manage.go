@@ -11,21 +11,30 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // ---------- background jobs (shared with New card) ----------
 
-func runJob(stage, doneMsg string, fn func() error) error {
+// runJob starts fn as the background job. With a card root the job holds that card's lock until it ends.
+func runJob(root, stage, doneMsg string, fn func() error) error {
+	unlock := func() {}
+	if root != "" {
+		var err error
+		if unlock, err = lockCard(root, stage); err != nil {
+			return err
+		}
+	}
 	jobMu.Lock()
 	if job.Running {
 		jobMu.Unlock()
+		unlock()
 		return errors.New("another task is still running; wait for it to finish")
 	}
 	job = jobState{Running: true, Stage: stage}
 	jobMu.Unlock()
 	go func() {
 		err := fn()
+		unlock()
 		jobUpdate(func(j *jobState) {
 			j.Running, j.Done = false, true
 			if err != nil {
@@ -309,7 +318,7 @@ func StartAddGames(root string, sources []string, dats string) error {
 	if err != nil {
 		return err
 	}
-	return runJob("Copying games", "Done. Put the card back in your GDEMU.", func() error {
+	return runJob(root, "Copying games", "Done. Put the card back in your GDEMU.", func() error {
 		jobLog("Adding %d games (%.1f GB)", p.Games, float64(p.Total)/(1<<30))
 		for _, s := range p.Skipped {
 			jobLog("%s", s)
@@ -346,8 +355,8 @@ func StartRemoveGames(root string, folders []string) error {
 	if len(folders) == 0 {
 		return errors.New("pick at least one game")
 	}
-	return runJob("Removing games", "Done. The removed games are in SWIRL_BACKUP until you delete them.", func() error {
-		dest := filepath.Join(root, backupDir, "removed_"+time.Now().Format("20060102_150405"))
+	return runJob(root, "Removing games", "Done. The removed games are in SWIRL_BACKUP until you delete them.", func() error {
+		dest := uniqueBackupPath(root, "removed_")
 		if err := cardfs.MkdirAll(dest, 0o755); err != nil {
 			return err
 		}
@@ -394,7 +403,7 @@ func reorderFolders(root string, order []string, log Logger) (int, error) {
 }
 
 func StartReorder(root string, order []string) error {
-	return runJob("Reordering games", "Done. Put the card back in your GDEMU.", func() error {
+	return runJob(root, "Reordering games", "Done. Put the card back in your GDEMU.", func() error {
 		n, err := reorderFolders(root, order, jobLog)
 		if err != nil {
 			return err

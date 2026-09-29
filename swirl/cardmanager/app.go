@@ -92,7 +92,7 @@ func busy() bool {
 	jobMu.Lock()
 	running := job.Running
 	jobMu.Unlock()
-	if running {
+	if running || anyCardBusy() {
 		return true
 	}
 	if !mu.TryLock() {
