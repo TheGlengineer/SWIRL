@@ -29,6 +29,7 @@ type fault struct {
 	n      int    // the nth matching call fails, counting from 1
 	sticky bool   // every matching call from the nth on fails
 	err    error  // syscall.EACCES, syscall.ENOSPC or syscall.EBUSY
+	panic  bool   // stop dead instead, like a pulled card or a power cut
 	seen   int
 }
 
@@ -58,6 +59,9 @@ func (f *faultFS) check(op string, paths ...string) error {
 		x.seen++
 		if x.seen == x.n || (x.sticky && x.seen > x.n) {
 			f.fired++
+			if x.panic {
+				panic("power lost")
+			}
 			return x.err
 		}
 	}
@@ -625,19 +629,19 @@ func TestCardFaultsRenumber(t *testing.T) {
 		return []*fault{{op: "Rename", exact: filepath.Join(root, "04"), n: 1, sticky: true, err: syscall.EBUSY}}
 	}
 	rows = append(rows,
-		txnRow{name: "CM5_remove_02_with_04_busy", menu: "swirl", games: 5, faults: busy04, run: opRemove("02")},
-		txnRow{name: "CM5_remove_03_04_with_04_busy", menu: "swirl", games: 4, faults: busy04, run: opRemove("03", "04")},
+		txnRow{name: "CM5_remove_02_with_04_busy", fixed: true, menu: "swirl", games: 5, faults: busy04, run: opRemove("02")},
+		txnRow{name: "CM5_remove_03_04_with_04_busy", fixed: true, menu: "swirl", games: 4, faults: busy04, run: opRemove("03", "04")},
 	)
 	for n := 1; n <= 10; n++ {
-		rows = append(rows, txnRow{name: fmt.Sprintf("CM5_remove_rename_fails_at_%d", n), menu: "swirl", games: 5,
+		rows = append(rows, txnRow{name: fmt.Sprintf("CM5_remove_rename_fails_at_%d", n), fixed: true, menu: "swirl", games: 5,
 			faults: renameAt(n, syscall.EBUSY), run: opRemove("03")})
 	}
 	for n := 1; n <= 8; n++ {
-		rows = append(rows, txnRow{name: fmt.Sprintf("CM5_reorder_rename_fails_at_%d", n), menu: "swirl", games: 4,
+		rows = append(rows, txnRow{name: fmt.Sprintf("CM5_reorder_rename_fails_at_%d", n), fixed: true, menu: "swirl", games: 4,
 			faults: renameAt(n, syscall.EACCES), run: opReverse})
 	}
 	// CM-5: remove duplicates with the extra copy busy
-	rows = append(rows, txnRow{name: "CM5_dedupe_with_a_busy_copy", menu: "swirl", games: 3,
+	rows = append(rows, txnRow{name: "CM5_dedupe_with_a_busy_copy", fixed: true, menu: "swirl", games: 3,
 		setup: func(t *testing.T, root string, s *cardSnap) {
 			writeTestCDI(t, filepath.Join(root, "05", "disc.cdi"), "GAME A", "T-00002N")
 			writeTestCDI(t, filepath.Join(root, "06", "disc.cdi"), "GAME A", "T-00002N")
@@ -933,4 +937,91 @@ func TestMenuSwapRecovery(t *testing.T) {
 	if fileExists(stagePath(root)) || len(c.Warnings) == 0 || !strings.Contains(c.Warnings[0], ".stage_01") {
 		t.Fatalf("stale stage: %v", c.Warnings)
 	}
+}
+
+// folderMap names the game in each folder (folder -> serial), for comparing a card before and after.
+func folderMap(root string) string {
+	c, err := ScanCard(root)
+	if err != nil {
+		return err.Error()
+	}
+	var out []string
+	for _, g := range c.Games {
+		out = append(out, g.Folder+"="+g.Product)
+	}
+	return strings.Join(out, " ")
+}
+
+// A4: a renumbering cut short at any step (power lost, card pulled) is undone by the next scan.
+func TestRenumberJournal(t *testing.T) {
+	for n := 1; n <= 12; n++ {
+		t.Run(fmt.Sprintf("power_lost_at_rename_%d", n), func(t *testing.T) {
+			root := txnCard(t, "swirl", 5)
+			os.WriteFile(artPath(root, "05", "box"), pngBytes(quadImage(32)), 0o644)
+			s := snapCard(root)
+			before := folderMap(root)
+			art03, _ := os.ReadFile(artPath(root, "03", "box"))
+			dest := uniqueBackupPath(root, "removed_")
+			useFaults(t, &fault{op: "Rename", n: n, panic: true})
+			func() {
+				defer func() { recover() }()
+				renumberTxn(root, []string{"03"}, dest, []string{"02", "04", "05", "06"})
+			}()
+			cardfs = realFS{}
+			if n > 1 { // the first rename puts the journal in place; before it nothing has changed
+				if !fileExists(journalPath(root)) {
+					t.Fatal("no journal after an interrupted renumbering")
+				}
+				c, _ := ScanCard(root)
+				if len(c.Warnings) == 0 || !strings.Contains(c.Warnings[0], "undone") {
+					t.Fatalf("warnings %q", c.Warnings)
+				}
+			}
+			report(t, true, assertCardSane(t, root, s))
+			if after := folderMap(root); after != before {
+				t.Fatalf("folders %s, were %s", after, before)
+			}
+			if b, _ := os.ReadFile(artPath(root, "03", "box")); string(b) != string(art03) {
+				t.Fatal("the box art of 03 did not come back")
+			}
+			if fileExists(dest) {
+				t.Fatal("the empty removed_ folder was left")
+			}
+		})
+	}
+	t.Run("completes", func(t *testing.T) {
+		root := txnCard(t, "swirl", 4)
+		art03, _ := os.ReadFile(artPath(root, "03", "box"))
+		os.WriteFile(artPath(root, "05", "box"), []byte("art of game D"), 0o644)
+		moved, err := renumberTxn(root, []string{"02"}, uniqueBackupPath(root, "removed_"), []string{"03", "04", "05"})
+		if err != nil || moved != 3 {
+			t.Fatalf("moved %d, %v", moved, err)
+		}
+		if fileExists(journalPath(root)) {
+			t.Fatal("journal left after a finished renumbering")
+		}
+		if m := folderMap(root); m != "02=T00003N 03=T00004N 04=T00005N" {
+			t.Fatalf("folders %s", m)
+		}
+		if b, _ := os.ReadFile(artPath(root, "02", "box")); string(b) != string(art03) {
+			t.Fatal("box art did not follow its game")
+		}
+		if b, _ := os.ReadFile(artPath(root, "04", "box")); string(b) != "art of game D" {
+			t.Fatal("box art did not follow its game")
+		}
+		if e := loadEdits(root).Games; len(e) != 3 || e["02"].Product != "T00003N" {
+			t.Fatalf("games.json %v", e)
+		}
+		if l, _ := filepath.Glob(filepath.Join(root, editsDir, "art", "*.rm")); len(l) != 0 {
+			t.Fatalf("removed art left: %v", l)
+		}
+	})
+	t.Run("hidden_folder_reported", func(t *testing.T) {
+		root := txnCard(t, "swirl", 3)
+		os.Rename(filepath.Join(root, "04"), filepath.Join(root, "_swirl_mv_04"))
+		c, _ := ScanCard(root)
+		if len(c.Warnings) == 0 || !strings.Contains(c.Warnings[0], "_swirl_mv_04") {
+			t.Fatalf("warnings %q", c.Warnings)
+		}
+	})
 }

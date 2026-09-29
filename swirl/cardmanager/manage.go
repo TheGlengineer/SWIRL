@@ -357,24 +357,28 @@ func StartRemoveGames(root string, folders []string) error {
 	}
 	return runJob(root, "Removing games", "Done. The removed games are in SWIRL_BACKUP until you delete them.", func() error {
 		dest := uniqueBackupPath(root, "removed_")
-		if err := cardfs.MkdirAll(dest, 0o755); err != nil {
+		gone := map[string]bool{}
+		for _, f := range folders {
+			gone[f] = true
+		}
+		var order []string
+		for _, n := range numberedFolders(root) {
+			if f := folderName(root, n); !gone[f] {
+				order = append(order, f)
+			}
+		}
+		// the moves and the renumbering are one journaled step; the menu is rebuilt only when it completed
+		moved, err := renumberTxn(root, folders, dest, order)
+		if err != nil {
 			return err
 		}
-		edits := loadEdits(root)
 		for _, f := range folders {
-			if err := cardfs.Rename(filepath.Join(root, f), filepath.Join(dest, f)); err != nil {
-				return fmt.Errorf("moving folder %s: %w", f, err)
-			}
-			delete(edits.Games, f)
-			os.Remove(artPath(root, f, "box"))
-			os.Remove(artPath(root, f, "vmu"))
 			jobLog("Removed folder %s", f)
 		}
-		edits.save()
-		setPct(0.3)
-		if _, err := renumber(root, jobLog); err != nil {
-			return err
+		if moved > 0 {
+			jobLog("Renumbered %d folders so there are no gaps", moved)
 		}
+		setPct(0.3)
 		jobUpdate(func(j *jobState) { j.Stage, j.Pct = "Rebuilding the menu", 0.5 })
 		return installSwirl(root, "", true, jobLog)
 	})

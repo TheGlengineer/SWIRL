@@ -190,3 +190,159 @@ func recoverMenu(root string) []string {
 	}
 	return warn
 }
+
+// ---------- journaled folder renames (renumber, reorder, remove) ----------
+
+const journalName = "renumber.json" // under SWIRL/
+
+func journalPath(root string) string { return filepath.Join(root, editsDir, journalName) }
+
+type renameStep struct {
+	From string `json:"from"` // relative to the card root, with forward slashes
+	To   string `json:"to"`
+	Done bool   `json:"done"`
+}
+
+// renumberJournal is SWIRL/renumber.json: the planned renames and which are done. It exists only while a
+// renumbering runs, so finding one means the last one was interrupted.
+type renumberJournal struct {
+	Version  int          `json:"version"`
+	Steps    []renameStep `json:"steps"`
+	HadEdits bool         `json:"hadEdits"`        // SWIRL/games.json existed before
+	Edits    string       `json:"edits,omitempty"` // and held this
+	Made     string       `json:"made,omitempty"`  // a folder made for the move, removed on undo if empty
+}
+
+func (j *renumberJournal) write(root string) error {
+	b, err := json.MarshalIndent(j, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := journalPath(root) + ".tmp"
+	if err := writeCardFile(tmp, b); err != nil {
+		return err
+	}
+	return cardfs.Rename(tmp, journalPath(root))
+}
+
+func cardPath(root, rel string) string { return filepath.Join(root, filepath.FromSlash(rel)) }
+
+// runRenames applies the steps under a journal. finish runs once every rename is done; if a rename or
+// finish fails, the done steps are undone and games.json is put back.
+func runRenames(root string, j *renumberJournal, finish func() error) error {
+	if b, err := os.ReadFile(filepath.Join(root, editsDir, "games.json")); err == nil {
+		j.HadEdits, j.Edits = true, string(b)
+	}
+	if err := j.write(root); err != nil {
+		cardfs.Remove(journalPath(root))
+		return fmt.Errorf("writing %s/%s: %w; nothing was changed", editsDir, journalName, err)
+	}
+	fail := func(err error) error {
+		if uerr := undoRenames(root, j); uerr != nil {
+			return errors.Join(err, fmt.Errorf("putting the folders back also failed (%w); open the card again to finish putting them back", uerr))
+		}
+		return fmt.Errorf("%w; the folders were put back as they were", err)
+	}
+	if j.Made != "" {
+		if err := cardfs.MkdirAll(cardPath(root, j.Made), 0o755); err != nil {
+			return fail(err)
+		}
+	}
+	for i := range j.Steps {
+		s := &j.Steps[i]
+		if err := cardfs.Rename(cardPath(root, s.From), cardPath(root, s.To)); err != nil {
+			return fail(fmt.Errorf("renaming %s to %s: %w", s.From, s.To, err))
+		}
+		s.Done = true
+		if err := j.write(root); err != nil {
+			return fail(fmt.Errorf("updating %s/%s: %w", editsDir, journalName, err))
+		}
+	}
+	if err := finish(); err != nil {
+		return fail(err)
+	}
+	cardfs.SyncDir(root)
+	if err := cardfs.Remove(journalPath(root)); err != nil {
+		// the next scan would undo the move; undo it now so the card and its menu stay in step
+		return fail(fmt.Errorf("removing %s/%s: %w", editsDir, journalName, err))
+	}
+	return nil
+}
+
+// undoRenames reverses the done steps of a journal, newest first, puts games.json back and removes the
+// journal. A step whose rename happened but was not yet marked done is undone too.
+func undoRenames(root string, j *renumberJournal) error {
+	var errs []error
+	exists := func(rel string) bool { _, err := cardfs.Stat(cardPath(root, rel)); return err == nil }
+	last := -1
+	for i, s := range j.Steps {
+		if s.Done {
+			last = i
+		}
+	}
+	if n := last + 1; n < len(j.Steps) && !exists(j.Steps[n].From) && exists(j.Steps[n].To) {
+		j.Steps[n].Done = true
+		last = n
+	}
+	for i := last; i >= 0; i-- {
+		s := &j.Steps[i]
+		if !s.Done {
+			continue
+		}
+		if exists(s.To) && !exists(s.From) {
+			if err := cardfs.Rename(cardPath(root, s.To), cardPath(root, s.From)); err != nil {
+				errs = append(errs, fmt.Errorf("renaming %s back to %s: %w", s.To, s.From, err))
+				continue
+			}
+		}
+		s.Done = false
+		j.write(root) // best effort: the rename above is what matters
+	}
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	games := filepath.Join(root, editsDir, "games.json")
+	if j.HadEdits {
+		if err := writeCardFile(games, []byte(j.Edits)); err != nil {
+			return fmt.Errorf("putting games.json back: %w", err)
+		}
+	} else if err := cardfs.Remove(games); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("putting games.json back: %w", err)
+	}
+	if j.Made != "" {
+		cardfs.Remove(cardPath(root, j.Made)) // only succeeds when empty, which is the point
+	}
+	cardfs.Remove(journalPath(root) + ".tmp")
+	if err := cardfs.Remove(journalPath(root)); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+// recoverRenumber runs at every scan while the card is not being written: an unfinished renumbering is
+// undone, and hidden _swirl_mv_ folders with no journal are reported.
+func recoverRenumber(root string) []string {
+	var warn []string
+	if b, err := os.ReadFile(journalPath(root)); err == nil {
+		var j renumberJournal
+		if err := json.Unmarshal(b, &j); err != nil || j.Version != 1 {
+			warn = append(warn, fmt.Sprintf("%s/%s from an interrupted renumbering cannot be read, so it was left alone. Check the game folders before changing anything.", editsDir, journalName))
+		} else if err := undoRenames(root, &j); err != nil {
+			warn = append(warn, fmt.Sprintf("An interrupted renumbering of the game folders was found but could not be undone: %v", err))
+		} else {
+			warn = append(warn, "An interrupted renumbering of the game folders was found and undone. The folders are as they were before it.")
+		}
+	}
+	return warn
+}
+
+// hiddenFolderWarnings reports game folders an interrupted renumbering hid from GDEMU.
+func hiddenFolderWarnings(root string) []string {
+	var warn []string
+	for _, n := range listDir(root) {
+		if strings.HasPrefix(n, "_swirl_mv_") && !fileExists(journalPath(root)) {
+			warn = append(warn, fmt.Sprintf("Folder %s holds a game that an interrupted renumbering hid from GDEMU. Rename it to the next free folder number, then open the card again.", n))
+		}
+	}
+	return warn
+}
