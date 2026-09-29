@@ -45,6 +45,12 @@ may ship without menu changes; the menu then keeps its major.minor version (2.11
 - Go back to SWIRL from a game with the in game reset (A+B+X+Y+Start). Are your SWIRL settings and favourites still there, or does SWIRL start with default settings? Please tell us either way
 - **Standard VMU owners:** everything should work exactly as in 2.13.2
 
+## [2.13.4]
+
+### Fixes
+
+- Fixed a memory overflow when SWIRL loads full size pictures (the Sega Dreamcast header logo, and the backgrounds of the Classic styles): 32 bytes were written past the end of a buffer at every start up. It could corrupt SWIRL's memory and make the Dreamcast stop later, for example when starting a game
+
 ## [2.13.3]
 
 Card Manager only. The menu on your card stays 2.13.2.
