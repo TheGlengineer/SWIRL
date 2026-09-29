@@ -65,17 +65,21 @@ type Card struct {
 	Root      string `json:"root"`
 	MenuType  string `json:"menuType"`
 	MenuTitle string `json:"menuTitle"`
-	SwirlVer  string `json:"swirlVersion"`
+	// MenuVariant names a build of openMenu that is not the stock one ("VFB", the Virtual Folder Bundle)
+	MenuVariant string `json:"menuVariant,omitempty"`
+	SwirlVer    string `json:"swirlVersion"`
 	// SwirlRelease is the version SWIRL reports in About ("2.10"); empty for early builds
-	SwirlRelease string     `json:"swirlRelease,omitempty"`
-	HasBox       bool       `json:"hasBox"`
-	HasIcon      bool       `json:"hasIcon"`
-	HasMeta      bool       `json:"hasMeta"`
-	Games        []Game     `json:"games"`
-	Warnings     []string   `json:"warnings"`
-	Backups      []string   `json:"backups"`
-	Dups         []DupGroup `json:"duplicates"`
-	Sets         []DiscSet  `json:"sets"`
+	SwirlRelease string   `json:"swirlRelease,omitempty"`
+	HasBox       bool     `json:"hasBox"`
+	HasIcon      bool     `json:"hasIcon"`
+	HasMeta      bool     `json:"hasMeta"`
+	Games        []Game   `json:"games"`
+	Warnings     []string `json:"warnings"`
+	Backups      []string `json:"backups"`
+	// BackupList describes the same folders for the Backups page: the pinned original first
+	BackupList []BackupItem `json:"backupList"`
+	Dups       []DupGroup   `json:"duplicates"`
+	Sets       []DiscSet    `json:"sets"`
 }
 
 var folderRe = regexp.MustCompile(`^\d{2,3}$`)
@@ -153,7 +157,7 @@ func ScanCard(root string) (*Card, error) {
 		}
 	}
 	fixed = append(fixed, hiddenFolderWarnings(root)...)
-	c := &Card{Root: root, MenuType: "None", Backups: listBackups(root), Warnings: fixed}
+	c := &Card{Root: root, MenuType: "None", Backups: listBackups(root), BackupList: listBackupItems(root), Warnings: fixed}
 	var boxIDs, iconIDs, metaIDs, vmuIDs map[string]bool
 	edits := loadEdits(root)
 
@@ -189,6 +193,8 @@ func ScanCard(root string) (*Card, error) {
 							metaIDs = datIDs(d, f)
 						case "VMU.DAT":
 							vmuIDs = datIDs(d, f)
+						case "FOLDRART.DAT", "DEFAULTS.INI": // only the Virtual Folder Bundle puts these on the disc
+							c.MenuVariant = "VFB"
 						case "1ST_READ.BIN":
 							if b, err := d.readSectors(f.LBA, (f.Size+sectorSize-1)/sectorSize); err == nil {
 								b = b[:f.Size]
@@ -311,6 +317,9 @@ func ScanCard(root string) (*Card, error) {
 	}
 	if c.Backups == nil {
 		c.Backups = []string{}
+	}
+	if c.BackupList == nil {
+		c.BackupList = []BackupItem{}
 	}
 	if c.Dups == nil {
 		c.Dups = []DupGroup{}
@@ -1072,19 +1081,6 @@ func FillFromDiscs(root string, log Logger) (int, error) {
 		n++
 	}
 	return n, nil
-}
-
-// pruneMenuBackups keeps the newest few automatic menu backups so the card does not fill up.
-func pruneMenuBackups(root string, keep int) {
-	var auto []string
-	for _, b := range listBackups(root) { // newest first
-		if strings.HasPrefix(b, "01_2") {
-			auto = append(auto, b)
-		}
-	}
-	for i := keep; i < len(auto); i++ {
-		cardfs.RemoveAll(filepath.Join(root, backupDir, auto[i]))
-	}
 }
 
 // addExtras puts the owner's collections, screenshots and menu music on the menu disc.

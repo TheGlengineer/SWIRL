@@ -1713,13 +1713,18 @@ $("bkGo").onclick = () => {
 
 function renderBackups() {
   initPCBackup();
-  const list = card?.backups || [];
+  const list = Array.isArray(card?.backupList) && card.backupList.length ? card.backupList
+    : (card?.backups || []).map(b => ({ name: b, kind: b.startsWith("removed_") ? "removed" : "menu", label: "", pinned: false }));
   setCount("nBackups", list.length);
   if (!list.length) { $("backups").innerHTML = `<div class="empty">No backups yet</div>`; return; }
   $("backups").className = "";
-  $("backups").innerHTML = list.map(b => b.startsWith("removed_")
-    ? `<div class="backup"><span>${esc(b)}<br><small>Removed duplicate games</small></span><button class="btn small" data-del="${esc(b)}">Delete permanently</button></div>`
-    : `<div class="backup"><span>${esc(b)}</span><button class="btn small" data-b="${esc(b)}">Restore</button></div>`).join("");
+  $("backups").innerHTML = list.map(b => {
+    const text = `<span>${b.pinned ? `<span class="badge ok">Original</span> ` : ""}${esc(b.name)}${b.label ? `<br><small>${esc(b.label)}</small>` : ""}</span>`;
+    if (b.kind === "removed" || b.kind === "junk") return `<div class="backup">${text}<button class="btn small" data-del="${esc(b.name)}">Delete permanently</button></div>`;
+    if (b.kind === "other") return `<div class="backup">${text}</div>`;
+    const back = b.pinned ? `Go back to ${esc(b.menu || "the old menu")}` : "Restore";
+    return `<div class="backup" data-pinned="${b.pinned ? 1 : 0}">${text}<button class="btn small" data-b="${esc(b.name)}">${back}</button></div>`;
+  }).join("");
   $("backups").querySelectorAll("button[data-del]").forEach(btn => btn.onclick = async () => {
     if (!confirm(`Permanently delete ${btn.dataset.del}? The removed game copies in it will be gone for good.`)) return;
     try { await api("/api/deleteremoved", { root: card.root, name: btn.dataset.del }); log("Deleted " + btn.dataset.del, "ok"); }
