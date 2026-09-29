@@ -17,6 +17,11 @@
 #include "../external/ini.h"
 #include "../gdrom/gdrom_fs.h"
 #include "draw_prototypes.h"
+#include "swirl/sw_trace.h"
+
+/* SWIRL: the custom theme table is fixed at 10 (the settings store a single digit); a THEME.INI is small */
+#define MAX_CUSTOM_THEMES (10)
+#define THEME_INI_MAX_SIZE (64 * 1024)
 
 /* Missing on sh-elf-gcc 9.1 ? */
 char *strdup(const char *s);
@@ -52,7 +57,7 @@ static theme_region region_themes[] = {
                 .menu_bkg_border_color = COLOR_BLACK}},
 };
 
-static theme_custom custom_themes[10];
+static theme_custom custom_themes[MAX_CUSTOM_THEMES];
 static int num_custom_themes = 0;
 
 static void select_art_by_aspect(CFG_ASPECT aspect) {
@@ -89,10 +94,16 @@ static inline long int filelength(FD_TYPE f) {
 static uint32_t str2argb(const char *str) {
   char *token, *temp, *tofree, *endptr;
   int rgb[3] = {0, 0, 0};
-  int *col = &rgb[0];
+  int n = 0;
 
   tofree = temp = strdup(str);
-  while ((token = strsep(&temp, ","))) *col++ = (int)strtol(token, &endptr, 0);
+  if (!tofree)
+    return PVR_PACK_ARGB(0xFF, 0, 0, 0);
+  /* SWIRL: at most three values; a fourth used to write past rgb[] */
+  while (n < 3 && (token = strsep(&temp, ","))) {
+    long v = strtol(token, &endptr, 0);
+    rgb[n++] = (int)(v < 0 ? 0 : v > 255 ? 255 : v);
+  }
   free(tofree);
   return PVR_PACK_ARGB(0xFF, rgb[0], rgb[1], rgb[2]);
 }
@@ -104,7 +115,7 @@ static int read_theme_ini(void *user, const char *section, const char *name, con
     theme_custom *new_theme = (theme_custom *)user;
     theme_color *new_color = &new_theme->colors;
     if (strcasecmp(name, "NAME") == 0) {
-      strncpy(new_theme->name, value, sizeof(new_theme->name) - 1);
+      snprintf(new_theme->name, sizeof(new_theme->name), "%s", value);
     } else if (strcasecmp(name, "ICON_COLOR") == 0) {
       new_color->icon_color = str2argb(value);
     } else if (strcasecmp(name, "TEXT_COLOR") == 0) {
@@ -138,62 +149,83 @@ static int theme_read(const char *filename, theme_custom *theme) {
     return -1;
   }
 
-  size_t ini_size = filelength(ini);
-  char *ini_buffer = malloc(ini_size);
-  fread(ini_buffer, ini_size, 1, ini);
-  fclose(ini);
-
-  if (ini_parse_string(ini_buffer, read_theme_ini, (void *)theme) < 0) {
-    printf("INI:Error Parsing %s!\n", filename);
-    fflush(stdout);
-    /*exit or something */
+  /* SWIRL: the size, the allocation and the read are checked, and the buffer gets the NUL inih needs */
+  long ini_size = filelength(ini);
+  if (ini_size < 0 || ini_size > THEME_INI_MAX_SIZE) {
+    sw_trace("theme: %s is %ld bytes, not read", filename, ini_size);
+    fclose(ini);
     return -1;
   }
+  char *ini_buffer = malloc((size_t)ini_size + 1);
+  if (!ini_buffer) {
+    fclose(ini);
+    return -1;
+  }
+  size_t got = fread(ini_buffer, 1, (size_t)ini_size, ini);
+  fclose(ini);
+  ini_buffer[got] = '\0';
+
+  int ret = ini_parse_string(ini_buffer, read_theme_ini, (void *)theme);
   free(ini_buffer);
+  if (ret != 0) {
+    /* a bad line is skipped (inih carries on); the name and colours read so far are kept */
+    sw_trace("theme: %s line %d not understood", filename, ret);
+    return ret < 0 ? -1 : 0;
+  }
 
   return 0;
 }
 
-static void load_themes(char *basePath) {
+/* SWIRL: the folder is opened by its full path (KOS's working directory is /, so the relative "THEME" never
+   opened on hardware and custom themes were never listed). The picture paths stay relative to the disc, as the
+   texture loader adds the prefix; the INI path is absolute. Every string is bounded by its field and the table
+   stops at MAX_CUSTOM_THEMES. */
+static void load_themes(const char *basePath) {
   char path[128];
   DIRENT_TYPE dp;
-  DIR_TYPE dir = opendir(basePath);
+  snprintf(path, sizeof(path), "%s%s", DISC_PREFIX, basePath);
+  DIR_TYPE dir = opendir(path);
 
   if (!dir) {
+    sw_trace("theme: %s not found, no custom themes", path);
     return;
   }
 
   while ((dp = readdir(dir)) != NULL) {
     if (strcmp(dp->d_name, ".") != 0 && strcmp(dp->d_name, "..") != 0) {
-      if (strncmp(dp->d_name, "CUST_", 5) == 0) {
+      if (strncasecmp(dp->d_name, "CUST_", 5) == 0) {
+        if (num_custom_themes >= MAX_CUSTOM_THEMES) {
+          sw_trace("theme: more than %d custom themes, %s not listed", MAX_CUSTOM_THEMES, dp->d_name);
+          continue;
+        }
+        theme_custom *theme = &custom_themes[num_custom_themes];
         int theme_num = dp->d_name[5] - '0';
+        if (theme_num < 0 || theme_num > 9)
+          theme_num = num_custom_themes;
 
-        strcpy(path, basePath);
-        strcat(path, "/");
-        strcat(path, dp->d_name);
-        strcat(path, "/");
-
-        printf("theme #%d: %s @ %s\n", theme_num, dp->d_name, path);
-
-        /* Add the theme */
-        strcpy(custom_themes[num_custom_themes].bg_left, path);
-        strcat(custom_themes[num_custom_themes].bg_left, "BG_L.PVR");
-        strcpy(custom_themes[num_custom_themes].bg_right, path);
-        strcat(custom_themes[num_custom_themes].bg_right, "BG_R.PVR");
+        /* the picture paths must fit their fields (a long folder name used to overflow bg_left) */
+        int n = snprintf(theme->bg_left, sizeof(theme->bg_left), "%s/%s/BG_L.PVR", basePath, dp->d_name);
+        if (n < 0 || n >= (int)sizeof(theme->bg_left)) {
+          sw_trace("theme: folder name %.24s too long, not listed", dp->d_name);
+          theme->bg_left[0] = '\0';
+          continue;
+        }
+        snprintf(theme->bg_right, sizeof(theme->bg_right), "%s/%s/BG_R.PVR", basePath, dp->d_name);
 
         /* dummy colors */
-        custom_themes[num_custom_themes].colors = (theme_color){.text_color = COLOR_WHITE,
-                                                                .highlight_color = COLOR_ORANGE_U,
-                                                                .menu_text_color = COLOR_WHITE,
-                                                                .menu_bkg_color = COLOR_BLACK,
-                                                                .menu_bkg_border_color = COLOR_WHITE};
+        theme->colors = (theme_color){.text_color = COLOR_WHITE,
+                                      .highlight_color = COLOR_ORANGE_U,
+                                      .menu_text_color = COLOR_WHITE,
+                                      .menu_bkg_color = COLOR_BLACK,
+                                      .menu_bkg_border_color = COLOR_WHITE};
 
         /* dummy name */
-        sprintf(custom_themes[num_custom_themes].name, "CUSTOM #%d", theme_num);
+        snprintf(theme->name, sizeof(theme->name), "CUSTOM #%d", theme_num);
 
         /* load INI if available, for name & colors */
-        strcat(path, "THEME.INI");
-        theme_read(path, &custom_themes[num_custom_themes]);
+        snprintf(path, sizeof(path), "%s%s/%s/THEME.INI", DISC_PREFIX, basePath, dp->d_name);
+        theme_read(path, theme);
+        printf("theme #%d: %s @ %s (%s)\n", theme_num, dp->d_name, theme->bg_left, theme->name);
 
         num_custom_themes++;
       }
