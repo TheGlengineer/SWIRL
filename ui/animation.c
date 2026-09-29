@@ -15,7 +15,8 @@
 void anim_update_2d(anim2d *anim) {
   //AHEasingFunction ease = CircularEaseOut;
   AHEasingFunction ease = CubicEaseInOut;
-  const float dt = (float)anim->time.frame_now / (float)anim->time.frame_len;
+  /* SWIRL: a zero length animation is finished, not a division by zero */
+  const float dt = anim->time.frame_len > 0 ? (float)anim->time.frame_now / (float)anim->time.frame_len : 1.0f;
   const float dv = (*ease)(dt);
   anim->cur.x = anim->start.x + (anim->end.x - anim->start.x) * dv;
   anim->cur.y = anim->start.y + (anim->end.y - anim->start.y) * dv;

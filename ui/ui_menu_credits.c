@@ -195,6 +195,9 @@ static void menu_accept(void) {
         case SORT_DATE:
           list_get_sort_date();
           break;
+        case SORT_PRODUCT: /* SWIRL: was missing, fell through to the default order */
+          list_get_sort_product();
+          break;
         default:
         case SORT_DEFAULT:
           list_get_sort_default();
@@ -207,7 +210,7 @@ static void menu_accept(void) {
 
     /* SWIRL: a change of style is always saved, as in SWIRL's own settings (otherwise the old style comes back at
        the next power on, which looks like the change was lost) */
-    if (choices[CHOICE_SAVE] == 0 /* Save */ || settings->ui != old_ui)
+    if (choices[CHOICE_SAVE] == 0 /* Save */ || (int)settings->ui != old_ui)
       settings_save();
     extern void reload_ui(void);
     reload_ui();
@@ -617,7 +620,7 @@ void draw_multidisc_tr(void) {
       const int disc_num = list_multidisc[i]->disc[0] - '0';
       strncpy(temp_game_name, list_multidisc[i]->name, sizeof(temp_game_name) - 1);
       temp_game_name[sizeof(temp_game_name) - 1] = '\0';
-      snprintf(temp_game_num, sizeof(temp_game_name), "%d", disc_num);
+      snprintf(temp_game_num, sizeof(temp_game_num), "%d", disc_num);
       string_outer_concat(line_buf, temp_game_name, temp_game_num, 39);
       font_bmp_draw_main(x_item, cur_y, line_buf);
     }
