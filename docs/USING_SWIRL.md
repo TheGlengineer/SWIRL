@@ -138,4 +138,8 @@ Classic styles follow the same setting.
 ## What is saved, and where
 
 Favorites, play history, launch options and SWIRL settings are saved as `SWIRL.DAT` on the first VMU with
-space. Nothing is written to the SD card by the Dreamcast.
+space. Each save is written under the other of two names (`SWIRL.DAT`, then `SWIRL.BAK`, then `SWIRL.DAT`
+again), read back, and only then is the older copy removed. A VMU pulled or a VM2 switching cards half way
+through a save keeps the previous copy; SWIRL starts from the newest copy that reads back intact. A save needs
+room for the new copy on top of the one already on the card (2 to 8 blocks, more with a long history).
+Nothing is written to the SD card by the Dreamcast.

@@ -37,7 +37,9 @@
 
 #define MAX_GAMES 1024
 #define MAX_STATS 256
-#define SAVE_NAME "SWIRL.DAT"
+/* Two names take turns (see "VMU persistence" below). A save goes to the name that is not holding the newest
+   copy; the older copy is removed only once the new one has been read back. */
+static const char *const save_names[2] = {"SWIRL.DAT", "SWIRL.BAK"};
 
 static sw_game games[MAX_GAMES];
 static int num_games;
@@ -65,6 +67,14 @@ typedef struct __attribute__((packed)) save_blob_v1 {
   sw_stat stats[MAX_STATS];
 } save_blob_v1;
 
+/* After the stats: which write this is, so the newest of two copies can be told apart. It is shorter than one
+   sw_stat, so a SWIRL from before it (which works out the stats from the length) never reads it as a stat. */
+typedef struct __attribute__((packed)) save_tail {
+  char tag[4]; /* "SEQ1" */
+  uint32_t seq;
+} save_tail;
+#define BLOB_HEAD (sizeof(save_blob) - sizeof(sw_stat) * MAX_STATS)
+
 static const uint32_t placeholder_colors[] = {
     0xFF1F3F7A, 0xFF7A2E1F, 0xFF1F6B4F, 0xFF5B2A7A, 0xFF7A5A12, 0xFF154F66, 0xFF6B1F3F, 0xFF3F5A1F,
 };
@@ -87,7 +97,14 @@ uint32_t sw_now(void) {
    - if SWIRL started without reading SWIRL.DAT (no card yet, a slow card, a VM2 switching cards), the file is
      read and merged before the first write, so a save never replaces it with defaults;
    - if the card holding SWIRL.DAT doesn't answer, nothing is written (the save is tried again later);
-   - every write is read back and compared; a failed save is reported and tried again by the caller. */
+   - every write is read back and compared; a failed save is reported and tried again by the caller;
+   - a save never writes over the copy it is replacing. KallistiOS gives a file that is written over the blocks
+     of the old one, so a card pulled (or a VM2 switching) half way through left SWIRL.DAT damaged and the next
+     save replaced it with this session's data. Now the new copy goes to the other name (SWIRL.DAT or
+     SWIRL.BAK), is read back, and only then is the old copy removed. At start up the newest valid copy wins
+     (each carries a write count); a copy that fails its check is ignored, not replaced.
+   Space: the card must hold both copies for a moment, so a save needs free blocks for the new copy on top of
+   the one already there. A card without that room is reported as "no space", with the blocks needed. */
 
 enum { LOAD_NONE = 0, LOAD_OK, LOAD_NO_FILE, LOAD_DAMAGED, LOAD_NO_ANSWER };
 static int load_state;     /* how the last attempt to read SWIRL.DAT went */
@@ -95,6 +112,9 @@ static int prefs_touched;  /* settings changed in this session (they win over a 
 static int settings_dirty; /* openMenu's settings file (OPENMENU.CFG) also needs writing */
 static char saved_on[4];   /* "A1" once a save worked */
 static int last_rv;        /* result of the last save */
+static int cur_copy = -1;  /* index into save_names of the newest valid copy on the card, -1 for none */
+static uint32_t cur_seq;   /* its write count */
+static int blocks_short;   /* blocks missing on the card after a save failed for space (-8) */
 
 static void dev_name(maple_device_t *dev, char *out) {
   out[0] = 'A' + dev->port;
@@ -102,16 +122,30 @@ static void dev_name(maple_device_t *dev, char *out) {
   out[2] = 0;
 }
 
+/* blocks a copy takes on the card, 0 when the name is not there */
+static int copy_blocks(maple_device_t *dev, int which) {
+  char path[32];
+  snprintf(path, sizeof(path), "/vmu/%c%d/%s", 'a' + dev->port, dev->unit, save_names[which]);
+  file_t f = fs_open(path, O_RDONLY | O_META);
+  if (f == FILEHND_INVALID)
+    return 0;
+  int size = fs_total(f);
+  fs_close(f);
+  return size > 0 ? (size + 511) / 512 : 1;
+}
+
+/* The card that holds a copy (has_file: bit 0 SWIRL.DAT, bit 1 SWIRL.BAK), else the first card with
+   need_blocks free. */
 static maple_device_t *find_vmu(int need_blocks, int *has_file) {
   maple_device_t *dev, *first_free = NULL;
-  char path[32];
   *has_file = 0;
   for (int i = 0; (dev = maple_enum_type(i, MAPLE_FUNC_MEMCARD)); i++) {
-    snprintf(path, sizeof(path), "/vmu/%c%d/%s", 'a' + dev->port, dev->unit, SAVE_NAME);
-    file_t f = fs_open(path, O_RDONLY | O_META);
-    if (f != FILEHND_INVALID) {
-      fs_close(f);
-      *has_file = 1;
+    int mask = 0;
+    for (int w = 0; w < 2; w++)
+      if (copy_blocks(dev, w))
+        mask |= 1 << w;
+    if (mask) {
+      *has_file = mask;
       return dev;
     }
     if (!first_free && vmufs_free_blocks(dev) >= need_blocks)
@@ -120,10 +154,10 @@ static maple_device_t *find_vmu(int need_blocks, int *has_file) {
   return first_free;
 }
 
-/* reads SWIRL.DAT from dev into a fresh buffer; 0 on success */
-static int read_file(maple_device_t *dev, uint8_t **out, int *out_size) {
+/* reads one copy from dev into a fresh buffer; 0 on success */
+static int read_file(maple_device_t *dev, int which, uint8_t **out, int *out_size) {
   char path[32];
-  snprintf(path, sizeof(path), "/vmu/%c%d/%s", 'a' + dev->port, dev->unit, SAVE_NAME);
+  snprintf(path, sizeof(path), "/vmu/%c%d/%s", 'a' + dev->port, dev->unit, save_names[which]);
   file_t f = fs_open(path, O_RDONLY | O_META);
   if (f == FILEHND_INVALID)
     return -1;
@@ -141,9 +175,11 @@ static int read_file(maple_device_t *dev, uint8_t **out, int *out_size) {
 }
 
 /* decodes a SWIRL.DAT package into p/st/n; 0 on success */
-static int parse_save(const uint8_t *buf, int size, sw_prefs *p, sw_stat *st, int *n, int *upgraded) {
+static int parse_save(const uint8_t *buf, int size, sw_prefs *p, sw_stat *st, int *n, int *upgraded,
+                      uint32_t *seq) {
   vmu_pkg_t pkg;
   *upgraded = 0;
+  *seq = 0;
   if (vmu_pkg_parse((uint8_t *)buf, size, &pkg) != 0 ||
       pkg.data_len < (int)(sizeof(save_blob_v1) - sizeof(sw_stat) * MAX_STATS))
     return -1;
@@ -157,6 +193,12 @@ static int parse_save(const uint8_t *buf, int size, sw_prefs *p, sw_stat *st, in
     *n = b->count > MAX_STATS ? MAX_STATS : b->count;
     if (*n > room_v2) *n = room_v2 < 0 ? 0 : room_v2;
     memcpy(st, b->stats, *n * sizeof(sw_stat));
+    const int tail_at = (int)BLOB_HEAD + *n * (int)sizeof(sw_stat);
+    if (pkg.data_len >= tail_at + (int)sizeof(save_tail)) {
+      save_tail t;
+      memcpy(&t, pkg.data + tail_at, sizeof(t));
+      if (!memcmp(t.tag, "SEQ1", 4)) *seq = t.seq;
+    }
     return 0;
   }
   if (!memcmp(b->magic, "SWL1", 4)) {
@@ -176,37 +218,59 @@ static int parse_save(const uint8_t *buf, int size, sw_prefs *p, sw_stat *st, in
   return -1;
 }
 
-/* Reads SWIRL.DAT and takes it in. At start up (merge 0) it simply replaces the defaults. Later (merge 1) it is
-   combined with what changed since: play counts add up, a favourite on either side stays a favourite, and
-   settings changed in this session are kept. Sets load_state; returns it. */
+/* Reads the newest valid copy of SWIRL.DAT and takes it in. At start up (merge 0) it simply replaces the
+   defaults. Later (merge 1) it is combined with what changed since: play counts add up, a favourite on either
+   side stays a favourite, and settings changed in this session are kept. Sets load_state; returns it. */
 static int take_in_file(int merge) {
   int has_file = 0;
   maple_device_t *dev = find_vmu(0, &has_file);
-  if (!dev) {
-    load_state = LOAD_NO_FILE; /* no memory card at all */
-    return load_state;
-  }
-  if (!has_file) {
-    load_state = LOAD_NO_FILE;
-    return load_state;
-  }
-  uint8_t *buf = NULL;
-  int size = 0;
-  if (read_file(dev, &buf, &size) != 0) {
-    printf("SWIRL: SWIRL.DAT on %c%d did not answer\n", 'A' + dev->port, dev->unit);
-    load_state = LOAD_NO_ANSWER;
+  if (!dev || !has_file) {
+    load_state = LOAD_NO_FILE; /* no memory card at all, or none with a copy */
     return load_state;
   }
   static sw_stat fstats[MAX_STATS];
   sw_prefs fprefs = prefs;
-  int fn = 0, upgraded = 0;
-  int rc = parse_save(buf, size, &fprefs, fstats, &fn, &upgraded);
-  free(buf);
-  if (rc != 0) {
-    printf("SWIRL: SWIRL.DAT on %c%d is damaged\n", 'A' + dev->port, dev->unit);
-    load_state = LOAD_DAMAGED;
+  int fn = 0, upgraded = 0, best = -1, damaged = 0, silent = 0;
+  uint32_t best_seq = 0;
+  for (int w = 0; w < 2; w++) {
+    if (!(has_file & (1 << w)))
+      continue;
+    uint8_t *buf = NULL;
+    int size = 0;
+    if (read_file(dev, w, &buf, &size) != 0) {
+      printf("SWIRL: %s on %c%d did not answer\n", save_names[w], 'A' + dev->port, dev->unit);
+      silent++;
+      continue;
+    }
+    static sw_stat cstats[MAX_STATS];
+    sw_prefs cprefs = prefs;
+    int cn = 0, cup = 0;
+    uint32_t cseq = 0;
+    int rc = parse_save(buf, size, &cprefs, cstats, &cn, &cup, &cseq);
+    free(buf);
+    if (rc != 0) {
+      printf("SWIRL: %s on %c%d is damaged\n", save_names[w], 'A' + dev->port, dev->unit);
+      damaged++;
+      continue;
+    }
+    /* the newest copy wins; SWIRL.DAT on a tie (two copies from before the write count) */
+    if (best < 0 || cseq > best_seq) {
+      best = w;
+      best_seq = cseq;
+      fprefs = cprefs;
+      fn = cn;
+      upgraded = cup;
+      memcpy(fstats, cstats, cn * sizeof(sw_stat));
+    }
+  }
+  if (best < 0) {
+    load_state = silent ? LOAD_NO_ANSWER : LOAD_DAMAGED;
     return load_state;
   }
+  if (damaged)
+    sw_trace("SWIRL.DAT: one copy damaged, using %s", save_names[best]);
+  cur_copy = best;
+  cur_seq = best_seq;
   if (!merge) {
     prefs = fprefs;
     num_stats = fn;
@@ -231,7 +295,7 @@ static int take_in_file(int merge) {
         stats[num_stats++] = fstats[i];
       }
     }
-    printf("SWIRL: merged SWIRL.DAT from %c%d (%d entries)\n", 'A' + dev->port, dev->unit, fn);
+    printf("SWIRL: merged %s from %c%d (%d entries)\n", save_names[best], 'A' + dev->port, dev->unit, fn);
   }
   if (upgraded) dirty = 1;
   loaded = 1;
@@ -242,19 +306,28 @@ static int take_in_file(int merge) {
 static void load_stats(void) {
   static const char *const names[] = {"none", "ok", "no file", "damaged", "no answer"};
   const int st = take_in_file(0);
-  sw_trace("SWIRL.DAT: %s", st >= 0 && st <= 4 ? names[st] : "?");
+  if (st == LOAD_OK)
+    sw_trace("SWIRL.DAT: ok (%s, write %lu)", save_names[cur_copy], (unsigned long)cur_seq);
+  else
+    sw_trace("SWIRL.DAT: %s", st >= 0 && st <= 4 ? names[st] : "?");
 }
 
 /* builds the VMU file for the current stats; caller frees *out */
-static int build_save(uint8_t **out, int *out_size) {
-  static save_blob blob;
-  memset(&blob, 0, sizeof(blob));
-  memcpy(blob.magic, "SWL2", 4);
-  blob.version = 2;
-  blob.count = num_stats;
-  blob.prefs = prefs;
-  memcpy(blob.stats, stats, num_stats * sizeof(sw_stat));
-  int data_len = sizeof(blob) - sizeof(sw_stat) * (MAX_STATS - num_stats);
+static int build_save(uint8_t **out, int *out_size, uint32_t seq) {
+  static uint8_t raw[sizeof(save_blob) + sizeof(save_tail)];
+  save_blob *blob = (save_blob *)raw;
+  memset(raw, 0, sizeof(raw));
+  memcpy(blob->magic, "SWL2", 4);
+  blob->version = 2;
+  blob->count = num_stats;
+  blob->prefs = prefs;
+  memcpy(blob->stats, stats, num_stats * sizeof(sw_stat));
+  int data_len = BLOB_HEAD + sizeof(sw_stat) * num_stats;
+  save_tail tail;
+  memcpy(tail.tag, "SEQ1", 4);
+  tail.seq = seq;
+  memcpy(raw + data_len, &tail, sizeof(tail));
+  data_len += sizeof(tail);
 
   vmu_pkg_t pkg;
   memset(&pkg, 0, sizeof(pkg));
@@ -269,35 +342,60 @@ static int build_save(uint8_t **out, int *out_size) {
 #endif
   pkg.eyecatch_type = VMUPKG_EC_NONE;
   pkg.data_len = data_len;
-  pkg.data = (const uint8_t *)&blob;
+  pkg.data = raw;
   return vmu_pkg_build(&pkg, out, out_size) < 0 ? -1 : 0;
 }
 
-/* runs on the worker: write, then read back and compare */
-static int write_save(uint8_t *out, int out_size, char *where) {
+/* runs on the worker: write the new copy to the free name, read it back, then remove the old copy.
+   0, -2 no card with room, -4 the write failed, -6 read back differs, -8 no room on the card that holds the
+   copies (blocks_short says how many blocks are missing) */
+static int write_save(uint8_t *out, int out_size, uint32_t seq, char *where) {
+  const int need = (out_size + 511) / 512;
   int has_file = 0;
-  maple_device_t *dev = find_vmu((out_size + 511) / 512, &has_file);
+  maple_device_t *dev = find_vmu(need, &has_file);
   if (!dev)
     return -2;
-  char path[32];
-  snprintf(path, sizeof(path), "/vmu/%c%d/%s", 'a' + dev->port, dev->unit, SAVE_NAME);
-  file_t f = fs_open(path, O_WRONLY | O_META);
-  if (f == FILEHND_INVALID)
-    return -3;
-  int rv = (fs_write(f, out, out_size) == out_size) ? 0 : -4;
-  fs_close(f);
-  if (rv == 0) {
-    uint8_t *back = NULL;
-    int back_size = 0;
-    if (read_file(dev, &back, &back_size) != 0 || back_size < out_size || memcmp(back, out, out_size) != 0) {
-      printf("SWIRL: SWIRL.DAT on %c%d did not read back the same\n", 'A' + dev->port, dev->unit);
-      rv = -6;
+  const int target = cur_copy < 0 ? 0 : 1 - cur_copy;
+  const int other = 1 - target;
+  if (has_file) {
+    /* the old copy stays until the new one is checked, so the new one needs room of its own. A stale file under
+       the target name (a removal that did not finish) is written over and its blocks count as free. */
+    const int room = vmufs_free_blocks(dev) + ((has_file & (1 << target)) ? copy_blocks(dev, target) : 0);
+    if (room < need) {
+      blocks_short = need - room;
+      printf("SWIRL: %s needs %d more blocks on %c%d\n", save_names[target], blocks_short, 'A' + dev->port, dev->unit);
+      return -8;
     }
-    free(back);
   }
-  if (rv == 0)
-    dev_name(dev, where);
-  return rv;
+  sw_trace("save: %s write %lu on %c%d (%d blocks, %d free)", save_names[target], (unsigned long)seq, 'A' + dev->port,
+           dev->unit, need, vmufs_free_blocks(dev));
+  int rv = vmufs_write(dev, save_names[target], out, out_size, VMUFS_OVERWRITE);
+  if (rv == -7) {
+    blocks_short = 1;
+    return -8;
+  }
+  if (rv < 0)
+    return -4;
+  uint8_t *back = NULL;
+  int back_size = 0;
+  if (read_file(dev, target, &back, &back_size) != 0 || back_size < out_size || memcmp(back, out, out_size) != 0) {
+    printf("SWIRL: %s on %c%d did not read back the same\n", save_names[target], 'A' + dev->port, dev->unit);
+    free(back);
+    return -6;
+  }
+  free(back);
+  cur_copy = target;
+  cur_seq = seq;
+  dev_name(dev, where);
+  if (has_file & (1 << other)) {
+    /* the new copy is safe on the card: the old one goes. If this fails both stay, and the write count picks
+       the newer one next time. */
+    int drv = vmufs_delete(dev, save_names[other]);
+    sw_trace("save: removed old %s: %d, %d free", save_names[other], drv, vmufs_free_blocks(dev));
+    if (drv < 0)
+      printf("SWIRL: could not remove the old %s on %s\n", save_names[other], where);
+  }
+  return 0;
 }
 
 static volatile int async_busy, async_done, async_rv;
@@ -307,12 +405,13 @@ typedef struct save_job {
   int size;
   int settings; /* also write openMenu's settings file */
   uint8_t *data;
+  uint32_t seq;
 } save_job;
 
 static void *save_thread(void *arg) {
   save_job *job = arg;
   sw_trace("save: start (SWIRL.DAT %s, settings %s)", job->data ? "yes" : "no", job->settings ? "yes" : "no");
-  int rv = job->data ? write_save(job->data, job->size, async_where) : 0;
+  int rv = job->data ? write_save(job->data, job->size, job->seq, async_where) : 0;
   sw_trace("save: SWIRL.DAT done (%d)", rv);
   if (job->settings)
     settings_save();
@@ -344,7 +443,8 @@ static int start_save(void) {
     return -1;
   uint8_t *pkt = NULL;
   if (dirty) {
-    if (build_save(&pkt, &job->size) < 0) {
+    job->seq = cur_seq + 1;
+    if (build_save(&pkt, &job->size, job->seq) < 0) {
       free(job);
       return -1;
     }
@@ -435,6 +535,10 @@ const char *sw_lib_save_status(char *buf, int len) {
     return "Saving...";
   if (dirty || settings_dirty) {
     if (last_rv == -2) return "No VMU with space";
+    if (last_rv == -8) {
+      snprintf(buf, len, "No space on VMU (needs %d block%s)", blocks_short, blocks_short == 1 ? "" : "s");
+      return buf;
+    }
     if (last_rv == -7) return "VMU busy, retrying";
     if (last_rv) return "Not saved, retrying";
     return "Unsaved changes";
@@ -455,6 +559,7 @@ int sw_lib_early_quality(void) {
 }
 
 int sw_lib_dirty(void) { return dirty || settings_dirty; }
+int sw_lib_blocks_short(void) { return blocks_short; }
 void sw_lib_mark_dirty(void) {
   dirty = 1;
   prefs_touched = 1;

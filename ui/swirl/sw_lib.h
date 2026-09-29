@@ -51,6 +51,7 @@ int sw_lib_save_result(int *rv);     /* 1 once when a save finished, with its re
 int sw_lib_busy(void);               /* a save is running */
 void sw_lib_settings_dirty(void);    /* openMenu's settings (style, beep) changed and need saving too */
 const char *sw_lib_save_status(char *buf, int len); /* one line for System > Save */
+int sw_lib_blocks_short(void);       /* after a save failed for space (-8): blocks missing on the card */
 int sw_lib_dirty(void);
 void sw_lib_mark_dirty(void);
 int sw_lib_stats_loaded(void);
