@@ -1742,6 +1742,8 @@ static void input_tabs(unsigned int btn, int pressed) {
         int keep = lib_list[lib_sel];
         lib_sort = (lib_sort + 1) % SW_SORT_COUNT;
         sw_lib_prefs()->sort = lib_sort;
+        sw_lib_mark_dirty(); /* kept in SWIRL.DAT like the other settings */
+        save_countdown = 180;
         build_library();
         for (int i = 0; i < lib_len; i++)
           if (lib_list[i] == keep) lib_sel = i;
