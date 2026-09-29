@@ -132,7 +132,10 @@ func serve() {
 		writeJSON(w, map[string]any{"ok": true, "log": l.lines})
 	}))
 	mux.HandleFunc("/api/restore", guard(func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Root, Backup string }
+		var req struct {
+			Root, Backup string
+			Force        bool
+		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			fail(w, err)
 			return
@@ -145,7 +148,12 @@ func serve() {
 		mu.Lock()
 		defer mu.Unlock()
 		l := &logBuf{lines: []string{}}
-		if err := RestoreBackup(req.Root, req.Backup, l.log); err != nil {
+		if err := RestoreBackupForce(req.Root, req.Backup, req.Force, l.log); err != nil {
+			var mm *restoreMismatch
+			if errors.As(err, &mm) {
+				writeJSON(w, map[string]any{"ok": false, "error": err.Error(), "log": l.lines, "mismatches": mm.Lines})
+				return
+			}
 			writeJSON(w, map[string]any{"ok": false, "error": err.Error(), "log": l.lines})
 			return
 		}
@@ -807,6 +815,7 @@ func serve() {
 		n, err := RemoveJunk(str(m, "root"))
 		return map[string]any{"moved": n}, err
 	}))
+	mux.HandleFunc("/api/health/gaps", post(func(m map[string]any) (any, error) { return nil, StartCloseGaps(str(m, "root")) }))
 	mux.HandleFunc("/api/games/arrange", post(func(m map[string]any) (any, error) { return nil, StartArrangeDiscs(str(m, "root")) }))
 	mux.HandleFunc("/api/preview", post(func(m map[string]any) (any, error) { return nil, StartPreview(str(m, "root"), str(m, "dats")) }))
 	mux.HandleFunc("/api/vmulogo", guard(func(w http.ResponseWriter, r *http.Request) {

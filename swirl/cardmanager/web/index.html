@@ -709,7 +709,7 @@ kbd{font-family:Barlow,sans-serif;font-size:.78rem;font-weight:600;color:var(--t
 <dialog id="healthDlg">
   <div class="edhead"><h3>Card health check</h3><span class="mono" id="healthWhen"></span></div>
   <div class="dbody" id="healthBody"></div>
-  <div class="edfoot"><span class="msg" id="healthMsg"></span><button class="btn" id="healthJunk" hidden>Move leftover system files to SWIRL_BACKUP</button><button class="btn primary" id="healthClose">Close</button></div>
+  <div class="edfoot"><span class="msg" id="healthMsg"></span><button class="btn" id="healthGaps" hidden>Close the gaps</button><button class="btn" id="healthJunk" hidden>Move leftover system files to SWIRL_BACKUP</button><button class="btn primary" id="healthClose">Close</button></div>
 </dialog>
 <dialog id="logoDlg">
   <div class="edhead"><h3>Make a VMU logo</h3><span class="mono">48 x 32 pixels, black and white</span></div>
@@ -955,6 +955,9 @@ function menuBadge(c) {
   if (c.menuType === "openMenu") return `<span class="badge">openMenu</span>`;
   if (c.menuType === "GDMENU") return `<span class="badge">GDMENU</span>`;
   if (c.menuType === "None") return `<span class="badge warn">No menu yet</span>`;
+  if (c.menuType === "Game") return `<span class="badge warn">Game, not a menu: ${esc(c.menuTitle || c.menuImage)} (${esc(c.menuFormat)})</span>`;
+  if (c.menuType === "Menu") return `<span class="badge warn">${esc(c.menuTitle)} (a menu SWIRL does not know, ${esc(c.menuFormat)})</span>`;
+  if (c.menuType === "Unknown") return `<span class="badge warn">Unreadable disc image: ${esc(c.menuImage)}</span>`;
   return `<span class="badge warn">${esc(c.menuType)}</span>`;
 }
 
@@ -988,23 +991,25 @@ async function scan() {
       <div class="stat"><span>With descriptions</span><b>${meta}</b></div>
     </div>
     ${(c.warnings || []).map(w => `<div class="warn">${esc(w)}</div>`).join("")}
+    ${c.gaps ? `<div class="row" style="margin-top:.5rem"><button class="btn small" id="closeGaps">Close the gaps (renumber the folders)</button></div>` : ""}
     ${(c.duplicates || []).length ? `<div class="warn"><b>Duplicate games:</b> ${c.duplicates.map(d => `${esc(d.name)} (folder ${esc(d.keep)}, extra ${d.extras.map(esc).join(", ")})`).join("; ")}.
       These are identical copies, not extra discs.
       <div class="row" style="margin-top:.5rem"><button class="btn small" id="dedupe">Remove extra copies (${(c.duplicates.reduce((a, d) => a + d.bytes, 0) / 1073741824).toFixed(1)} GB)</button></div></div>` : ""}
     ${!c.hasBox && !c.hasIcon && c.games.length ? `<div class="warn">No box art files on the card yet. Add them in Art and info, or SWIRL will show colored placeholders.</div>` : ""}`;
   renderGames();
   if ($("dedupe")) $("dedupe").onclick = dedupe;
+  if ($("closeGaps")) $("closeGaps").onclick = () => { if (confirm("Renumber the game folders so there are no gaps, then rebuild the menu?")) startJob("Closing the gaps", "/api/health/gaps", { root: card.root }); };
   vgaAfterScan();
   setNav(true);
   setCount("nGames", c.games.length);
   $("cardFlag").hidden = !warnCount;
   $("cardLed").className = "led " + (warnCount || c.menuType !== "SWIRL" ? "warn" : "ok");
   $("cardChipName").textContent = c.root;
-  $("cardChipInfo").textContent = `${c.menuType === "SWIRL" ? "SWIRL" : c.menuType === "None" ? "No menu" : c.menuType} · ${c.games.length} games`;
+  $("cardChipInfo").textContent = `${c.menuType === "SWIRL" ? "SWIRL" : c.menuType === "None" ? "No menu" : c.menuType === "Game" ? "Game in 01" : c.menuType === "Unknown" ? "Unreadable image in 01" : c.menuType} · ${c.games.length} games`;
   $("gamesSub").textContent = `${c.games.length} games · ${art} with box art · ${meta} with descriptions. Folders 02 and up, in the order GDEMU and SWIRL list them.`;
   $("fillArt").disabled = !c.games.length;
   if (view === "card" && !warnCount) show("games");
-  const blocked = c.menuType === "Game" || (!c.games.length && c.menuType === "None");
+  const blocked = c.menuType === "Game" || c.menuType === "Unknown" || (!c.games.length && c.menuType === "None");
   $("install").disabled = blocked;
   $("install").textContent = c.menuType === "SWIRL" ? "Update SWIRL" : "Install SWIRL";
   log(blocked ? "This card can't be updated yet (see the notes under SD card)." : c.games.length ? `Ready. ${c.games.length} games found on ${c.root}` : `Ready. ${c.root} has SWIRL but no games yet. Add them in Games.`);
@@ -1573,7 +1578,9 @@ async function runHealth() {
       <div class="stat"><span>Free</span><b class="sm">${r.totalBytes ? gb(r.freeBytes) : "?"}</b></div></div>
     <div>${(r.items || []).map(it => `<div class="hrow"><span class="dot ${it.level}"></span><span>${it.folder ? `<span class="mono">${esc(it.folder)}</span> ` : ""}${esc(it.message)}</span></div>`).join("")}</div>`;
   $("healthJunk").hidden = !(r.junkFiles || []).length;
+  $("healthGaps").hidden = !r.gaps;
 }
+$("healthGaps").onclick = () => { $("healthDlg").close(); startJob("Closing the gaps", "/api/health/gaps", { root: card.root }); };
 $("healthGo").onclick = runHealth;
 $("healthClose").onclick = () => $("healthDlg").close();
 $("healthJunk").onclick = async () => {
@@ -1713,13 +1720,19 @@ $("bkGo").onclick = () => {
 
 function renderBackups() {
   initPCBackup();
-  const list = card?.backups || [];
+  const list = Array.isArray(card?.backupList) && card.backupList.length ? card.backupList
+    : (card?.backups || []).map(b => ({ name: b, kind: b.startsWith("removed_") ? "removed" : "menu", label: "", pinned: false }));
   setCount("nBackups", list.length);
   if (!list.length) { $("backups").innerHTML = `<div class="empty">No backups yet</div>`; return; }
   $("backups").className = "";
-  $("backups").innerHTML = list.map(b => b.startsWith("removed_")
-    ? `<div class="backup"><span>${esc(b)}<br><small>Removed duplicate games</small></span><button class="btn small" data-del="${esc(b)}">Delete permanently</button></div>`
-    : `<div class="backup"><span>${esc(b)}</span><button class="btn small" data-b="${esc(b)}">Restore</button></div>`).join("");
+  $("backups").innerHTML = list.map(b => {
+    const note = b.note ? `<br><small style="color:var(--yellow)">Cannot be restored: ${esc(b.note)}</small>` : "";
+    const text = `<span>${b.pinned ? `<span class="badge ok">Original</span> ` : ""}${esc(b.name)}${b.label ? `<br><small>${esc(b.label)}</small>` : ""}${note}</span>`;
+    if (b.kind === "removed" || b.kind === "junk") return `<div class="backup">${text}<button class="btn small" data-del="${esc(b.name)}">Delete permanently</button></div>`;
+    if (b.kind === "other") return `<div class="backup">${text}</div>`;
+    const back = b.pinned ? `Go back to ${esc(b.menu || "the old menu")}` : "Restore";
+    return `<div class="backup" data-pinned="${b.pinned ? 1 : 0}">${text}<button class="btn small" data-b="${esc(b.name)}"${b.note ? " disabled" : ""}>${back}</button></div>`;
+  }).join("");
   $("backups").querySelectorAll("button[data-del]").forEach(btn => btn.onclick = async () => {
     if (!confirm(`Permanently delete ${btn.dataset.del}? The removed game copies in it will be gone for good.`)) return;
     try { await api("/api/deleteremoved", { root: card.root, name: btn.dataset.del }); log("Deleted " + btn.dataset.del, "ok"); }
@@ -1729,7 +1742,12 @@ function renderBackups() {
   $("backups").querySelectorAll("button[data-b]").forEach(btn => btn.onclick = async () => {
     if (!confirm(`Put ${btn.dataset.b} back into folder 01? The current menu will be kept as another backup.`)) return;
     try {
-      const r = await api("/api/restore", { root: card.root, backup: btn.dataset.b });
+      let r = await api("/api/restore", { root: card.root, backup: btn.dataset.b });
+      if (!r.ok && Array.isArray(r.mismatches) && r.mismatches.length) {
+        const list = r.mismatches.slice(0, 12).join("\n") + (r.mismatches.length > 12 ? `\n... and ${r.mismatches.length - 12} more` : "");
+        if (!confirm(`The game folders have changed since this menu was saved, so it would start the wrong games:\n\n${list}\n\nRestore it anyway? You can fix the list afterwards by installing SWIRL again.`)) { log("Restore cancelled: " + r.error, "err"); scan(); return; }
+        r = await api("/api/restore", { root: card.root, backup: btn.dataset.b, force: true });
+      }
       log((r.log || []).concat(r.ok ? ["Done."] : ["Error: " + r.error]), r.ok ? "ok" : "err");
     } catch (e) { log("Error: " + e.message, "err"); }
     scan();

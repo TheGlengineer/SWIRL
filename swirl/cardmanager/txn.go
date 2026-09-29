@@ -142,25 +142,15 @@ func writeCardFile(p string, b []byte) error {
 	return cardfs.SyncDir(filepath.Dir(p))
 }
 
-// menuBackupPrefix names the backup of the menu in 01. The first backup of a menu SWIRL did not build is
-// kept for good as 01_original_<menu>_<time>; the rest are 01_<time> and only the newest three stay.
-func menuBackupPrefix(root string, c *Card) string {
-	if c == nil || (c.MenuType != "openMenu" && c.MenuType != "GDMENU") {
-		return "01_"
-	}
-	for _, b := range listBackups(root) {
-		if strings.HasPrefix(b, "01_original_") {
-			return "01_"
-		}
-	}
-	return "01_original_" + strings.ToLower(c.MenuType) + "_"
-}
-
-// checkMenuBackup refuses a backup whose .gdi is missing or names a file that is not in the backup.
+// checkMenuBackup refuses a backup that is incomplete: a file its manifest lists is missing or short,
+// there is no disc image, or its .gdi names a file that is not in the backup.
 func checkMenuBackup(dir string) error {
+	if err := checkBackupComplete(dir); err != nil {
+		return err
+	}
 	gdi := findGDI(dir)
 	if gdi == "" {
-		return errors.New("that backup holds no menu disc (.gdi); nothing was changed")
+		return nil // a CDI menu
 	}
 	tracks, err := parseGDI(gdi)
 	if err != nil {

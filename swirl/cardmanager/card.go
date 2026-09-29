@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"crypto/sha1"
 	_ "embed"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"image"
@@ -65,20 +64,33 @@ type Card struct {
 	Root      string `json:"root"`
 	MenuType  string `json:"menuType"`
 	MenuTitle string `json:"menuTitle"`
-	SwirlVer  string `json:"swirlVersion"`
+	// MenuVariant names a build of openMenu that is not the stock one ("VFB", the Virtual Folder Bundle)
+	MenuVariant string `json:"menuVariant,omitempty"`
+	// MenuImage is the disc image file in 01 (disc.gdi, disc.cdi, ...) and MenuFormat its kind (GDI, CDI, MDS, CCD, ISO)
+	MenuImage  string `json:"menuImage,omitempty"`
+	MenuFormat string `json:"menuFormat,omitempty"`
+	SwirlVer   string `json:"swirlVersion"`
 	// SwirlRelease is the version SWIRL reports in About ("2.10"); empty for early builds
-	SwirlRelease string     `json:"swirlRelease,omitempty"`
-	HasBox       bool       `json:"hasBox"`
-	HasIcon      bool       `json:"hasIcon"`
-	HasMeta      bool       `json:"hasMeta"`
-	Games        []Game     `json:"games"`
-	Warnings     []string   `json:"warnings"`
-	Backups      []string   `json:"backups"`
-	Dups         []DupGroup `json:"duplicates"`
-	Sets         []DiscSet  `json:"sets"`
+	SwirlRelease string `json:"swirlRelease,omitempty"`
+	// Gaps is set when the game folder numbers skip (GDEMU stops at the first gap)
+	Gaps bool `json:"gaps,omitempty"`
+	// DatIssues names the DAT files on the menu disc the menu cannot read (wrong version, short table)
+	DatIssues []string `json:"datIssues,omitempty"`
+	HasBox    bool     `json:"hasBox"`
+	HasIcon   bool     `json:"hasIcon"`
+	HasMeta   bool     `json:"hasMeta"`
+	Games     []Game   `json:"games"`
+	Warnings  []string `json:"warnings"`
+	Backups   []string `json:"backups"`
+	// BackupList describes the same folders for the Backups page: the pinned original first
+	BackupList []BackupItem `json:"backupList"`
+	Dups       []DupGroup   `json:"duplicates"`
+	Sets       []DiscSet    `json:"sets"`
 }
 
-var folderRe = regexp.MustCompile(`^\d{2,3}$`)
+// folderRe matches a GDEMU game folder: 01..09, 10..99, 100..999, 1000..9999 (GDMENUCardManager and the
+// Virtual Folder Bundle write four digits past 999)
+var folderRe = regexp.MustCompile(`^\d{2,4}$`)
 
 func swirlHash(b []byte) string {
 	h := sha1.Sum(b)
@@ -93,20 +105,21 @@ func openMenuProduct(serial string) string {
 	return s
 }
 
-// datIDs reads the ID table of a DAT file held inside the menu disc.
-func datIDs(d sectorReader, f isoFile) map[string]bool {
+// datIDs reads the ID table of a DAT file held inside the menu disc. A file the menu cannot read gives
+// no IDs and an error saying why.
+func datIDs(d sectorReader, f isoFile) (map[string]bool, error) {
 	ids := map[string]bool{}
 	hdr, err := d.readSectors(f.LBA, 1)
-	if err != nil || string(hdr[0:3]) != "DAT" {
-		return ids
+	if err != nil {
+		return ids, err
 	}
-	n := int(binary.LittleEndian.Uint32(hdr[8:]))
-	if n <= 0 || n > 100000 {
-		return ids
+	_, n, err := checkDatHeader(hdr, int64(f.Size))
+	if err != nil {
+		return ids, err
 	}
 	b, err := d.readSectors(f.LBA, (16+16*n+sectorSize-1)/sectorSize)
 	if err != nil {
-		return ids
+		return ids, err
 	}
 	for i := 0; i < n; i++ {
 		rec := b[16+16*i : 16+16*i+12]
@@ -115,7 +128,7 @@ func datIDs(d sectorReader, f isoFile) map[string]bool {
 		}
 		ids[string(rec)] = true
 	}
-	return ids
+	return ids, nil
 }
 
 func readText(path string) string {
@@ -153,42 +166,50 @@ func ScanCard(root string) (*Card, error) {
 		}
 	}
 	fixed = append(fixed, hiddenFolderWarnings(root)...)
-	c := &Card{Root: root, MenuType: "None", Backups: listBackups(root), Warnings: fixed}
+	c := &Card{Root: root, MenuType: "None", Backups: listBackups(root), BackupList: listBackupItems(root), Warnings: fixed}
 	var boxIDs, iconIDs, metaIDs, vmuIDs map[string]bool
 	edits := loadEdits(root)
 
-	// menu disc in 01
-	gdi := findGDI(filepath.Join(root, "01"))
-	if gdi != "" {
-		if d, err := openGDI(gdi); err == nil {
-			if b, err := d.readSectors(d.highDensityStart(), 1); err == nil {
-				if ip, ok := parseIP(b); ok {
-					c.MenuTitle = ip.Name
-					switch {
-					case strings.Contains(ip.Name, "openMenu"):
-						c.MenuType = "openMenu"
-					case strings.Contains(strings.ToUpper(ip.Name), "GDMENU"):
-						c.MenuType = "GDMENU"
-					default:
-						c.MenuType = "Game"
-					}
-				}
-			}
-			if c.MenuType == "openMenu" {
+	// menu disc in 01: any image is looked at, so a game or an unknown menu is named for what it is
+	menuDir := filepath.Join(root, "01")
+	if img := menuImageIn01(menuDir); img != "" {
+		c.MenuImage, c.MenuFormat = img, imageFormat(img)
+		ip, _, err := readImageIP(menuDir)
+		switch {
+		case err != nil || ip == nil:
+			c.MenuType = "Unknown"
+			c.Warnings = append(c.Warnings, fmt.Sprintf("Folder 01 holds %s, a disc image whose header cannot be read (%v). SWIRL cannot be installed until it is moved to a later folder.", img, err))
+		default:
+			c.MenuTitle = ip.Name
+			c.MenuType = menuTypeFromIP(ip)
+		}
+		if c.MenuType == "openMenu" {
+			if d, err := openGameDisc(menuDir); err == nil {
 				if files, err := listISO(d); err == nil {
+					dat := func(f isoFile) map[string]bool {
+						ids, err := datIDs(d, f)
+						if err != nil {
+							c.DatIssues = append(c.DatIssues, fmt.Sprintf("%s on the menu disc cannot be read (%v). The menu shows nothing from it; SWIRL keeps the file as it is when the menu is rebuilt.", strings.ToUpper(f.Path), err))
+						}
+						return ids
+					}
 					for _, f := range files {
 						switch strings.ToUpper(f.Path) {
 						case "BOX.DAT":
 							c.HasBox = true
-							boxIDs = datIDs(d, f)
+							boxIDs = dat(f)
 						case "ICON.DAT":
 							c.HasIcon = true
-							iconIDs = datIDs(d, f)
+							iconIDs = dat(f)
 						case "META.DAT":
 							c.HasMeta = true
-							metaIDs = datIDs(d, f)
+							metaIDs = dat(f)
 						case "VMU.DAT":
-							vmuIDs = datIDs(d, f)
+							vmuIDs = dat(f)
+						case "SHOT.DAT":
+							dat(f)
+						case "FOLDRART.DAT", "DEFAULTS.INI": // only the Virtual Folder Bundle puts these on the disc
+							c.MenuVariant = "VFB"
 						case "1ST_READ.BIN":
 							if b, err := d.readSectors(f.LBA, (f.Size+sectorSize-1)/sectorSize); err == nil {
 								b = b[:f.Size]
@@ -201,19 +222,26 @@ func ScanCard(root string) (*Card, error) {
 						}
 					}
 				}
+				d.Close()
 			}
-			d.Close()
 		}
 	}
-	if c.MenuType == "Game" {
-		c.Warnings = append(c.Warnings, "Folder 01 holds a game, not a menu. Move it to a later folder first.")
+	c.Warnings = append(c.Warnings, c.DatIssues...)
+	switch c.MenuType {
+	case "Game":
+		c.Warnings = append(c.Warnings, fmt.Sprintf("Folder 01 holds a game, not a menu: %s (%s). Move it to a later folder first.", c.MenuTitle, c.MenuImage))
+	case "Menu":
+		c.Warnings = append(c.Warnings, fmt.Sprintf("Folder 01 holds a menu SWIRL does not know, %s (%s). Installing SWIRL keeps it in Backups.", c.MenuTitle, c.MenuImage))
 	}
 
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return nil, err
 	}
+	vfbDB := readVFBDatabase(root)
+	editsMoved := false
 	var nums []int
+	byNum := map[int]string{}
 	for _, e := range entries {
 		if !e.IsDir() || !folderRe.MatchString(e.Name()) {
 			continue
@@ -222,15 +250,17 @@ func ScanCard(root string) (*Card, error) {
 		if n <= 1 {
 			continue
 		}
+		if first, dup := byNum[n]; dup { // 02 and 002 are both folder 2; GDEMU reads one of them
+			c.Warnings = append(c.Warnings, fmt.Sprintf("Folders %s and %s are both number %d. GDEMU reads only one of them; rename or remove one.", first, e.Name(), n))
+			continue
+		}
+		byNum[n] = e.Name()
 		nums = append(nums, n)
 	}
 	sort.Ints(nums)
 	gapWarned := false
 	for i, n := range nums {
-		folder := fmt.Sprintf("%02d", n)
-		if _, err := os.Stat(filepath.Join(root, folder)); err != nil {
-			folder = strconv.Itoa(n)
-		}
+		folder := byNum[n]
 		g := Game{Folder: folder, Slot: n, Disc: "1/1", Region: "JUE", Version: "V1.000", Date: "20000101", VGA: true}
 		dir := filepath.Join(root, folder)
 		ip, format, err := readImageIP(dir)
@@ -238,8 +268,12 @@ func ScanCard(root string) (*Card, error) {
 		if err != nil {
 			g.Error = err.Error()
 		}
+		raw := ""
 		if ip != nil {
 			g.Name, g.Product, g.Region, g.Disc, g.Version, g.Date, g.VGA = ip.Name, openMenuProduct(ip.Product), ip.Region, ip.Disc, ip.Version, ip.Date, ip.VGA
+			// the code the menu will use (a few discs carry another game's code, see assets/serials.tsv)
+			raw = g.Product
+			g.Product = fixSerial(g.Product, ip.Date, ip.Name)
 			if e := vgaPatchFor(ip.Product, ip.Version); e != nil {
 				g.VGABy = e.Author
 				g.VGAState = "patch"
@@ -255,13 +289,31 @@ func ScanCard(root string) (*Card, error) {
 			g.Name = folder
 		}
 		if s := readText(filepath.Join(dir, "serial.txt")); s != "" {
-			g.Product = openMenuProduct(s)
+			raw = openMenuProduct(s)
+			g.Product = fixSerial(raw, g.Date, g.Name)
+		}
+		// edits saved under the raw code by an older Card Manager belong to this game
+		if e := edits.Games[folder]; e != nil && raw != "" && e.Product == raw && raw != g.Product {
+			e.Product = g.Product
+			editsMoved = true
 		}
 		if name := readText(filepath.Join(dir, "name.txt")); name != "" {
 			g.Name, g.Custom = name, true
 		}
 		if g.Name == "" {
 			g.Name = "Folder " + folder
+		}
+		// the Virtual Folder Bundle's type.txt and disc.txt (an audio CD as "other", a disc number the header has wrong)
+		if x := readVFBExtras(dir, vfbDB[folder]); x.Type != "" || x.Disc != "" {
+			if x.Type != "" {
+				g.Type = x.Type
+				if x.Type == "other" {
+					g.Error = ""
+				}
+			}
+			if x.Disc != "" {
+				g.Disc = x.Disc
+			}
 		}
 		if e := edits.Games[folder]; e != nil && e.Product == g.Product {
 			g.Edited = true
@@ -286,7 +338,10 @@ func ScanCard(root string) (*Card, error) {
 		c.Games = append(c.Games, g)
 		if n != i+2 && !gapWarned {
 			gapWarned = true
-			c.Warnings = append(c.Warnings, fmt.Sprintf("Folder numbers skip a number before %s. GDEMU expects 02, 03, 04 ... with no gaps; renumber with GDMENUCardManager.", folder))
+			c.Warnings = append(c.Warnings, fmt.Sprintf("Folder numbers skip a number before %s. GDEMU expects 02, 03, 04 ... with no gaps and stops at the first one; Close the gaps (under Health and preview) renumbers the folders.", folder))
+		}
+		if n != i+2 {
+			c.Gaps = true
 		}
 	}
 	for i := range c.Games {
@@ -300,6 +355,12 @@ func ScanCard(root string) (*Card, error) {
 			g.Suggested = sg
 		}
 	}
+	if editsMoved { // written when the card is not being written to; the next scan tries again otherwise
+		if unlock, ok := tryLockCard(root, "Scan"); ok {
+			edits.save()
+			unlock()
+		}
+	}
 	c.Sets = findDiscSets(c.Games)
 	c.Dups = findDuplicates(root, c.Games)
 	// empty lists, not null, for the web page (a new card has no games yet)
@@ -311,6 +372,9 @@ func ScanCard(root string) (*Card, error) {
 	}
 	if c.Backups == nil {
 		c.Backups = []string{}
+	}
+	if c.BackupList == nil {
+		c.BackupList = []BackupItem{}
 	}
 	if c.Dups == nil {
 		c.Dups = []DupGroup{}
@@ -337,25 +401,64 @@ func findGDI(dir string) string {
 	return ""
 }
 
+// imageExtOrder is the order a folder's disc image is picked in when it holds more than one file.
+var imageExtOrder = []string{".gdi", ".cdi", ".mds", ".ccd", ".iso"}
+
+// menuImageIn01 names the disc image file in the menu folder ("" when there is none).
+func menuImageIn01(dir string) string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	for _, ext := range imageExtOrder {
+		for _, e := range entries {
+			if !e.IsDir() && !isJunk(e.Name()) && strings.EqualFold(filepath.Ext(e.Name()), ext) {
+				return e.Name()
+			}
+		}
+	}
+	return ""
+}
+
+func imageFormat(name string) string {
+	return strings.ToUpper(strings.TrimPrefix(filepath.Ext(name), "."))
+}
+
+// menuTypeFromIP says what a disc in 01 is from its header: a menu SWIRL knows, one it does not, or a game.
+func menuTypeFromIP(ip *ipInfo) string {
+	switch {
+	case strings.Contains(ip.Name, "openMenu"):
+		return "openMenu"
+	case strings.Contains(strings.ToUpper(ip.Name), "GDMENU"):
+		return "GDMENU"
+	case strings.Contains(strings.ToUpper(ip.Name), "MENU"):
+		return "Menu"
+	}
+	return "Game"
+}
+
+// iniEntry writes one game's lines. extra[0] is the type line (SWIRL reads it; stock openMenu ignores
+// unknown keys), extra[1] any lines carried over from the old menu's list, already terminated.
 func iniEntry(b *strings.Builder, slot int, name, disc string, vga bool, region, version, date, product string, extra ...string) {
 	v := "0"
 	if vga {
 		v = "1"
 	}
 	s := fmt.Sprintf("%02d", slot)
-	fmt.Fprintf(b, "%s.name=%s\r\n%s.disc=%s\r\n%s.vga=%s\r\n%s.region=%s\r\n%s.version=%s\r\n%s.date=%s\r\n%s.product=%s\r\n\r\n",
+	fmt.Fprintf(b, "%s.name=%s\r\n%s.disc=%s\r\n%s.vga=%s\r\n%s.region=%s\r\n%s.version=%s\r\n%s.date=%s\r\n%s.product=%s\r\n",
 		s, name, s, disc, s, v, s, region, s, version, s, date, s, product)
 	if len(extra) > 0 && extra[0] != "" {
-		// the type line goes with the entry (SWIRL reads it; stock openMenu ignores unknown keys)
-		out := b.String()
-		out = strings.TrimSuffix(out, "\r\n")
-		b.Reset()
-		b.WriteString(out)
-		fmt.Fprintf(b, "%s.type=%s\r\n\r\n", s, extra[0])
+		fmt.Fprintf(b, "%s.type=%s\r\n", s, extra[0])
 	}
+	if len(extra) > 1 {
+		b.WriteString(extra[1])
+	}
+	b.WriteString("\r\n")
 }
 
-func buildINI(c *Card, menuIP *ipInfo) string {
+// buildINI writes OPENMENU.INI. legacy, when the card had another menu before, holds the keys of that
+// menu's list SWIRL does not know; they are written back so nothing is lost.
+func buildINI(c *Card, menuIP *ipInfo, legacy *legacyINI) string {
 	var b strings.Builder
 	max := 1
 	for _, g := range c.Games {
@@ -363,11 +466,11 @@ func buildINI(c *Card, menuIP *ipInfo) string {
 			max = g.Slot
 		}
 	}
-	fmt.Fprintf(&b, "[OPENMENU]\r\nnum_items=%d\r\n\r\n[ITEMS]\r\n", max)
+	fmt.Fprintf(&b, "[OPENMENU]\r\nnum_items=%d\r\n%s\r\n[ITEMS]\r\n", max, legacy.headerLines())
 	iniEntry(&b, 1, "openMenu", "1/1", true, "JUE", menuIP.Version, menuIP.Date, openMenuProduct(menuIP.Product))
 	for _, g := range c.Games {
 		name := strings.ReplaceAll(strings.ReplaceAll(g.Name, "\r", " "), "\n", " ")
-		iniEntry(&b, g.Slot, name, g.Disc, g.VGA, g.Region, g.Version, g.Date, g.Product, g.Type)
+		iniEntry(&b, g.Slot, name, g.Disc, g.VGA, g.Region, g.Version, g.Date, g.Product, g.Type, legacy.legacyLines(fmt.Sprintf("%02d", g.Slot), g.Product))
 	}
 	return b.String()
 }
@@ -421,10 +524,21 @@ func buildMenuImageInto(root, datDir string, allowEmpty bool, log Logger) (strin
 	if c.MenuType == "Game" {
 		return "", "", nil, errors.New("folder 01 holds a game, not a menu; nothing was changed")
 	}
+	if c.MenuType == "Unknown" {
+		return "", "", nil, fmt.Errorf("folder 01 holds %s, a disc image that cannot be read; move it to a later folder first. Nothing was changed", c.MenuImage)
+	}
 	if len(c.Games) == 0 && !allowEmpty {
 		return "", "", nil, errors.New("no game folders (02, 03, ...) were found on this card")
 	}
 	log("Found %d games", len(c.Games))
+	// the first install over another menu keeps what that menu's list knew
+	if changed, err := importOldMenuList(root, c, log); err != nil {
+		log("The old menu's list could not be read: %v", err)
+	} else if changed {
+		if c, err = ScanCard(root); err != nil {
+			return "", "", nil, err
+		}
+	}
 
 	work, err := os.MkdirTemp("", "swirl_")
 	if err != nil {
@@ -440,8 +554,8 @@ func buildMenuImageInto(root, datDir string, allowEmpty bool, log Logger) (strin
 	menuIP := &ipInfo{Name: "openMenu", Version: "V1.000", Date: time.Now().Format("20060102"), Product: "SWIRL_1"}
 	ipBytes := fallbackIP
 	menuDir := filepath.Join(root, "01")
-	if gdi := findGDI(menuDir); gdi != "" && (c.MenuType == "openMenu" || c.MenuType == "SWIRL") {
-		d, err := openGDI(gdi)
+	if c.MenuType == "openMenu" || c.MenuType == "SWIRL" {
+		d, err := openGameDisc(menuDir)
 		if err != nil {
 			return work, "", nil, err
 		}
@@ -471,6 +585,7 @@ func buildMenuImageInto(root, datDir string, allowEmpty bool, log Logger) (strin
 	} else {
 		log("No openMenu disc in 01 yet; building a fresh menu")
 	}
+	carryGDMENUFiles(root, c, data, log)
 	if datDir != "" {
 		for _, name := range []string{"BOX.DAT", "ICON.DAT", "META.DAT", "BOX_EX.DAT", "ICON_EX.DAT"} {
 			src := filepath.Join(datDir, name)
@@ -500,6 +615,9 @@ func buildMenuImageInto(root, datDir string, allowEmpty bool, log Logger) (strin
 	if err := applyEdits(root, c, data, log); err != nil {
 		return work, "", nil, err
 	}
+	if err := importVFBFolders(root, c, log); err != nil {
+		log("%v", err)
+	}
 	if err := addExtras(root, c, data, log); err != nil {
 		return work, "", nil, err
 	}
@@ -514,7 +632,7 @@ func buildMenuImageInto(root, datDir string, allowEmpty bool, log Logger) (strin
 	if err := os.WriteFile(filepath.Join(data, "1ST_READ.BIN"), bin, 0o644); err != nil {
 		return work, "", nil, err
 	}
-	ini := buildINI(c, menuIP)
+	ini := buildINI(c, menuIP, loadLegacyINI(root))
 	for _, f := range []struct{ path, text string }{
 		{filepath.Join(data, "OPENMENU.INI"), ini},
 		{filepath.Join(low, "OPENMENU.INI"), ini},
@@ -554,16 +672,27 @@ func installSwirl(root, datDir string, allowEmpty bool, log Logger) error {
 		return err
 	}
 	if backup != "" {
+		if err := writeBackupManifest(root, backup, c, ""); err != nil {
+			log("The backup's manifest could not be written: %v", err)
+		}
 		log("Backed up the old menu to %s", filepath.Join(backupDir, filepath.Base(backup)))
 	}
 	pruneMenuBackups(root, 3)
+	if err := syncDiscDB(root, c, log); err != nil {
+		log("%v", err)
+	}
 	log("SWIRL installed in folder 01. Game folders were not changed.")
 	return nil
 }
 
 // RestoreBackup puts a copy of a saved menu into 01, keeping the current one as another backup. The saved
-// menu stays in SWIRL_BACKUP.
+// menu stays in SWIRL_BACKUP. A backup whose files are incomplete is refused, and so is one whose game
+// list no longer matches the folders (a *restoreMismatch) unless force is set.
 func RestoreBackup(root, name string, log Logger) error {
+	return RestoreBackupForce(root, name, false, log)
+}
+
+func RestoreBackupForce(root, name string, force bool, log Logger) error {
 	if strings.ContainsAny(name, `/\`) || name == "" || name == "." || name == ".." {
 		return errors.New("bad backup name")
 	}
@@ -576,6 +705,17 @@ func RestoreBackup(root, name string, log Logger) error {
 	}
 	if err := checkMenuBackup(src); err != nil {
 		return err
+	}
+	c, err := ScanCard(root)
+	if err != nil {
+		return err
+	}
+	m := readBackupManifest(src)
+	if lines := slotMismatches(m, c); len(lines) > 0 {
+		if !force {
+			return &restoreMismatch{Lines: lines}
+		}
+		log("Restoring anyway: %s", strings.Join(lines, "; "))
 	}
 	var names []string
 	entries, err := os.ReadDir(src)
@@ -599,6 +739,9 @@ func RestoreBackup(root, name string, log Logger) error {
 		return err
 	}
 	if keep != "" {
+		if err := writeBackupManifest(root, keep, c, "Restore of "+name); err != nil {
+			log("The backup's manifest could not be written: %v", err)
+		}
 		log("Current menu saved as %s", filepath.Base(keep))
 	}
 	log("Restored %s into folder 01; the backup stays in %s", name, backupDir)
@@ -742,15 +885,20 @@ func findDataFile(dir, name string) string {
 	return ""
 }
 
-func loadOrNewDat(dir, name string, chunk int) (*datFile, string) {
+// loadOrNewDat loads a DAT file from the menu data folder, or starts an empty one when there is none. A
+// file that cannot be read is kept exactly as it is: ok is false, nothing is merged into it, and the
+// log says so (the art it holds is still on the disc for a reader that can parse it).
+func loadOrNewDat(dir, name string, chunk int, log Logger) (d *datFile, path string, ok bool) {
 	p := findDataFile(dir, name)
-	if p != "" {
-		if d, err := readDat(p); err == nil {
-			return d, p
-		}
-		os.Remove(p)
+	if p == "" {
+		return newDat(chunk), filepath.Join(dir, name), true
 	}
-	return newDat(chunk), filepath.Join(dir, name)
+	d, err := readDat(p)
+	if err != nil {
+		log("%s on the current menu cannot be read (%v); it was kept as it is and nothing was added to it", name, err)
+		return nil, p, false
+	}
+	return d, p, true
 }
 
 // applyEdits merges the SWIRL/ edits into META.DAT, BOX.DAT, ICON.DAT and VMU.DAT in the menu data folder.
@@ -772,8 +920,7 @@ func applyEdits(root string, c *Card, data string, log Logger) error {
 			vmuSet = append(vmuSet, g)
 		}
 	}
-	if len(metaSet) > 0 {
-		d, p := loadOrNewDat(data, "META.DAT", metaSize)
+	if d, p, ok := loadOrNewDat(data, "META.DAT", metaSize, log); len(metaSet) > 0 && ok {
 		for _, g := range metaSet {
 			d.Set(g.Product, encodeMeta(*edits.Games[g.Folder].Meta))
 		}
@@ -783,8 +930,8 @@ func applyEdits(root string, c *Card, data string, log Logger) error {
 		log("Saved info for %d games", len(metaSet))
 	}
 	if len(boxSet) > 0 {
-		box, bp := loadOrNewDat(data, "BOX.DAT", 131104)
-		icon, ip := loadOrNewDat(data, "ICON.DAT", 32800)
+		box, bp, boxOK := loadOrNewDat(data, "BOX.DAT", 131104, log)
+		icon, ip, iconOK := loadOrNewDat(data, "ICON.DAT", 32800, log)
 		n := 0
 		for _, g := range boxSet {
 			f, err := os.Open(artPath(root, g.Folder, "box"))
@@ -796,20 +943,29 @@ func applyEdits(root string, c *Card, data string, log Logger) error {
 			if err != nil {
 				continue
 			}
-			box.Set(g.Product, encodePVR565(img, 256))
-			icon.Set(g.Product, encodePVR565(img, 128))
+			if boxOK {
+				box.Set(g.Product, encodePVR565(img, 256))
+			}
+			if iconOK {
+				icon.Set(g.Product, encodePVR565(img, 128))
+			}
 			n++
 		}
-		if err := box.Write(bp); err != nil {
-			return err
+		if boxOK {
+			if err := box.Write(bp); err != nil {
+				return err
+			}
 		}
-		if err := icon.Write(ip); err != nil {
-			return err
+		if iconOK {
+			if err := icon.Write(ip); err != nil {
+				return err
+			}
 		}
-		log("Saved box art for %d games", n)
+		if boxOK || iconOK {
+			log("Saved box art for %d games", n)
+		}
 	}
-	if len(vmuSet) > 0 {
-		d, p := loadOrNewDat(data, "VMU.DAT", vmuBytes)
+	if d, p, ok := loadOrNewDat(data, "VMU.DAT", vmuBytes, log); len(vmuSet) > 0 && ok {
 		for _, g := range vmuSet {
 			if b, err := os.ReadFile(artPath(root, g.Folder, "vmu")); err == nil && len(b) == vmuBytes {
 				d.Set(g.Product, b)
@@ -1072,19 +1228,6 @@ func FillFromDiscs(root string, log Logger) (int, error) {
 		n++
 	}
 	return n, nil
-}
-
-// pruneMenuBackups keeps the newest few automatic menu backups so the card does not fill up.
-func pruneMenuBackups(root string, keep int) {
-	var auto []string
-	for _, b := range listBackups(root) { // newest first
-		if strings.HasPrefix(b, "01_2") {
-			auto = append(auto, b)
-		}
-	}
-	for i := keep; i < len(auto); i++ {
-		cardfs.RemoveAll(filepath.Join(root, backupDir, auto[i]))
-	}
 }
 
 // addExtras puts the owner's collections, screenshots and menu music on the menu disc.

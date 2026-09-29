@@ -26,6 +26,7 @@ type HealthReport struct {
 	Games       int          `json:"games"`
 	Items       []HealthItem `json:"items"`
 	JunkFiles   []string     `json:"junkFiles"`
+	Gaps        bool         `json:"gaps"` // folder numbers skip; CloseGaps fixes it
 	CheckedTime string       `json:"checked"`
 }
 
@@ -100,21 +101,30 @@ func CheckCard(root string) (*HealthReport, error) {
 	case "None":
 		add("error", "01", "There is no menu in folder 01, so GDEMU will boot the first game instead")
 	case "Game":
-		add("error", "01", "Folder 01 holds a game, not a menu")
+		add("error", "01", "Folder 01 holds a game, not a menu: %s (%s)", c.MenuTitle, c.MenuImage)
+	case "Unknown":
+		add("error", "01", "Folder 01 holds %s, a disc image whose header cannot be read", c.MenuImage)
+	case "Menu":
+		add("warn", "01", "Folder 01 has a menu SWIRL does not know, %s (%s), not SWIRL", c.MenuTitle, c.MenuImage)
 	default:
 		add("warn", "01", "Folder 01 has %s, not SWIRL", c.MenuType)
+	}
+
+	for _, w := range c.DatIssues {
+		add("warn", "01", "%s", w)
 	}
 
 	// folders
 	nums := numberedFolders(root)
 	for i, n := range nums {
 		if n != i+2 {
-			add("warn", folderName(root, n), "Folder numbers skip before this one; GDEMU stops at the first gap")
+			r.Gaps = true
+			add("warn", folderName(root, n), "Folder numbers skip before this one; GDEMU stops at the first gap. Close the gaps renumbers the folders (the menu is rebuilt)")
 			break
 		}
 	}
-	if len(nums) > 998 {
-		add("error", "", "GDEMU supports up to 999 folders")
+	if len(nums) > 9998 {
+		add("error", "", "GDEMU supports up to 9999 folders")
 	}
 	entries, _ := os.ReadDir(root)
 	for _, e := range entries {
@@ -181,10 +191,29 @@ func CheckCard(root string) (*HealthReport, error) {
 	if len(c.Dups) > 0 {
 		add("warn", "", "%d games are on the card more than once (see Remove extra copies)", len(c.Dups))
 	}
+	for _, p := range discDBProblems(root, c) {
+		add("warn", "", "%s", p)
+	}
 	if len(r.JunkFiles) > 0 {
 		add("warn", "", "%d leftover system files (like ._ files from a Mac). They can confuse GDEMU", len(r.JunkFiles))
 	}
 	return r, nil
+}
+
+// StartCloseGaps renumbers the game folders so there are no gaps and rebuilds the menu.
+func StartCloseGaps(root string) error {
+	return runJob(root, "Closing the gaps", "Done. Put the card back in your GDEMU.", func() error {
+		n, err := renumber(root, jobLog)
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			jobLog("The folder numbers have no gaps.")
+			return nil
+		}
+		jobUpdate(func(j *jobState) { j.Stage, j.Pct = "Rebuilding the menu", 0.5 })
+		return installSwirl(root, "", true, jobLog)
+	})
 }
 
 // RemoveJunk moves the leftover system files into SWIRL_BACKUP/junk_<time>.
