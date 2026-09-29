@@ -39,14 +39,19 @@ type Game struct {
 	Version string `json:"version"`
 	Date    string `json:"date"`
 	VGA     bool   `json:"vga"`
-	Format  string `json:"format"`
-	Type    string `json:"type,omitempty"` // "psx" for PlayStation discs (run through Bleem)
-	HasArt  bool   `json:"hasArt"`
-	HasMeta bool   `json:"hasMeta"`
-	HasVMU  bool   `json:"hasVmu"`
-	Edited  bool   `json:"edited"`
-	Shots   int    `json:"shots"`
-	Error   string `json:"error,omitempty"`
+	// VGAState: "" (as the VGA flag says), "patch" (the game has no VGA mode and a patch is known),
+	// "patched" (that patch is applied), "skipped" (the owner removed it, so it is not applied again by
+	// itself). VGABy names the patch author.
+	VGAState string `json:"vgaState,omitempty"`
+	VGABy    string `json:"vgaBy,omitempty"`
+	Format   string `json:"format"`
+	Type     string `json:"type,omitempty"` // "psx" for PlayStation discs (run through Bleem)
+	HasArt   bool   `json:"hasArt"`
+	HasMeta  bool   `json:"hasMeta"`
+	HasVMU   bool   `json:"hasVmu"`
+	Edited   bool   `json:"edited"`
+	Shots    int    `json:"shots"`
+	Error    string `json:"error,omitempty"`
 	// proper name when the current one could be better ("" otherwise)
 	Suggested string `json:"suggested,omitempty"`
 	UserName  bool   `json:"userName,omitempty"`
@@ -235,6 +240,15 @@ func ScanCard(root string) (*Card, error) {
 		}
 		if ip != nil {
 			g.Name, g.Product, g.Region, g.Disc, g.Version, g.Date, g.VGA = ip.Name, openMenuProduct(ip.Product), ip.Region, ip.Disc, ip.Version, ip.Date, ip.VGA
+			if e := vgaPatchFor(ip.Product, ip.Version); e != nil {
+				g.VGABy = e.Author
+				g.VGAState = "patch"
+				if vgaUndoFile(root, folder) != "" {
+					g.VGAState = "patched"
+				} else if vgaSkipped(root, folder) {
+					g.VGAState = "skipped"
+				}
+			}
 		} else if serial, ok := detectPSX(dir); ok {
 			g.Type, g.Format, g.Error, g.Region = "psx", "PSX", "", "U"
 			g.Product = serial

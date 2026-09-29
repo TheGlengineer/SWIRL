@@ -218,6 +218,56 @@ func serve() {
 		}
 		writeJSON(w, LoadUIPrefs())
 	}))
+	mux.HandleFunc("/api/vga/patch", guard(func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Root, Folder string }
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || !folderRe.MatchString(req.Folder) {
+			fail(w, errors.New("bad request"))
+			return
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		rep, err := applyCatalogVGAPatch(req.Root, filepath.Join(req.Root, req.Folder), false)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, rep)
+	}))
+	mux.HandleFunc("/api/vga/unpatch", guard(func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Root, Folder string }
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || !folderRe.MatchString(req.Folder) {
+			fail(w, errors.New("bad request"))
+			return
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		undo := vgaUndoFile(req.Root, filepath.Join(req.Root, req.Folder))
+		if undo == "" {
+			fail(w, errors.New("no patch is applied to this game"))
+			return
+		}
+		rep, err := undoDCP(req.Root, filepath.Join(req.Root, req.Folder), undo)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, rep)
+	}))
+	mux.HandleFunc("/api/vga/fix", guard(func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Root string }
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			fail(w, err)
+			return
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		res, err := vgaFixCard(req.Root)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, res)
+	}))
 	mux.HandleFunc("/api/fillart", guard(func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Root string }
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -899,6 +949,7 @@ func main() {
 	unpatch := flag.String("unpatch", "", "take a patch off again from its undo file: -root <card> -folder <NN> -unpatch <file.undo>")
 	dryRun := flag.Bool("dry-run", false, "with -patch or -vga-patch: only report what would change")
 	vgaPatch := flag.Bool("vga-patch", false, "apply the catalog's VGA patch to a game that has one: -root <card> -folder <NN> -vga-patch [-dry-run]")
+	vgaFix := flag.Bool("vga-fix-all", false, "apply the catalog's VGA patch to every game on the card that has one: -root <card> -vga-fix-all [-dry-run]")
 	vgaStatus := flag.Bool("vga-status", false, "list every game's VGA support and whether a patch is available or applied: -root <card> -vga-status")
 	flag.Parse()
 	if *waitPID > 0 {
@@ -983,6 +1034,15 @@ func main() {
 		}
 		out, _ := json.MarshalIndent(rep, "", "  ")
 		fmt.Println(string(out))
+	case *root != "" && *vgaFix:
+		rows, err := vgaFixAll(*root, *dryRun)
+		if err != nil {
+			fmt.Println("error:", err)
+			os.Exit(1)
+		}
+		for _, r := range rows {
+			fmt.Println(r)
+		}
 	case *root != "" && *vgaStatus:
 		rows, err := vgaStatusReport(*root)
 		if err != nil {

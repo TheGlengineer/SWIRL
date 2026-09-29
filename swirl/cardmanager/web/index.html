@@ -269,6 +269,9 @@ dialog::backdrop{background:rgba(3,5,10,.72)}
 .fields .fnote{grid-column:1/-1;display:flex;gap:.55rem;align-items:flex-start;margin:-.2rem 0 0;padding:.6rem .75rem;border-radius:.6rem;background:var(--field);border:1px solid var(--line2);color:var(--dim);font-size:.84rem;line-height:1.45}
 .fields .fnote svg{width:1.05rem;height:1.05rem;flex:none;margin-top:.1rem;stroke:var(--orange);fill:none;stroke-width:1.8;stroke-linecap:round}
 .fields .fnote b{color:var(--text)}
+.fields .fnote.vgapatch{flex-wrap:wrap;align-items:center}
+.fields .fnote.vgapatch span{flex:1 1 20rem}
+td.c-flag.warnflag{color:var(--orange);font-weight:600}
 .fields label.inline{flex-direction:row;align-items:center;gap:.5rem;color:var(--text);font-weight:400;font-size:.9rem}
 .fields .wide{grid-column:1/-1}
 .fields input[type=text],.fields input[type=number],.fields select,.fields textarea{font-size:.9rem;font-weight:400}
@@ -800,6 +803,12 @@ kbd{font-family:Barlow,sans-serif;font-size:.78rem;font-weight:600;color:var(--t
 
       <section class="abcard abwide"><h4><svg><use href="#i-gdemu"/></svg>Region, VGA and boot options</h4>
         <p>Every game boots region free and in VGA, with nothing changed on the card. To set one game differently, open it on the Dreamcast and press <b>X</b> for <b>Options</b>: Region (game default, Japan, USA, Europe), Video (Force VGA or game default) and Boot (straight in, boot animation, SEGA screen). The choice is saved for that game.</p>
+        <p><b>Games with no VGA mode.</b> A few games (Hydro Thunder is one) have no VGA output of their own: over a VGA cable they reach the SEGA screen and then the display shows nothing. Card Manager carries community patches that add VGA to those games and can apply them in place, with an undo. Tell it how your Dreamcast is connected:</p>
+        <div class="row" style="gap:1rem;flex-wrap:wrap">
+          <label class="inline"><input type="radio" name="abOut" value="vga"> VGA cable: patch these games for me automatically</label>
+          <label class="inline"><input type="radio" name="abOut" value="tv"> TV (composite, S-Video, RGB SCART): leave games as they are</label>
+        </div>
+        <p class="hint tight" id="abOutNote"></p>
       </section>
 
       <section class="abcard abwide"><h4><svg><use href="#i-coll"/></svg>Credits</h4><div class="abcredits">
@@ -875,7 +884,8 @@ kbd{font-family:Barlow,sans-serif;font-size:.78rem;font-weight:600;color:var(--t
       <label>VMU blocks<input type="number" id="fVmu" min="0" max="200"></label>
       <label>Online<select id="fNet"><option value="0">None</option><option value="1">Modem</option><option value="2">Broadband adapter</option><option value="3">Modem or broadband</option></select></label>
       <label class="wide inline"><input type="checkbox" id="fVga"> Show the VGA tag in the menu</label>
-      <p class="wide fnote"><svg><use href="#i-info"/></svg><span>Region and VGA here only change what SWIRL shows. Every game already boots region free and in VGA. To change how one game starts (region, VGA or boot screens), open it on the Dreamcast and press <b>X</b> for <b>Options</b>.</span></p>
+      <div class="wide fnote vgapatch" id="fVgaPatch" hidden><svg><use href="#i-info"/></svg><span id="fVgaPatchText"></span><button type="button" class="btn small" id="fVgaApply">Apply VGA patch</button><button type="button" class="btn small" id="fVgaRemove">Remove VGA patch</button></div>
+      <p class="wide fnote"><svg><use href="#i-info"/></svg><span>Region and VGA here only change what SWIRL shows. Every game boots region free and in VGA unless you change it on the Dreamcast (press <b>X</b> on a game for <b>Options</b>). A game with no VGA mode of its own needs a patch to show a picture over a VGA cable; when one is known, it is offered above.</span></p>
       <label class="wide">Genres<div class="checks" id="fGenres"></div></label>
       <label class="wide">Accessories<div class="checks" id="fAcc"></div></label>
       <label class="wide">Description <span class="count" id="fDescCount"></span><textarea id="fDesc" maxlength="375"></textarea></label>
@@ -984,6 +994,7 @@ async function scan() {
     ${!c.hasBox && !c.hasIcon && c.games.length ? `<div class="warn">No box art files on the card yet. Add them in Art and info, or SWIRL will show colored placeholders.</div>` : ""}`;
   renderGames();
   if ($("dedupe")) $("dedupe").onclick = dedupe;
+  vgaAfterScan();
   setNav(true);
   setCount("nGames", c.games.length);
   $("cardFlag").hidden = !warnCount;
@@ -1005,9 +1016,45 @@ async function scan() {
   loadLogo();
 }
 
-let order = null, dragFrom = null, gFilter = "", scanNo = 0;
+let order = null, dragFrom = null, gFilter = "", scanNo = 0, vgaBusy = false;
+// Games with no VGA mode: when the owner said the console is on VGA, known patches are applied as soon as a
+// scan finds a game that needs one (after adding games too, since every add ends in a scan). With no answer
+// yet, the card page asks once.
+function vgaAfterScan() {
+  const c = card; if (!c) return;
+  const need = c.games.filter(g => g.vgaState === "patch");
+  const box = $("vgaAsk"); if (box) box.remove();
+  if (!need.length || vgaBusy) return;
+  if (uip.output === "vga") { fixVga(false); return; }
+  if (uip.output === "tv") return;
+  const names = need.map(g => esc(g.name)).join(", ");
+  $("cardInfo").insertAdjacentHTML("beforeend", `<div class="warn" id="vgaAsk"><b>${need.length === 1 ? "One game has" : need.length + " games have"} no VGA mode:</b> ${names}. Over a VGA cable ${need.length === 1 ? "it reaches" : "they reach"} the SEGA screen and then the display shows nothing. A community patch is known for ${need.length === 1 ? "it" : "each"}. How is your Dreamcast connected?
+    <div class="row" style="margin-top:.5rem;gap:.5rem;flex-wrap:wrap"><button class="btn small accent" id="vgaYes">VGA cable, patch ${need.length === 1 ? "it" : "them"}</button><button class="btn small" id="vgaNo">TV, leave ${need.length === 1 ? "it" : "them"}</button></div></div>`);
+  $("vgaYes").onclick = () => { uip.output = "vga"; saveUIP(); syncOut(); fixVga(false); };
+  $("vgaNo").onclick = () => { uip.output = "tv"; saveUIP(); syncOut(); $("vgaAsk").remove(); log("Games with no VGA mode are left as they are. Change this under About if you move to a VGA cable."); };
+  if (view !== "card") show("card");
+}
+async function fixVga(manual) {
+  if (!card || vgaBusy) return;
+  vgaBusy = true;
+  const box = $("vgaAsk"); if (box) box.remove();
+  log("Patching games with no VGA mode ...");
+  let lines = [], cls = "";
+  try {
+    const r = await api("/api/vga/fix", { root: card.root });
+    lines = r.log || [];
+    if (r.patched.length) { lines.push(`Patched for VGA: ${r.patched.join(", ")}. The original bytes are kept under SWIRL_BACKUP\\patches; Remove VGA patch on the game's Edit page puts them back.`); cls = "ok"; }
+    if (r.failed.length) { lines.push(`Could not patch: ${r.failed.join("; ")}`); cls = "err"; }
+    if (!r.patched.length && !r.failed.length && manual) lines.push("Every game that has a known VGA patch is already patched.");
+  } catch (e) { lines = ["VGA patch: " + e.message]; cls = "err"; }
+  vgaBusy = false;
+  await scan();
+  if (lines.length) log(lines, cls);
+}
+function syncOut() { document.querySelectorAll("input[name=abOut]").forEach(r => r.checked = r.value === uip.output); $("abOutNote").textContent = uip.output === "vga" ? "Games with a known VGA patch are patched when they are found on the card." : uip.output === "tv" ? "Nothing is patched. You can still patch one game from its Edit page." : "Not set yet. Card Manager asks when it finds a game that needs a patch."; }
+document.querySelectorAll("input[name=abOut]").forEach(r => r.onchange = () => { uip.output = r.value; saveUIP(); syncOut(); if (card) vgaAfterScan(); });
 let uip = { gamesView: "list", gridSize: 150 };
-api("/api/uiprefs").then(p => { uip = p; if (card && view === "games") renderGames(); setTimeout(() => checkUpdates(false), 1500); }).catch(() => {});
+api("/api/uiprefs").then(p => { uip = p; syncOut(); if (card && view === "games") renderGames(); setTimeout(() => checkUpdates(false), 1500); }).catch(() => {});
 function saveUIP() { api("/api/uiprefs", uip).catch(() => {}); }
 function renderGames() {
   const c = card;
@@ -1018,6 +1065,7 @@ function renderGames() {
       <button class="btn small" id="undoOrder" hidden>Undo order</button>
       <button class="btn small" id="tidyNames" hidden>Tidy names</button>
       <button class="btn small" id="arrangeDiscs" hidden>Put discs together</button>
+      <button class="btn small accent" id="fixVga" hidden>Patch games for VGA</button>
       <span class="tbspace"></span>
       <input type="range" id="gSize" min="100" max="260" step="10" value="${uip.gridSize}" title="Cover size" aria-label="Cover size" ${uip.gamesView === "grid" ? "" : "hidden"}>
       <div class="seg" role="group" aria-label="View">
@@ -1030,7 +1078,7 @@ function renderGames() {
     wireTools();
     $("addGames2").onclick = () => $("addGames").onclick();
     $("games").querySelector(".seg").hidden = $("gSize").hidden = true;
-    ["rmGames", "saveOrder", "undoOrder", "tidyNames", "arrangeDiscs"].forEach(id => { if ($(id)) $(id).hidden = id !== "rmGames" ? true : $(id).hidden; });
+    ["rmGames", "saveOrder", "undoOrder", "tidyNames", "arrangeDiscs", "fixVga"].forEach(id => { if ($(id)) $(id).hidden = id !== "rmGames" ? true : $(id).hidden; });
     return;
   }
   if (!order) order = c.games.map(g => g.folder);
@@ -1056,6 +1104,10 @@ function renderGames() {
     return `<td class="c-name setfirst">${esc(g.name)} ${disc}${warn}${edited}${sug}</td>`;
   };
   const flag = (label, v, text) => `<td class="c-flag ${v ? "yes" : "no"}" data-label="${label}">${text}</td>`;
+  const vgaCell = g => g.vgaState === "patch" ? `<td class="c-flag warnflag" data-label="VGA" title="This game has no VGA mode. A patch by ${esc(g.vgaBy)} is known.">Needs patch</td>`
+    : g.vgaState === "patched" ? `<td class="c-flag yes" data-label="VGA" title="VGA patch by ${esc(g.vgaBy)} applied">Patched</td>`
+    : g.vgaState === "skipped" ? `<td class="c-flag no" data-label="VGA" title="No VGA mode. You removed its patch; apply it again from Edit.">No (patch removed)</td>`
+    : flag("VGA", g.vga, g.vga ? "Yes" : "No");
   const foot = `<div class="gfoot">${q ? "Clear the search to drag games into a new order." : uip.gamesView === "grid" ? "Drag covers to change the folder order. Click a cover to edit the game." : "Drag rows by the handle to change the folder order."} Edits are saved on the card in a SWIRL folder. Click Update SWIRL to put them on the Dreamcast.</div>`;
   if (uip.gamesView === "grid") {
     const thumb = g => `/api/thumb?t=${TOKEN}&root=${encodeURIComponent(c.root)}&folder=${encodeURIComponent(g.folder)}&product=${encodeURIComponent(g.product || "")}&size=${uip.gridSize > 150 || devicePixelRatio > 1.25 ? 256 : 128}&v=${scanNo}`;
@@ -1065,6 +1117,7 @@ function renderGames() {
       if (q && !shown.has(f)) return "";
       const s = setOf(f), child = s && i > 0 && setOf(order[i - 1]) === s, cont = s && order[i + 1] && setOf(order[i + 1]) === s;
       const missing = [!g.hasArt && "art", !g.hasMeta && "info", !g.hasVmu && "VMU"].filter(Boolean);
+      const vgaNote = g.vgaState === "patch" ? `<span class="setwarn">Needs VGA patch</span> ` : "";
       const warn = s && !child && (s.missing || []).length ? `Disc ${s.missing.join(", ")} missing` : s && !child && s.apart ? "Discs are apart" : "";
       return `<div class="gtile${s ? " inset" : ""}${child ? " child" : ""}${cont ? " cont" : ""}" draggable="${q ? "false" : "true"}" data-f="${esc(f)}" data-g="${esc(f)}" title="${esc(g.name)}${g.error ? " · " + esc(g.error) : ""}">
         <div class="gart" style="--c:${g.hasArt ? "#141d31" : "#1d2640"}">
@@ -1076,11 +1129,11 @@ function renderGames() {
           ${g.edited ? `<span class="gedit">edited</span>` : ""}
         </div>
         <div class="gname">${esc(g.name)}</div>
-        <div class="gmeta">${warn ? `<span class="setwarn">${warn}</span>` : missing.length ? `<span class="gmiss">No ${missing.join(", ")}</span>` : `<span class="yes">Art, info and VMU</span>`}</div>
+        <div class="gmeta">${vgaNote}${warn ? `<span class="setwarn">${warn}</span>` : missing.length ? `<span class="gmiss">No ${missing.join(", ")}</span>` : `<span class="yes">Art, info and VMU</span>`}</div>
       </div>`; }).join("")}</div></div>${foot}`;
   } else {
   $("games").innerHTML = tools + `<div class="tablewrap"><table>
-    <thead><tr><th></th><th><input type="checkbox" id="selAll" title="Select all"></th><th>Slot</th><th>Name</th><th class="c-serial">Serial</th><th class="c-region">Region</th><th class="c-disc">Disc</th><th>Art</th><th>Info</th><th>VMU</th><th>Shots</th><th></th></tr></thead>
+    <thead><tr><th></th><th><input type="checkbox" id="selAll" title="Select all"></th><th>Slot</th><th>Name</th><th class="c-serial">Serial</th><th class="c-region">Region</th><th class="c-disc">Disc</th><th>Art</th><th>Info</th><th>VMU</th><th>Shots</th><th>VGA</th><th></th></tr></thead>
     <tbody>${order.map((f, i) => { const g = byFolder[f]; const slot = String(i + 2).padStart(2, "0");
       if (q && !shown.has(f)) return "";
       const s = setOf(f), child = s && i > 0 && setOf(order[i - 1]) === s;
@@ -1093,7 +1146,7 @@ function renderGames() {
       <td class="mono c-region">${esc(g.region)}</td>
       <td class="mono c-disc">${esc(g.disc)}</td>
       <td class="brk"></td>
-      ${flag("Art", g.hasArt, g.hasArt ? "Yes" : "No")}${flag("Info", g.hasMeta, g.hasMeta ? "Yes" : "No")}${flag("VMU", g.hasVmu, g.hasVmu ? "Yes" : "No")}${flag("Shots", g.shots, g.shots || "No")}
+      ${flag("Art", g.hasArt, g.hasArt ? "Yes" : "No")}${flag("Info", g.hasMeta, g.hasMeta ? "Yes" : "No")}${flag("VMU", g.hasVmu, g.hasVmu ? "Yes" : "No")}${flag("Shots", g.shots, g.shots || "No")}${vgaCell(g)}
       <td class="c-edit"><button class="btn small" data-edit="${esc(f)}" ${changed ? "disabled" : ""}>Edit</button></td></tr>`; }).join("")}</tbody></table></div>${foot}`;
   }
   // view switch and cover size
@@ -1116,6 +1169,11 @@ function renderGames() {
   $("tidyNames").textContent = `Tidy names (${nSug})`;
   $("tidyNames").onclick = openTidy;
   const apart = (c.sets || []).filter(s => s.apart);
+  const needVga = c.games.filter(g => g.vgaState === "patch");
+  $("fixVga").hidden = !needVga.length;
+  $("fixVga").textContent = `Patch ${needVga.length === 1 ? "1 game" : needVga.length + " games"} for VGA`;
+  $("fixVga").title = needVga.map(g => g.name).join(", ");
+  $("fixVga").onclick = () => fixVga(true);
   $("arrangeDiscs").hidden = !apart.length || changed;
   $("arrangeDiscs").title = apart.map(s => s.name).join(", ");
   $("arrangeDiscs").onclick = () => startJob("Putting discs together", "/api/games/arrange", { root: card.root });
@@ -1707,6 +1765,12 @@ async function openEditor(folder) {
   if (g.suggested) { $("fNameSug").innerHTML = `Suggested: <button type="button" class="linkbtn" id="fNameUse">${esc(g.suggested)}</button>`; $("fNameUse").onclick = () => { $("fName").value = g.suggested; $("fNameSug").hidden = true; }; }
   if ($("fRegion").value !== g.region) { const o = document.createElement("option"); o.value = o.textContent = g.region; $("fRegion").appendChild(o); $("fRegion").value = g.region; }
   $("fDate").value = g.date; $("fVga").checked = g.vga;
+  $("fVgaPatch").hidden = !g.vgaState;
+  if (g.vgaState) {
+    $("fVgaPatchText").innerHTML = g.vgaState === "patched" ? `<b>VGA patch applied</b> (by ${esc(g.vgaBy)}). The game shows a picture over a VGA cable. Remove it to put the original bytes back.` : `<b>This game has no VGA mode.</b> Over a VGA cable it reaches the SEGA screen and then the display shows nothing. A patch by ${esc(g.vgaBy)} adds VGA output; it changes a few bytes on the card and can be removed again.`;
+    if (g.vgaState === "skipped") $("fVgaPatchText").innerHTML += " You removed it; it is not applied again unless you choose to.";
+    $("fVgaApply").hidden = g.vgaState === "patched"; $("fVgaRemove").hidden = g.vgaState !== "patched";
+  }
   $("fPlayers").value = String(Math.min(4, m.players || 0)); $("fVmu").value = m.vmuBlocks || 0; $("fNet").value = String(m.network || 0);
   checks($("fGenres"), GENRES, m.genre || 0, "g"); checks($("fAcc"), ACCS, m.accessories || 0, "a");
   $("fDesc").value = m.description || ""; $("fDescCount").textContent = `${$("fDesc").value.length} / 375`;
@@ -1717,6 +1781,8 @@ async function openEditor(folder) {
   showShots();
   $("editor").showModal();
 }
+$("fVgaApply").onclick = async () => { $("fVgaApply").disabled = true; try { const r = await api("/api/vga/patch", { root: card.root, folder: ed.folder }); log(`${$("edTitle").textContent}: VGA patch applied (${r.sectors} sectors, undo saved).`, "ok"); $("editor").close(); scan(); } catch (e) { log("VGA patch: " + e.message, "err"); } $("fVgaApply").disabled = false; };
+$("fVgaRemove").onclick = async () => { $("fVgaRemove").disabled = true; try { await api("/api/vga/unpatch", { root: card.root, folder: ed.folder }); log(`${$("edTitle").textContent}: VGA patch removed, original bytes restored.`, "ok"); $("editor").close(); scan(); } catch (e) { log("VGA patch: " + e.message, "err"); } $("fVgaRemove").disabled = false; };
 $("fDesc").oninput = () => { $("fDescCount").textContent = `${$("fDesc").value.length} / 375`; };
 $("edBoxFile").onchange = async () => { const u = await readFile($("edBoxFile")); if (!u) return; ed.box = u; ed.boxDisc = false; ed.clearBox = false; showImg($("edBox"), u, ""); $("edMsg").textContent = "New box art will be saved."; };
 $("edBoxDisc").onclick = () => { ed.boxDisc = true; ed.box = null; ed.clearBox = false; showImg($("edBox"), artURL("disc"), "Disc artwork unreadable"); $("edMsg").textContent = "The disc artwork will be used."; };

@@ -18,16 +18,31 @@ var patchFiles embed.FS
 type vgaCatalogEntry struct {
 	vgaPatchEntry
 	File string `json:"file"`
+	Dir  string `json:"-"` // "" for a built in patch, else the folder holding File
+}
+
+// userPatchDir is a folder where the owner can put their own patches: a catalog.json in the same shape as the
+// built in one, next to the .dcp files it names. Tests point SWIRL_PATCH_DIR at a folder of their own.
+func userPatchDir() string {
+	if d := os.Getenv("SWIRL_PATCH_DIR"); d != "" {
+		return d
+	}
+	return filepath.Join(appDataDir(), "patches")
 }
 
 func vgaCatalog() []vgaCatalogEntry {
-	b, err := patchFiles.ReadFile("patches/catalog.json")
-	if err != nil {
-		return nil
-	}
 	var out []vgaCatalogEntry
-	if json.Unmarshal(b, &out) != nil {
-		return nil
+	if b, err := patchFiles.ReadFile("patches/catalog.json"); err == nil {
+		json.Unmarshal(b, &out)
+	}
+	if b, err := os.ReadFile(filepath.Join(userPatchDir(), "catalog.json")); err == nil {
+		var extra []vgaCatalogEntry
+		if json.Unmarshal(b, &extra) == nil {
+			for i := range extra {
+				extra[i].Dir = userPatchDir()
+			}
+			out = append(extra, out...) // the owner's entries win
+		}
 	}
 	return out
 }
@@ -43,8 +58,8 @@ func vgaPatchFor(product, version string) *vgaCatalogEntry {
 	if e == nil {
 		return nil
 	}
-	for i := range cat {
-		if cat[i].Product == e.Product && cat[i].Version == e.Version {
+	for i := range plain {
+		if &plain[i] == e {
 			return &cat[i]
 		}
 	}
@@ -53,7 +68,13 @@ func vgaPatchFor(product, version string) *vgaCatalogEntry {
 
 // writeCatalogPatch puts the embedded .dcp in a temporary file and returns its path.
 func writeCatalogPatch(e *vgaCatalogEntry) (string, error) {
-	b, err := patchFiles.ReadFile("patches/" + e.File)
+	var b []byte
+	var err error
+	if e.Dir != "" {
+		b, err = os.ReadFile(filepath.Join(e.Dir, e.File))
+	} else {
+		b, err = patchFiles.ReadFile("patches/" + e.File)
+	}
 	if err != nil {
 		return "", err
 	}
@@ -119,4 +140,95 @@ func vgaStatusReport(root string) ([]string, error) {
 		rows = append(rows, fmt.Sprintf("%s: %s (%s %s): %s", en.Name(), strings.TrimSpace(ip.Name), ip.Product, ip.Version, state))
 	}
 	return rows, nil
+}
+
+// vgaFixAll applies the catalog patch to every game on the card that has one and is not patched yet.
+// One line per game says what happened; a game that fails does not stop the others.
+func vgaFixAll(root string, dry bool) ([]string, error) {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil, err
+	}
+	var rows []string
+	for _, en := range entries {
+		if !en.IsDir() || !folderRe.MatchString(en.Name()) || en.Name() == "01" {
+			continue
+		}
+		folder := filepath.Join(root, en.Name())
+		ip, _, err := readImageIP(folder)
+		if err != nil {
+			continue
+		}
+		e := vgaPatchFor(ip.Product, ip.Version)
+		if e == nil {
+			continue
+		}
+		name := fmt.Sprintf("%s %s (%s %s)", en.Name(), strings.TrimSpace(ip.Name), ip.Product, ip.Version)
+		rep, err := applyCatalogVGAPatch(root, folder, dry)
+		switch {
+		case err != nil:
+			rows = append(rows, fmt.Sprintf("%s: not patched: %v", name, err))
+		case rep.Sectors == 0:
+			rows = append(rows, fmt.Sprintf("%s: already patched (%s)", name, e.Author))
+		case dry:
+			rows = append(rows, fmt.Sprintf("%s: would patch %d sectors (%s)", name, rep.Sectors, e.Author))
+		default:
+			rows = append(rows, fmt.Sprintf("%s: patched, %d sectors (%s), undo in %s", name, rep.Sectors, e.Author, rep.UndoFile))
+		}
+	}
+	if len(rows) == 0 {
+		rows = append(rows, "no game on this card has a known VGA patch")
+	}
+	return rows, nil
+}
+
+type vgaFixResult struct {
+	Patched []string `json:"patched"` // game names patched now
+	Already []string `json:"already"`
+	Failed  []string `json:"failed"` // "name: why"
+	Log     []string `json:"log"`
+}
+
+// vgaFixCard patches every game with a known patch that is not patched yet, for the page.
+func vgaFixCard(root string) (*vgaFixResult, error) {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil, err
+	}
+	res := &vgaFixResult{Patched: []string{}, Already: []string{}, Failed: []string{}, Log: []string{}}
+	for _, en := range entries {
+		if !en.IsDir() || !folderRe.MatchString(en.Name()) || en.Name() == "01" {
+			continue
+		}
+		folder := filepath.Join(root, en.Name())
+		ip, _, err := readImageIP(folder)
+		if err != nil {
+			continue
+		}
+		e := vgaPatchFor(ip.Product, ip.Version)
+		if e == nil {
+			continue
+		}
+		name := strings.TrimSpace(ip.Name)
+		if n := readText(filepath.Join(folder, "name.txt")); n != "" {
+			name = n
+		}
+		if vgaUndoFile(root, folder) != "" {
+			res.Already = append(res.Already, name)
+			continue
+		}
+		if vgaSkipped(root, folder) {
+			res.Log = append(res.Log, fmt.Sprintf("%s (folder %s): left alone, its patch was removed by hand", name, en.Name()))
+			continue
+		}
+		rep, err := applyCatalogVGAPatch(root, folder, false)
+		if err != nil {
+			res.Failed = append(res.Failed, name+": "+err.Error())
+			res.Log = append(res.Log, fmt.Sprintf("%s (folder %s): not patched: %v", name, en.Name(), err))
+			continue
+		}
+		res.Patched = append(res.Patched, name)
+		res.Log = append(res.Log, fmt.Sprintf("%s (folder %s): VGA patch by %s applied, %d sectors, undo in %s", name, en.Name(), e.Author, rep.Sectors, filepath.Base(rep.UndoFile)))
+	}
+	return res, nil
 }

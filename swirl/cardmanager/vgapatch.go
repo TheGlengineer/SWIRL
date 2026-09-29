@@ -291,6 +291,7 @@ func applyDCP(root, folder, dcpPath string, dry bool) (*patchReport, error) {
 	if err := writeSectors(tracks, writes, rawSize); err != nil {
 		return nil, err
 	}
+	os.Remove(filepath.Join(undoDir, "skip")) // a patch applied on purpose ends an earlier "leave it"
 	note := fmt.Sprintf("%s %s %s\r\n", hdr.When, d.SHA256[:16], d.Name)
 	if err := appendCardFile(filepath.Join(folder, "patches.txt"), note); err != nil {
 		return nil, err
@@ -422,6 +423,8 @@ func undoDCP(root, folder, undoPath string) (*patchReport, error) {
 		}
 	}
 	_ = os.Rename(undoPath, undoPath+".undone")
+	// a patch taken off on purpose stays off: the automatic pass leaves this folder alone from now on
+	_ = os.WriteFile(filepath.Join(filepath.Dir(undoPath), "skip"), []byte("The VGA patch was removed by hand; Card Manager will not apply it again by itself.\r\n"), 0o644)
 	_ = appendCardFile(filepath.Join(folder, "patches.txt"), fmt.Sprintf("%s removed %s\r\n", time.Now().Format(time.RFC3339), hdr.Patch))
 	return &patchReport{Folder: filepath.Base(folder), Patch: hdr.Patch, Sectors: len(hdr.LBAs), Changes: []string{"restored from " + filepath.Base(undoPath)}}, nil
 }
@@ -439,11 +442,15 @@ type vgaPatchEntry struct {
 	Notes   string `json:"notes,omitempty"`
 }
 
+func productKey(s string) string {
+	return strings.ToUpper(strings.NewReplacer("-", "", " ", "").Replace(strings.TrimSpace(s)))
+}
+
 func findVGAPatch(catalog []vgaPatchEntry, product, version string) *vgaPatchEntry {
-	p := strings.ToUpper(strings.TrimSpace(product))
+	p := productKey(product)
 	v := strings.ToUpper(strings.TrimSpace(version))
 	for i := range catalog {
-		if strings.ToUpper(catalog[i].Product) == p && (catalog[i].Version == "" || strings.ToUpper(catalog[i].Version) == v) {
+		if productKey(catalog[i].Product) == p && (catalog[i].Version == "" || strings.ToUpper(catalog[i].Version) == v) {
 			return &catalog[i]
 		}
 	}
@@ -467,3 +474,19 @@ func checkDCPHash(p, want string) error {
 }
 
 var _ = binary.LittleEndian
+
+// vgaUndoFile is the undo file of the patch applied to a folder, or "" when none is applied.
+func vgaUndoFile(root, folder string) string {
+	m, _ := filepath.Glob(filepath.Join(patchDir(root, folder), "*.undo"))
+	if len(m) == 0 {
+		return ""
+	}
+	sort.Strings(m)
+	return m[len(m)-1]
+}
+
+// vgaSkipped reports whether the owner took the patch off this folder by hand.
+func vgaSkipped(root, folder string) bool {
+	_, err := os.Stat(filepath.Join(patchDir(root, folder), "skip"))
+	return err == nil
+}

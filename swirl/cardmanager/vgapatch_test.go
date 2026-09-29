@@ -358,3 +358,81 @@ func TestVGACatalogEmbedded(t *testing.T) {
 		t.Fatal("another version matched")
 	}
 }
+
+func TestVGAFixAllReportsEachGame(t *testing.T) {
+	root := t.TempDir()
+	testGameFolder(t, root, false) // T-0001N, not in the catalog
+	rows, err := vgaFixAll(root, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || !strings.Contains(rows[0], "no game on this card") {
+		t.Fatalf("rows: %v", rows)
+	}
+}
+
+// A card whose game has a patch in the owner's own patch folder: the scan reports it, the card wide fix
+// patches it, a second scan shows it patched, and the undo puts it back.
+func TestVGAScanFixUndoFlow(t *testing.T) {
+	root := t.TempDir()
+	makeMenuIn01(t, root, "SWIRL")
+	folder := testGameFolder(t, root, true) // T-0001N V1.000, no VGA flag, raw tracks
+	orig := readDiscFileBytes(t, folder, "1ST_READ.BIN")
+	pdir := t.TempDir()
+	t.Setenv("SWIRL_PATCH_DIR", pdir)
+	d, _ := openGDI(filepath.Join(folder, "disc.gdi"))
+	ip, _ := d.readSectors(d.highDensityStart(), 16)
+	d.Close()
+	ip = append([]byte(nil), ip...)
+	ip[0x3D] = '1'
+	writeDCP(t, filepath.Join(pdir, "test.dcp"), ip, map[string][]byte{"1ST_READ.BIN.xdelta": makeXdelta(orig, 777, []byte{9, 0})})
+	os.WriteFile(filepath.Join(pdir, "catalog.json"), []byte(`[{"product":"T0001N","version":"V1.000","name":"Test","author":"Tester","file":"test.dcp"}]`), 0o644)
+
+	c, err := ScanCard(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := c.Games[0]
+	if g.VGAState != "patch" || g.VGABy != "Tester" || g.VGA {
+		t.Fatalf("before: %+v", g)
+	}
+	res, err := vgaFixCard(root)
+	if err != nil || len(res.Patched) != 1 || len(res.Failed) != 0 {
+		t.Fatalf("fix: %+v %v", res, err)
+	}
+	c, _ = ScanCard(root)
+	if g := c.Games[0]; g.VGAState != "patched" || !g.VGA {
+		t.Fatalf("after: %+v", g)
+	}
+	res, _ = vgaFixCard(root)
+	if len(res.Already) != 1 || len(res.Patched) != 0 {
+		t.Fatalf("second fix: %+v", res)
+	}
+	undo := vgaUndoFile(root, folder)
+	if undo == "" {
+		t.Fatal("no undo file")
+	}
+	if _, err := undoDCP(root, folder, undo); err != nil {
+		t.Fatal(err)
+	}
+	c, _ = ScanCard(root)
+	if g := c.Games[0]; g.VGAState != "skipped" || g.VGA {
+		t.Fatalf("after undo: %+v", g)
+	}
+	if b := readDiscFileBytes(t, folder, "1ST_READ.BIN"); !bytes.Equal(b, orig) {
+		t.Fatal("undo did not restore the file")
+	}
+	// a patch removed by hand is not put back by the automatic pass
+	res, _ = vgaFixCard(root)
+	if len(res.Patched) != 0 || len(res.Already) != 0 {
+		t.Fatalf("fix after a removal: %+v", res)
+	}
+	// applying it on purpose works again and ends the skip
+	if _, err := applyCatalogVGAPatch(root, folder, false); err != nil {
+		t.Fatal(err)
+	}
+	c, _ = ScanCard(root)
+	if g := c.Games[0]; g.VGAState != "patched" {
+		t.Fatalf("after re apply: %+v", g)
+	}
+}
