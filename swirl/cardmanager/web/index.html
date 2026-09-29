@@ -1722,11 +1722,12 @@ function renderBackups() {
   if (!list.length) { $("backups").innerHTML = `<div class="empty">No backups yet</div>`; return; }
   $("backups").className = "";
   $("backups").innerHTML = list.map(b => {
-    const text = `<span>${b.pinned ? `<span class="badge ok">Original</span> ` : ""}${esc(b.name)}${b.label ? `<br><small>${esc(b.label)}</small>` : ""}</span>`;
+    const note = b.note ? `<br><small style="color:var(--yellow)">Cannot be restored: ${esc(b.note)}</small>` : "";
+    const text = `<span>${b.pinned ? `<span class="badge ok">Original</span> ` : ""}${esc(b.name)}${b.label ? `<br><small>${esc(b.label)}</small>` : ""}${note}</span>`;
     if (b.kind === "removed" || b.kind === "junk") return `<div class="backup">${text}<button class="btn small" data-del="${esc(b.name)}">Delete permanently</button></div>`;
     if (b.kind === "other") return `<div class="backup">${text}</div>`;
     const back = b.pinned ? `Go back to ${esc(b.menu || "the old menu")}` : "Restore";
-    return `<div class="backup" data-pinned="${b.pinned ? 1 : 0}">${text}<button class="btn small" data-b="${esc(b.name)}">${back}</button></div>`;
+    return `<div class="backup" data-pinned="${b.pinned ? 1 : 0}">${text}<button class="btn small" data-b="${esc(b.name)}"${b.note ? " disabled" : ""}>${back}</button></div>`;
   }).join("");
   $("backups").querySelectorAll("button[data-del]").forEach(btn => btn.onclick = async () => {
     if (!confirm(`Permanently delete ${btn.dataset.del}? The removed game copies in it will be gone for good.`)) return;
@@ -1737,7 +1738,12 @@ function renderBackups() {
   $("backups").querySelectorAll("button[data-b]").forEach(btn => btn.onclick = async () => {
     if (!confirm(`Put ${btn.dataset.b} back into folder 01? The current menu will be kept as another backup.`)) return;
     try {
-      const r = await api("/api/restore", { root: card.root, backup: btn.dataset.b });
+      let r = await api("/api/restore", { root: card.root, backup: btn.dataset.b });
+      if (!r.ok && Array.isArray(r.mismatches) && r.mismatches.length) {
+        const list = r.mismatches.slice(0, 12).join("\n") + (r.mismatches.length > 12 ? `\n... and ${r.mismatches.length - 12} more` : "");
+        if (!confirm(`The game folders have changed since this menu was saved, so it would start the wrong games:\n\n${list}\n\nRestore it anyway? You can fix the list afterwards by installing SWIRL again.`)) { log("Restore cancelled: " + r.error, "err"); scan(); return; }
+        r = await api("/api/restore", { root: card.root, backup: btn.dataset.b, force: true });
+      }
       log((r.log || []).concat(r.ok ? ["Done."] : ["Error: " + r.error]), r.ok ? "ok" : "err");
     } catch (e) { log("Error: " + e.message, "err"); }
     scan();

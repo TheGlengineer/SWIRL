@@ -6,6 +6,8 @@ package main
 
 import (
 	"crypto/sha1"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -13,6 +15,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
 
 // BackupItem is one folder in SWIRL_BACKUP as the Backups page shows it.
@@ -22,6 +25,12 @@ type BackupItem struct {
 	Label  string `json:"label"`  // one line for the page
 	Menu   string `json:"menu"`   // the menu the folder holds: openMenu, GDMENU, SWIRL, ... ("" for removed games)
 	Pinned bool   `json:"pinned"` // never pruned
+	// from the manifest, when the backup has one
+	When    string `json:"when,omitempty"`
+	Reason  string `json:"reason,omitempty"`
+	Release string `json:"release,omitempty"` // SWIRL version of a SWIRL menu
+	Games   int    `json:"games,omitempty"`   // game folders on the card when it was saved
+	Note    string `json:"note,omitempty"`    // why it cannot be restored as it is
 }
 
 // autoBackupRe matches the automatic backups of menus SWIRL built (01_<date>_<time>, with _2, _3 ... in
@@ -109,7 +118,9 @@ func pruneMenuBackups(root string, keep int) {
 		auto = append(auto, b)
 	}
 	for i := keep; i < len(auto); i++ {
-		cardfs.RemoveAll(filepath.Join(root, backupDir, auto[i]))
+		if cardfs.RemoveAll(filepath.Join(root, backupDir, auto[i])) == nil {
+			cardfs.Remove(manifestPath(filepath.Join(root, backupDir, auto[i])))
+		}
 	}
 }
 
@@ -162,8 +173,34 @@ func listBackupItems(root string) []BackupItem {
 			it.Kind = "other"
 			it.Label = "Not made by SWIRL Card Manager"
 		}
-		if it.Menu != "" && it.Kind != "original" {
-			it.Label += " (" + it.Menu + ")"
+		if it.Kind == "original" || it.Kind == "menu" || it.Kind == "replaced" {
+			dir := filepath.Join(root, backupDir, name)
+			var parts []string
+			if m := readBackupManifest(dir); m != nil { // the manifest knows a SWIRL menu from stock openMenu
+				it.Reason, it.Release, it.Games = m.Reason, m.SwirlRelease, len(m.Slots)
+				if t, err := time.Parse(time.RFC3339, m.Time); err == nil {
+					it.When = t.Format("2006-01-02 15:04")
+				}
+				if m.Menu != "" {
+					it.Menu = m.Menu
+				}
+				if it.Reason != "" {
+					parts = append(parts, "saved by "+it.Reason)
+				}
+				if it.Release != "" {
+					parts = append(parts, "SWIRL "+it.Release)
+				}
+				parts = append(parts, fmt.Sprintf("%d games", it.Games))
+			}
+			if it.Menu != "" && it.Kind != "original" {
+				it.Label += " (" + it.Menu + ")"
+			}
+			if len(parts) > 0 {
+				it.Label += ": " + strings.Join(parts, ", ")
+			}
+			if err := checkBackupComplete(dir); err != nil {
+				it.Note = strings.TrimSuffix(err.Error(), "; nothing was changed")
+			}
 		}
 		out = append(out, it)
 	}
@@ -180,4 +217,147 @@ func backupTime(name string) string {
 		return ""
 	}
 	return fmt.Sprintf(", %s-%s-%s %s:%s", m[1], m[2], m[3], m[4], m[5])
+}
+
+// ---------- backup manifests ----------
+
+// manifestPath is SWIRL_BACKUP/<name>.json, next to the backup folder so the folder stays exactly what
+// was in 01.
+func manifestPath(dir string) string { return dir + ".json" }
+
+type manifestSlot struct {
+	Product string `json:"product"`
+	Name    string `json:"name"`
+	Disc    string `json:"disc,omitempty"`
+}
+
+// backupManifest is SWIRL_BACKUP/<name>.json: what the backup holds and what the card looked
+// like when it was made, so a restore can tell whether the old menu still matches the game folders.
+type backupManifest struct {
+	Version      int                     `json:"version"`
+	Time         string                  `json:"time"`
+	Reason       string                  `json:"reason"`
+	Menu         string                  `json:"menu"`
+	MenuTitle    string                  `json:"menuTitle,omitempty"`
+	MenuVariant  string                  `json:"menuVariant,omitempty"`
+	MenuImage    string                  `json:"menuImage,omitempty"`
+	MenuFormat   string                  `json:"menuFormat,omitempty"`
+	SwirlRelease string                  `json:"swirlRelease,omitempty"`
+	CardManager  string                  `json:"cardManager"`
+	Files        map[string]int64        `json:"files"`
+	Slots        map[string]manifestSlot `json:"slots"`
+}
+
+// writeBackupManifest describes the menu that was just moved into dir. c is the card as it was scanned
+// before the move (its MenuType is the menu now in dir).
+func writeBackupManifest(root, dir string, c *Card, reason string) error {
+	if reason == "" {
+		reason = cardOp(root)
+	}
+	if reason == "" {
+		reason = "Install SWIRL"
+	}
+	m := backupManifest{Version: 1, Time: time.Now().Format(time.RFC3339), Reason: reason, CardManager: version,
+		Files: map[string]int64{}, Slots: map[string]manifestSlot{}}
+	if c != nil {
+		m.Menu, m.MenuTitle, m.MenuVariant, m.MenuImage, m.MenuFormat, m.SwirlRelease = c.MenuType, c.MenuTitle, c.MenuVariant, c.MenuImage, c.MenuFormat, c.SwirlRelease
+		for _, g := range c.Games {
+			m.Slots[g.Folder] = manifestSlot{Product: g.Product, Name: g.Name, Disc: g.Disc}
+		}
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if e.IsDir() || isJunk(e.Name()) {
+			continue
+		}
+		if info, err := e.Info(); err == nil {
+			m.Files[e.Name()] = info.Size()
+		}
+	}
+	b, _ := json.MarshalIndent(m, "", "  ")
+	return writeCardFile(manifestPath(dir), b)
+}
+
+func readBackupManifest(dir string) *backupManifest {
+	b, err := os.ReadFile(manifestPath(dir))
+	if err != nil {
+		return nil
+	}
+	var m backupManifest
+	if json.Unmarshal(b, &m) != nil || m.Version != 1 {
+		return nil
+	}
+	return &m
+}
+
+// checkBackupComplete refuses a backup that lost a file since it was made (the manifest lists every file
+// with its size) or whose disc image is missing.
+func checkBackupComplete(dir string) error {
+	if m := readBackupManifest(dir); m != nil {
+		var missing []string
+		for name, size := range m.Files {
+			st, err := os.Stat(filepath.Join(dir, name))
+			switch {
+			case err != nil:
+				missing = append(missing, name+" is missing")
+			case st.Size() != size:
+				missing = append(missing, fmt.Sprintf("%s is %d bytes, was %d", name, st.Size(), size))
+			}
+		}
+		if len(missing) > 0 {
+			sort.Strings(missing)
+			return fmt.Errorf("that backup is incomplete: %s; nothing was changed", strings.Join(missing, ", "))
+		}
+	}
+	if menuImageIn01(dir) == "" {
+		return errors.New("that backup holds no menu disc; nothing was changed")
+	}
+	return nil
+}
+
+// restoreMismatch is the error a restore gives when the old menu's game list no longer matches the folders.
+type restoreMismatch struct {
+	Lines []string
+}
+
+func (e *restoreMismatch) Error() string {
+	return "the game folders have changed since that menu was saved, so it would start the wrong games: " + strings.Join(e.Lines, "; ")
+}
+
+// slotMismatches compares the folders a backup's menu was built for with the folders on the card now.
+func slotMismatches(m *backupManifest, c *Card) []string {
+	if m == nil || m.Slots == nil || c == nil {
+		return nil
+	}
+	now := map[string]Game{}
+	for _, g := range c.Games {
+		now[g.Folder] = g
+	}
+	var folders []string
+	for f := range m.Slots {
+		folders = append(folders, f)
+	}
+	for f := range now {
+		if _, ok := m.Slots[f]; !ok {
+			folders = append(folders, f)
+		}
+	}
+	sort.Slice(folders, func(i, j int) bool { return naturalLess(folders[i], folders[j]) })
+	var out []string
+	for _, f := range folders {
+		was, had := m.Slots[f]
+		is, has := now[f]
+		switch {
+		case had && !has:
+			out = append(out, fmt.Sprintf("slot %s was %s, is now empty", f, was.Name))
+		case !had && has:
+			out = append(out, fmt.Sprintf("slot %s is new (%s), the old menu does not list it", f, is.Name))
+		case was.Product != is.Product || (was.Disc != "" && is.Disc != "" && was.Disc != is.Disc):
+			out = append(out, fmt.Sprintf("slot %s was %s, is now %s", f, was.Name, is.Name))
+		}
+	}
+	return out
 }

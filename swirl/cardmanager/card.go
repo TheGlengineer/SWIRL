@@ -605,6 +605,9 @@ func installSwirl(root, datDir string, allowEmpty bool, log Logger) error {
 		return err
 	}
 	if backup != "" {
+		if err := writeBackupManifest(root, backup, c, ""); err != nil {
+			log("The backup's manifest could not be written: %v", err)
+		}
 		log("Backed up the old menu to %s", filepath.Join(backupDir, filepath.Base(backup)))
 	}
 	pruneMenuBackups(root, 3)
@@ -613,8 +616,13 @@ func installSwirl(root, datDir string, allowEmpty bool, log Logger) error {
 }
 
 // RestoreBackup puts a copy of a saved menu into 01, keeping the current one as another backup. The saved
-// menu stays in SWIRL_BACKUP.
+// menu stays in SWIRL_BACKUP. A backup whose files are incomplete is refused, and so is one whose game
+// list no longer matches the folders (a *restoreMismatch) unless force is set.
 func RestoreBackup(root, name string, log Logger) error {
+	return RestoreBackupForce(root, name, false, log)
+}
+
+func RestoreBackupForce(root, name string, force bool, log Logger) error {
 	if strings.ContainsAny(name, `/\`) || name == "" || name == "." || name == ".." {
 		return errors.New("bad backup name")
 	}
@@ -627,6 +635,17 @@ func RestoreBackup(root, name string, log Logger) error {
 	}
 	if err := checkMenuBackup(src); err != nil {
 		return err
+	}
+	c, err := ScanCard(root)
+	if err != nil {
+		return err
+	}
+	m := readBackupManifest(src)
+	if lines := slotMismatches(m, c); len(lines) > 0 {
+		if !force {
+			return &restoreMismatch{Lines: lines}
+		}
+		log("Restoring anyway: %s", strings.Join(lines, "; "))
 	}
 	var names []string
 	entries, err := os.ReadDir(src)
@@ -650,6 +669,9 @@ func RestoreBackup(root, name string, log Logger) error {
 		return err
 	}
 	if keep != "" {
+		if err := writeBackupManifest(root, keep, c, "Restore of "+name); err != nil {
+			log("The backup's manifest could not be written: %v", err)
+		}
 		log("Current menu saved as %s", filepath.Base(keep))
 	}
 	log("Restored %s into folder 01; the backup stays in %s", name, backupDir)

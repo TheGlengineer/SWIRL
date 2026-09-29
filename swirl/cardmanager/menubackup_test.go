@@ -1,11 +1,13 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // makeMenuIn01With is makeMenuIn01 with extra files on the menu disc (FOLDRART.DAT marks a VFB menu).
@@ -75,7 +77,7 @@ func TestOriginalMenuPinned(t *testing.T) {
 				t.Fatalf("label %q menu %q", c.BackupList[0].Label, c.BackupList[0].Menu)
 			}
 			for _, b := range c.BackupList[1:] {
-				if b.Pinned || b.Kind != "menu" || b.Menu != "openMenu" {
+				if b.Pinned || b.Kind != "menu" || b.Menu != "SWIRL" {
 					t.Fatalf("automatic backup %+v", b)
 				}
 			}
@@ -332,5 +334,175 @@ func TestPruneSkipsBackupsHoldingGames(t *testing.T) {
 	pruneMenuBackups(root, 1)
 	if n := len(listBackups(root)); n != 6 {
 		t.Fatalf("%d backups left: %v", n, listBackups(root))
+	}
+}
+
+// UP-2: every backup carries a manifest; a backup with a missing file is refused; a backup whose game
+// list no longer matches the folders is refused unless forced.
+func TestBackupManifest(t *testing.T) {
+	root := txnCard(t, "openMenu", 3)
+	unlock, _ := lockCard(root, "Update SWIRL")
+	err := InstallSwirl(root, "", quiet)
+	unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	orig := backupsWithPrefix(root, "01_original_openmenu_")[0]
+	m := readBackupManifest(filepath.Join(root, backupDir, orig))
+	if m == nil {
+		t.Fatal("no manifest")
+	}
+	if m.Menu != "openMenu" || m.Reason != "Update SWIRL" || m.MenuFormat != "GDI" || len(m.Slots) != 3 || m.Slots["02"].Product != "T00002N" || m.Files["track03.iso"] == 0 || m.CardManager != version {
+		t.Fatalf("manifest %+v", m)
+	}
+	c, _ := ScanCard(root)
+	b := c.BackupList[0]
+	if b.Reason != "Update SWIRL" || b.Games != 3 || b.When == "" || !strings.Contains(b.Label, "3 games") || b.Note != "" {
+		t.Fatalf("backup item %+v", b)
+	}
+	if !fileExists(filepath.Join(root, backupDir, orig+".json")) {
+		t.Fatal("the manifest is not next to the backup")
+	}
+	if err := RestoreBackup(root, orig, quiet); err != nil {
+		t.Fatal(err)
+	}
+	c, _ = ScanCard(root)
+	rep := c.BackupList[1]
+	if rep.Kind != "replaced" || rep.Menu != "SWIRL" || !strings.HasPrefix(rep.Reason, "Restore of 01_original_") || rep.Release == "" {
+		t.Fatalf("replaced item %+v", rep)
+	}
+	if err := InstallSwirl(root, "", quiet); err != nil {
+		t.Fatal(err)
+	}
+
+	// the folders change: 03 removed and the rest renumbered
+	if err := StartRemoveGames(root, []string{"03"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := waitJobErr(t); err != nil {
+		t.Fatal(err)
+	}
+	err = RestoreBackup(root, orig, quiet)
+	var mm *restoreMismatch
+	if !errors.As(err, &mm) {
+		t.Fatalf("restore after a renumber: %v", err)
+	}
+	want := []string{"slot 03 was GAME B, is now GAME C", "slot 04 was GAME C, is now empty"}
+	if strings.Join(mm.Lines, "|") != strings.Join(want, "|") {
+		t.Fatalf("mismatches %q", mm.Lines)
+	}
+	if !fileExists(filepath.Join(root, "01", "track05.iso")) || len(backupsWithPrefix(root, "01_replaced_")) != 1 {
+		t.Fatal("the refused restore changed the card")
+	}
+	if err := RestoreBackupForce(root, orig, true, quiet); err != nil {
+		t.Fatal(err)
+	}
+	c, _ = ScanCard(root)
+	if c.MenuType != "openMenu" {
+		t.Fatalf("forced restore: %s", c.MenuType)
+	}
+
+	// a backup that lost a file is refused with a message, and the page says so
+	if err := InstallSwirl(root, "", quiet); err != nil {
+		t.Fatal(err)
+	}
+	newest := listBackups(root)
+	var auto string
+	for _, n := range newest {
+		if autoBackupRe.MatchString(n) {
+			auto = n
+			break
+		}
+	}
+	os.Remove(filepath.Join(root, backupDir, auto, "track05.iso"))
+	err = RestoreBackup(root, auto, quiet)
+	if err == nil || !strings.Contains(err.Error(), "incomplete: track05.iso is missing") {
+		t.Fatalf("restore of an incomplete backup: %v", err)
+	}
+	c, _ = ScanCard(root)
+	found := false
+	for _, b := range c.BackupList {
+		if b.Name == auto {
+			found = strings.Contains(b.Note, "track05.iso is missing")
+		}
+	}
+	if !found {
+		t.Fatalf("no note on the incomplete backup: %+v", c.BackupList)
+	}
+	// a short file too
+	os.WriteFile(filepath.Join(root, backupDir, auto, "track05.iso"), []byte("short"), 0o644)
+	if err := RestoreBackup(root, auto, quiet); err == nil || !strings.Contains(err.Error(), "track05.iso is 5 bytes") {
+		t.Fatalf("restore of a short backup: %v", err)
+	}
+}
+
+// L13: two installs in one second make two backups, each with its own manifest.
+func TestBackupsInOneSecond(t *testing.T) {
+	root := txnCard(t, "openMenu", 2)
+	time.Sleep(time.Until(time.Now().Truncate(time.Second).Add(time.Second)))
+	for i := 0; i < 3; i++ {
+		if err := InstallSwirl(root, "", quiet); err != nil {
+			t.Fatal(err)
+		}
+	}
+	bk := listBackups(root)
+	if len(bk) != 3 {
+		t.Fatalf("backups %v", bk)
+	}
+	for _, b := range bk {
+		if readBackupManifest(filepath.Join(root, backupDir, b)) == nil {
+			t.Fatalf("%s has no manifest", b)
+		}
+	}
+	// pruning takes the manifest with the folder
+	for i := 0; i < 3; i++ {
+		if err := InstallSwirl(root, "", quiet); err != nil {
+			t.Fatal(err)
+		}
+	}
+	entries, _ := os.ReadDir(filepath.Join(root, backupDir))
+	dirs, files := 0, 0
+	for _, e := range entries {
+		if e.IsDir() {
+			dirs++
+		} else {
+			files++
+		}
+	}
+	if dirs != 4 || files != 4 {
+		t.Fatalf("%d backup folders and %d manifests", dirs, files)
+	}
+}
+
+// SWIRL_UI_CARD2=dir go test -run TestMakeUICard2: the card above after a game was removed (the original's
+// list no longer matches) and with one automatic backup missing a track.
+func TestMakeUICard2(t *testing.T) {
+	dir := os.Getenv("SWIRL_UI_CARD2")
+	if dir == "" {
+		t.Skip()
+	}
+	os.RemoveAll(dir)
+	os.MkdirAll(dir, 0o755)
+	for i := 0; i < 3; i++ {
+		f := fmt.Sprintf("%02d", i+2)
+		writeTestCDI(t, filepath.Join(dir, f, "disc.cdi"), fmt.Sprintf("GAME %c", 'A'+i), fmt.Sprintf("T-%05dN", i+2))
+	}
+	makeMenuIn01(t, dir, "openMenu")
+	for i := 0; i < 2; i++ {
+		if err := InstallSwirl(dir, "", quiet); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := StartRemoveGames(dir, []string{"02"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := waitJobErr(t); err != nil {
+		t.Fatal(err)
+	}
+	for _, b := range listBackups(dir) {
+		if autoBackupRe.MatchString(b) {
+			os.Remove(filepath.Join(dir, backupDir, b, "track03.iso"))
+			break
+		}
 	}
 }

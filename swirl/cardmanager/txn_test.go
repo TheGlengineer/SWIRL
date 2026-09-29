@@ -1074,8 +1074,8 @@ func TestCardWritesAreFlushed(t *testing.T) {
 		t.Fatal(err)
 	}
 	done()
-	if files.seen != 6 || dirs.seen < 2 {
-		t.Errorf("install flushed %d files and %d folders; want the 6 menu files, the stage and the card root", files.seen, dirs.seen)
+	if files.seen != 7 || dirs.seen < 2 { // the 6 menu files and the backup's manifest
+		t.Errorf("install flushed %d files and %d folders; want the 6 menu files, the manifest, the stage and the card root", files.seen, dirs.seen)
 	}
 	src := t.TempDir()
 	writeTestGDI(t, filepath.Join(src, "New Game"), "NEW GAME", "T-00077N")
