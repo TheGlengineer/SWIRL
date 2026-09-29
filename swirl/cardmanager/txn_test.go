@@ -793,3 +793,44 @@ func TestUniqueBackupNames(t *testing.T) {
 		t.Fatalf("names %s %s %s", a, b, c)
 	}
 }
+
+func openMenuReaders() int {
+	thumbMu.Lock()
+	defer thumbMu.Unlock()
+	n := 0
+	for _, tc := range thumbCards {
+		if tc.menu != nil {
+			n++
+		}
+	}
+	return n
+}
+
+// A2: the cover grid keeps the menu disc open; taking the card lock closes it and keeps it closed until the
+// write is over. Linux renames open files, so only the Windows runner proves the rename itself succeeds.
+func TestLockClosesMenuReaders(t *testing.T) {
+	root := txnCard(t, "swirl", 3)
+	GameThumb(root, "02", "T00002N", false)
+	if openMenuReaders() == 0 {
+		t.Fatal("the cover grid did not open the menu disc; the test proves nothing")
+	}
+	unlock, err := lockCard(root, "Update SWIRL")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := openMenuReaders(); n != 0 {
+		t.Fatalf("%d menu disc readers still open after the card lock was taken", n)
+	}
+	GameThumb(root, "04", "T00004N", true) // a cover asked for during the write
+	if n := openMenuReaders(); n != 0 {
+		t.Fatalf("a cover request opened the menu disc during a write")
+	}
+	if err := InstallSwirl(root, "", quiet); err != nil {
+		t.Fatal(err)
+	}
+	unlock()
+	GameThumb(root, "04", "T00004N", true)
+	if openMenuReaders() == 0 {
+		t.Fatal("covers did not open the menu disc again after the write")
+	}
+}

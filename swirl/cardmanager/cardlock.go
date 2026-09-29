@@ -66,6 +66,8 @@ func lockCard(root, op string) (func(), error) {
 	cardLocksMu.Lock()
 	l.op = op
 	cardLocksMu.Unlock()
+	// no file on the card may stay open while it is written: close the cover grid's menu disc
+	closeMenuReaders()
 	var once sync.Once
 	return func() {
 		once.Do(func() {
@@ -75,6 +77,17 @@ func lockCard(root, op string) (func(), error) {
 			l.mu.Unlock()
 		})
 	}, nil
+}
+
+// cardOp names what is writing to the card ("" when nothing is).
+func cardOp(root string) string {
+	k := cardKey(root)
+	cardLocksMu.Lock()
+	defer cardLocksMu.Unlock()
+	if l := cardLocks[k]; l != nil {
+		return l.op
+	}
+	return ""
 }
 
 // anyCardBusy is true while any card is being written.
