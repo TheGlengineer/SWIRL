@@ -106,6 +106,12 @@ static void font_bmp_draw_char(int x, int y, unsigned char ch) {
   if (index == -1)
     return;
 
+  /* SWIRL: the buffer holds BUFFER_MAX_CHARS characters; a longer string is sent in parts */
+  if (charbuffered + VERT_PER_CHAR > BUFFER_MAX_CHARS * VERT_PER_CHAR) {
+    pvr_prim(charbuf, charbuffered * sizeof(charbuf[0]));
+    charbuffered = 0;
+  }
+
 #ifdef KOS_SPRITE
   pvr_sprite_txr_t vert = {
       .flags = PVR_CMD_VERTEX_EOL, /* Always? */

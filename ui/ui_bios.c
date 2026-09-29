@@ -142,7 +142,7 @@ static void draw_gamelist(void) {
       break;
     }
 
-    sprintf(buffer, "%02d %s", current_starting_index + i + 1, list_current[current_starting_index + i]->name);
+    snprintf(buffer, sizeof(buffer), "%02d %s", current_starting_index + i + 1, list_current[current_starting_index + i]->name);
     if ((current_starting_index + i) == current_selected_item) {
       /* grab the disc number and if there is more than one */
       int disc_set = list_current[current_selected_item]->disc[2] - '0';
@@ -248,8 +248,10 @@ static void menu_decrement(int amount) {
   if (navigate_timeout > 0) {
     return;
   }
-  if (current_selected_item > 0) {
-    current_selected_item -= amount;
+  /* SWIRL: clamped at 0, as in the GDMENU style */
+  current_selected_item -= amount;
+  if (current_selected_item < 0) {
+    current_selected_item = 0;
   }
   if (current_selected_item < current_starting_index) {
     current_starting_index -= amount;

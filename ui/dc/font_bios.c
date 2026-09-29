@@ -62,6 +62,7 @@ _get_romfont_address:	\n\
 ");
 
 static void _bfont_draw(void *buffer, int bufwidth, int opaque, int c) {
+  (void)opaque;
   int i, j;
   uint8 *fa = (uint8 *)get_romfont_address();
 
@@ -111,6 +112,12 @@ void font_bios_init() {
   int x, y;
   unsigned int temp = texman_create();
   unsigned short *tex = (unsigned short *)texman_get_tex_data(temp);
+  /* SWIRL: the font is drawn straight into the scratch, so the room is checked first */
+  if (!tex || !texman_fits(256, 256, 2)) {
+    printf("font_bios: no room in the texture scratch\n");
+    texture = NULL;
+    return;
+  }
   texture = tex;
   texman_reserve_memory(256, 256, 2 /* 16Bit */);
   unsigned short *vram = (unsigned short *)tex;
@@ -141,6 +148,11 @@ void font_bios_begin_draw() {
 
 static void draw_bios_poly_char(float x1, float y1, int c) {
   pvr_vertex_t *vert1, *vert2, *vert3, *vert4;
+  /* SWIRL: the buffer holds BUFFER_MAX_CHARS characters; a longer string is sent in parts */
+  if (charbuffered + VERT_PER_CHAR > BUFFER_MAX_CHARS * VERT_PER_CHAR) {
+    pvr_prim(charbuf, charbuffered * sizeof(charbuf[0]));
+    charbuffered = 0;
+  }
   vert1 = &charbuf[charbuffered + 0];
   vert2 = &charbuf[charbuffered + 1];
   vert3 = &charbuf[charbuffered + 2];
