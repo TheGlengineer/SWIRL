@@ -79,6 +79,24 @@ func lockCard(root, op string) (func(), error) {
 	}, nil
 }
 
+// tryLockCard takes the lock only if it is free right now (for the repairs a scan makes).
+func tryLockCard(root, op string) (func(), bool) {
+	l := cardLockFor(root)
+	if !l.mu.TryLock() {
+		return nil, false
+	}
+	cardLocksMu.Lock()
+	l.op = op
+	cardLocksMu.Unlock()
+	closeMenuReaders()
+	return func() {
+		cardLocksMu.Lock()
+		l.op = ""
+		cardLocksMu.Unlock()
+		l.mu.Unlock()
+	}, true
+}
+
 // cardOp names what is writing to the card ("" when nothing is).
 func cardOp(root string) string {
 	k := cardKey(root)

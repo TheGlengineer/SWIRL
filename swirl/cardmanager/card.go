@@ -139,7 +139,14 @@ func ScanCard(root string) (*Card, error) {
 		return nil, fmt.Errorf("%s is not a folder", root)
 	}
 	tidyMacFiles(root)
-	c := &Card{Root: root, MenuType: "None", Backups: listBackups(root)}
+	var fixed []string
+	if fileExists(recoverPath(root)) || fileExists(stagePath(root)) {
+		if unlock, ok := tryLockCard(root, "Scan"); ok { // never while the card is being written
+			fixed = recoverMenu(root)
+			unlock()
+		}
+	}
+	c := &Card{Root: root, MenuType: "None", Backups: listBackups(root), Warnings: fixed}
 	var boxIDs, iconIDs, metaIDs, vmuIDs map[string]bool
 	edits := loadEdits(root)
 
@@ -368,6 +375,10 @@ func copyFile(src, dst string) error {
 		out.Close()
 		return err
 	}
+	if err := cardfs.SyncFile(out); err != nil {
+		out.Close()
+		return err
+	}
 	return out.Close()
 }
 
@@ -508,55 +519,28 @@ func installSwirl(root, datDir string, allowEmpty bool, log Logger) error {
 	if err != nil {
 		return err
 	}
-	_ = c
-	menuDir := filepath.Join(root, "01")
-	// back up the current 01, then write the new one
-	backup := ""
-	if entries, err := os.ReadDir(menuDir); err == nil && len(entries) > 0 {
-		backup = uniqueBackupPath(root, "01_")
-		if err := cardfs.MkdirAll(backup, 0o755); err != nil {
-			return err
-		}
-		for _, e := range entries {
-			if err := cardfs.Rename(filepath.Join(menuDir, e.Name()), filepath.Join(backup, e.Name())); err != nil {
-				return fmt.Errorf("backing up 01: %w", err)
-			}
-		}
-		log("Backed up the old menu to %s", filepath.Join(backupDir, filepath.Base(backup)))
+	// the new menu goes to SWIRL/.stage_01 first; 01 is only touched by the two renames of swapMenu
+	stage, err := stageFiles(root, out, []string{"disc.gdi", "track01.iso", "track02.raw", "track03.iso", "track04.raw", "track05.iso"})
+	if err != nil {
+		return fmt.Errorf("%w; the menu in 01 was not changed", err)
 	}
-	cardfs.MkdirAll(menuDir, 0o755)
-	for _, name := range []string{"disc.gdi", "track01.iso", "track02.raw", "track03.iso", "track04.raw", "track05.iso"} {
-		if err := copyFile(filepath.Join(out, name), filepath.Join(menuDir, name)); err != nil {
-			// put the backup back
-			if backup != "" {
-				entries, _ := os.ReadDir(menuDir)
-				for _, e := range entries {
-					cardfs.Remove(filepath.Join(menuDir, e.Name()))
-				}
-				restoreFrom(backup, menuDir)
-			}
-			return fmt.Errorf("writing to the SD card failed, old menu restored: %w", err)
-		}
+	backup := ""
+	if entries, err := os.ReadDir(filepath.Join(root, "01")); err == nil && len(entries) > 0 {
+		backup = uniqueBackupPath(root, menuBackupPrefix(root, c))
+	}
+	if err := swapMenu(root, stage, backup); err != nil {
+		return err
+	}
+	if backup != "" {
+		log("Backed up the old menu to %s", filepath.Join(backupDir, filepath.Base(backup)))
 	}
 	pruneMenuBackups(root, 3)
 	log("SWIRL installed in folder 01. Game folders were not changed.")
 	return nil
 }
 
-func restoreFrom(src, dst string) error {
-	entries, err := os.ReadDir(src)
-	if err != nil {
-		return err
-	}
-	for _, e := range entries {
-		if err := cardfs.Rename(filepath.Join(src, e.Name()), filepath.Join(dst, e.Name())); err != nil {
-			return err
-		}
-	}
-	return cardfs.Remove(src)
-}
-
-// RestoreBackup puts a saved menu back into 01, keeping the current one as another backup.
+// RestoreBackup puts a copy of a saved menu into 01, keeping the current one as another backup. The saved
+// menu stays in SWIRL_BACKUP.
 func RestoreBackup(root, name string, log Logger) error {
 	if strings.ContainsAny(name, `/\`) || name == "" || name == "." || name == ".." {
 		return errors.New("bad backup name")
@@ -568,22 +552,34 @@ func RestoreBackup(root, name string, log Logger) error {
 	if _, err := os.Stat(src); err != nil {
 		return err
 	}
-	menuDir := filepath.Join(root, "01")
-	if entries, err := os.ReadDir(menuDir); err == nil && len(entries) > 0 {
-		keep := uniqueBackupPath(root, "01_replaced_")
-		cardfs.MkdirAll(keep, 0o755)
-		for _, e := range entries {
-			if err := cardfs.Rename(filepath.Join(menuDir, e.Name()), filepath.Join(keep, e.Name())); err != nil {
-				return err
-			}
-		}
-		log("Current menu saved as %s", filepath.Base(keep))
-	}
-	cardfs.MkdirAll(menuDir, 0o755)
-	if err := restoreFrom(src, menuDir); err != nil {
+	if err := checkMenuBackup(src); err != nil {
 		return err
 	}
-	log("Restored %s into folder 01", name)
+	var names []string
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if e.Type().IsRegular() {
+			names = append(names, e.Name())
+		}
+	}
+	stage, err := stageFiles(root, src, names)
+	if err != nil {
+		return fmt.Errorf("%w; the menu in 01 was not changed", err)
+	}
+	keep := ""
+	if entries, err := os.ReadDir(filepath.Join(root, "01")); err == nil && len(entries) > 0 {
+		keep = uniqueBackupPath(root, "01_replaced_")
+	}
+	if err := swapMenu(root, stage, keep); err != nil {
+		return err
+	}
+	if keep != "" {
+		log("Current menu saved as %s", filepath.Base(keep))
+	}
+	log("Restored %s into folder 01; the backup stays in %s", name, backupDir)
 	return nil
 }
 

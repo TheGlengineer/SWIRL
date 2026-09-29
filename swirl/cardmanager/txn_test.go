@@ -6,6 +6,7 @@ package main
 
 import (
 	"crypto/sha1"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -521,13 +522,13 @@ func TestCardFaultsInstall(t *testing.T) {
 	var rows []txnRow
 	// CM-2: a rename fails at step n (antivirus, indexer, an open file on Windows)
 	for n := 1; n <= 6; n++ {
-		rows = append(rows, txnRow{name: fmt.Sprintf("CM2_rename_fails_at_%d", n), menu: "openMenu", games: 3,
+		rows = append(rows, txnRow{name: fmt.Sprintf("CM2_rename_fails_at_%d", n), fixed: true, menu: "openMenu", games: 3,
 			faults: renameAt(n, syscall.EBUSY), run: opInstall, extra: keepsOriginal})
 	}
 	// CM-2: renames keep failing from step n, so the rollback fails too
 	for n := 1; n <= 3; n++ {
 		n := n
-		rows = append(rows, txnRow{name: fmt.Sprintf("CM2_renames_fail_from_%d", n), menu: "openMenu", games: 3,
+		rows = append(rows, txnRow{name: fmt.Sprintf("CM2_renames_fail_from_%d", n), fixed: true, menu: "openMenu", games: 3,
 			faults: func(string) []*fault { return []*fault{{op: "Rename", n: n, sticky: true, err: syscall.EACCES}} },
 			run:    opInstall, extra: keepsOriginal})
 	}
@@ -554,7 +555,7 @@ func TestCardFaultsInstall(t *testing.T) {
 			return InstallSwirl(root, "", quiet)
 		}, extra: keepsOriginal})
 	// CM-3: the menu that was on the card before SWIRL survives later rebuilds
-	rows = append(rows, txnRow{name: "CM3_original_survives_rebuilds", menu: "openMenu", games: 2,
+	rows = append(rows, txnRow{name: "CM3_original_survives_rebuilds", fixed: true, menu: "openMenu", games: 2,
 		run: func(t *testing.T, root string) error {
 			for i := 0; i < 4; i++ {
 				if err := InstallSwirl(root, "", quiet); err != nil {
@@ -589,9 +590,9 @@ func TestCardFaultsRestore(t *testing.T) {
 		return []string{"the backup that was restored is no longer on the card"}
 	}
 	rows := []txnRow{
-		{name: "restore_keeps_the_backup", menu: "openMenu", games: 2, setup: origSetup, run: restoreOnly, extra: backupKept},
+		{name: "restore_keeps_the_backup", fixed: true, menu: "openMenu", games: 2, setup: origSetup, run: restoreOnly, extra: backupKept},
 		// CM-2 and L11: a backup left half made by a failed install is restored over a good menu
-		{name: "CM2_restore_of_a_half_backup", menu: "swirl", games: 2,
+		{name: "CM2_restore_of_a_half_backup", fixed: true, menu: "swirl", games: 2,
 			setup: func(t *testing.T, root string, s *cardSnap) {
 				half := filepath.Join(root, backupDir, "01_20000101_000000")
 				os.MkdirAll(half, 0o755)
@@ -611,7 +612,7 @@ func TestCardFaultsRestore(t *testing.T) {
 			}},
 	}
 	for n := 1; n <= 6; n++ {
-		rows = append(rows, txnRow{name: fmt.Sprintf("CM2_restore_rename_fails_at_%d", n), menu: "openMenu", games: 2,
+		rows = append(rows, txnRow{name: fmt.Sprintf("CM2_restore_rename_fails_at_%d", n), fixed: true, menu: "openMenu", games: 2,
 			setup: origSetup, faults: renameAt(n, syscall.EBUSY), run: restoreOnly, extra: backupKept})
 	}
 	runTxnRows(t, rows)
@@ -832,5 +833,104 @@ func TestLockClosesMenuReaders(t *testing.T) {
 	GameThumb(root, "04", "T00004N", true)
 	if openMenuReaders() == 0 {
 		t.Fatal("covers did not open the menu disc again after the write")
+	}
+}
+
+// A3: backups never lose a menu. The original is pinned, restores copy, and an interrupted swap is undone.
+func TestMenuBackups(t *testing.T) {
+	root := txnCard(t, "openMenu", 2)
+	orig := hashDir(filepath.Join(root, "01"))
+	for i := 0; i < 5; i++ {
+		if err := InstallSwirl(root, "", quiet); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var original, auto []string
+	for _, b := range listBackups(root) {
+		switch {
+		case strings.HasPrefix(b, "01_original_openmenu_"):
+			original = append(original, b)
+		case strings.HasPrefix(b, "01_2"):
+			auto = append(auto, b)
+		default:
+			t.Errorf("unexpected backup %s", b)
+		}
+	}
+	if len(original) != 1 || len(auto) != 3 {
+		t.Fatalf("original %v, automatic %v", original, auto)
+	}
+	if !sameHashes(hashDir(filepath.Join(root, backupDir, original[0])), orig) {
+		t.Fatal("the original backup does not hold the original menu")
+	}
+	// restore copies the backup: it is still there afterwards, and the replaced menu is kept too
+	swirl := hashDir(filepath.Join(root, "01"))
+	if err := RestoreBackup(root, original[0], quiet); err != nil {
+		t.Fatal(err)
+	}
+	if !sameHashes(hashDir(filepath.Join(root, "01")), orig) {
+		t.Fatal("01 is not the original menu after the restore")
+	}
+	if !sameHashes(hashDir(filepath.Join(root, backupDir, original[0])), orig) {
+		t.Fatal("the restored backup was consumed")
+	}
+	if r := listBackups(root)[0]; !strings.HasPrefix(r, "01_replaced_") || !sameHashes(hashDir(filepath.Join(root, backupDir, r)), swirl) {
+		t.Fatalf("the replaced SWIRL menu was not kept: %v", listBackups(root))
+	}
+	// going back to SWIRL from the restored original does not pin a second original
+	if err := InstallSwirl(root, "", quiet); err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, b := range listBackups(root) {
+		if strings.HasPrefix(b, "01_original_") {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("%d original backups: %v", n, listBackups(root))
+	}
+}
+
+func TestMenuSwapRecovery(t *testing.T) {
+	// both the swap and its undo fail: RECOVER.json names both folders and the next scan puts 01 back
+	root := txnCard(t, "openMenu", 2)
+	orig := hashDir(filepath.Join(root, "01"))
+	_, done := useFaults(t, &fault{op: "Rename", n: 2, sticky: true, err: syscall.EACCES})
+	err := InstallSwirl(root, "", quiet)
+	done()
+	if err == nil || !strings.Contains(err.Error(), "could not be put back") {
+		t.Fatalf("install: %v", err)
+	}
+	b, rerr := os.ReadFile(recoverPath(root))
+	if rerr != nil {
+		t.Fatal("no RECOVER.json:", rerr)
+	}
+	var info recoverInfo
+	if json.Unmarshal(b, &info) != nil || !strings.HasPrefix(info.Previous, backupDir+"/01_original_openmenu_") || info.New != editsDir+"/"+stageName {
+		t.Fatalf("RECOVER.json: %s", b)
+	}
+	// not while the card is locked
+	unlock, _ := lockCard(root, "Update SWIRL")
+	ScanCard(root)
+	if fileExists(filepath.Join(root, "01")) {
+		t.Fatal("a scan repaired the card while it was locked")
+	}
+	unlock()
+	c, err := ScanCard(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !sameHashes(hashDir(filepath.Join(root, "01")), orig) || fileExists(recoverPath(root)) || fileExists(stagePath(root)) {
+		t.Fatalf("the scan did not put the old menu back: %v", c.Warnings)
+	}
+	if len(c.Warnings) == 0 || !strings.Contains(c.Warnings[0], "undone") {
+		t.Fatalf("warnings %q", c.Warnings)
+	}
+	// a staging folder left by a crash is removed by the next scan and reported
+	os.MkdirAll(stagePath(root), 0o755)
+	os.WriteFile(filepath.Join(stagePath(root), "track05.iso"), []byte("half"), 0o644)
+	c, _ = ScanCard(root)
+	if fileExists(stagePath(root)) || len(c.Warnings) == 0 || !strings.Contains(c.Warnings[0], ".stage_01") {
+		t.Fatalf("stale stage: %v", c.Warnings)
 	}
 }
