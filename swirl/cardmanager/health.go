@@ -109,6 +109,10 @@ func CheckCard(root string) (*HealthReport, error) {
 		add("warn", "01", "Folder 01 has %s, not SWIRL", c.MenuType)
 	}
 
+	for _, w := range c.DatIssues {
+		add("warn", "01", "%s", w)
+	}
+
 	// folders
 	nums := numberedFolders(root)
 	for i, n := range nums {

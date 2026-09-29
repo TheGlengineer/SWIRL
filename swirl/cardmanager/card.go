@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"crypto/sha1"
 	_ "embed"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"image"
@@ -72,13 +71,15 @@ type Card struct {
 	MenuFormat string `json:"menuFormat,omitempty"`
 	SwirlVer   string `json:"swirlVersion"`
 	// SwirlRelease is the version SWIRL reports in About ("2.10"); empty for early builds
-	SwirlRelease string   `json:"swirlRelease,omitempty"`
-	HasBox       bool     `json:"hasBox"`
-	HasIcon      bool     `json:"hasIcon"`
-	HasMeta      bool     `json:"hasMeta"`
-	Games        []Game   `json:"games"`
-	Warnings     []string `json:"warnings"`
-	Backups      []string `json:"backups"`
+	SwirlRelease string `json:"swirlRelease,omitempty"`
+	// DatIssues names the DAT files on the menu disc the menu cannot read (wrong version, short table)
+	DatIssues []string `json:"datIssues,omitempty"`
+	HasBox    bool     `json:"hasBox"`
+	HasIcon   bool     `json:"hasIcon"`
+	HasMeta   bool     `json:"hasMeta"`
+	Games     []Game   `json:"games"`
+	Warnings  []string `json:"warnings"`
+	Backups   []string `json:"backups"`
 	// BackupList describes the same folders for the Backups page: the pinned original first
 	BackupList []BackupItem `json:"backupList"`
 	Dups       []DupGroup   `json:"duplicates"`
@@ -100,20 +101,21 @@ func openMenuProduct(serial string) string {
 	return s
 }
 
-// datIDs reads the ID table of a DAT file held inside the menu disc.
-func datIDs(d sectorReader, f isoFile) map[string]bool {
+// datIDs reads the ID table of a DAT file held inside the menu disc. A file the menu cannot read gives
+// no IDs and an error saying why.
+func datIDs(d sectorReader, f isoFile) (map[string]bool, error) {
 	ids := map[string]bool{}
 	hdr, err := d.readSectors(f.LBA, 1)
-	if err != nil || string(hdr[0:3]) != "DAT" {
-		return ids
+	if err != nil {
+		return ids, err
 	}
-	n := int(binary.LittleEndian.Uint32(hdr[8:]))
-	if n <= 0 || n > 100000 {
-		return ids
+	_, n, err := checkDatHeader(hdr, int64(f.Size))
+	if err != nil {
+		return ids, err
 	}
 	b, err := d.readSectors(f.LBA, (16+16*n+sectorSize-1)/sectorSize)
 	if err != nil {
-		return ids
+		return ids, err
 	}
 	for i := 0; i < n; i++ {
 		rec := b[16+16*i : 16+16*i+12]
@@ -122,7 +124,7 @@ func datIDs(d sectorReader, f isoFile) map[string]bool {
 		}
 		ids[string(rec)] = true
 	}
-	return ids
+	return ids, nil
 }
 
 func readText(path string) string {
@@ -180,19 +182,28 @@ func ScanCard(root string) (*Card, error) {
 		if c.MenuType == "openMenu" {
 			if d, err := openGameDisc(menuDir); err == nil {
 				if files, err := listISO(d); err == nil {
+					dat := func(f isoFile) map[string]bool {
+						ids, err := datIDs(d, f)
+						if err != nil {
+							c.DatIssues = append(c.DatIssues, fmt.Sprintf("%s on the menu disc cannot be read (%v). The menu shows nothing from it; SWIRL keeps the file as it is when the menu is rebuilt.", strings.ToUpper(f.Path), err))
+						}
+						return ids
+					}
 					for _, f := range files {
 						switch strings.ToUpper(f.Path) {
 						case "BOX.DAT":
 							c.HasBox = true
-							boxIDs = datIDs(d, f)
+							boxIDs = dat(f)
 						case "ICON.DAT":
 							c.HasIcon = true
-							iconIDs = datIDs(d, f)
+							iconIDs = dat(f)
 						case "META.DAT":
 							c.HasMeta = true
-							metaIDs = datIDs(d, f)
+							metaIDs = dat(f)
 						case "VMU.DAT":
-							vmuIDs = datIDs(d, f)
+							vmuIDs = dat(f)
+						case "SHOT.DAT":
+							dat(f)
 						case "FOLDRART.DAT", "DEFAULTS.INI": // only the Virtual Folder Bundle puts these on the disc
 							c.MenuVariant = "VFB"
 						case "1ST_READ.BIN":
@@ -211,6 +222,7 @@ func ScanCard(root string) (*Card, error) {
 			}
 		}
 	}
+	c.Warnings = append(c.Warnings, c.DatIssues...)
 	switch c.MenuType {
 	case "Game":
 		c.Warnings = append(c.Warnings, fmt.Sprintf("Folder 01 holds a game, not a menu: %s (%s). Move it to a later folder first.", c.MenuTitle, c.MenuImage))
@@ -815,15 +827,20 @@ func findDataFile(dir, name string) string {
 	return ""
 }
 
-func loadOrNewDat(dir, name string, chunk int) (*datFile, string) {
+// loadOrNewDat loads a DAT file from the menu data folder, or starts an empty one when there is none. A
+// file that cannot be read is kept exactly as it is: ok is false, nothing is merged into it, and the
+// log says so (the art it holds is still on the disc for a reader that can parse it).
+func loadOrNewDat(dir, name string, chunk int, log Logger) (d *datFile, path string, ok bool) {
 	p := findDataFile(dir, name)
-	if p != "" {
-		if d, err := readDat(p); err == nil {
-			return d, p
-		}
-		os.Remove(p)
+	if p == "" {
+		return newDat(chunk), filepath.Join(dir, name), true
 	}
-	return newDat(chunk), filepath.Join(dir, name)
+	d, err := readDat(p)
+	if err != nil {
+		log("%s on the current menu cannot be read (%v); it was kept as it is and nothing was added to it", name, err)
+		return nil, p, false
+	}
+	return d, p, true
 }
 
 // applyEdits merges the SWIRL/ edits into META.DAT, BOX.DAT, ICON.DAT and VMU.DAT in the menu data folder.
@@ -845,8 +862,7 @@ func applyEdits(root string, c *Card, data string, log Logger) error {
 			vmuSet = append(vmuSet, g)
 		}
 	}
-	if len(metaSet) > 0 {
-		d, p := loadOrNewDat(data, "META.DAT", metaSize)
+	if d, p, ok := loadOrNewDat(data, "META.DAT", metaSize, log); len(metaSet) > 0 && ok {
 		for _, g := range metaSet {
 			d.Set(g.Product, encodeMeta(*edits.Games[g.Folder].Meta))
 		}
@@ -856,8 +872,8 @@ func applyEdits(root string, c *Card, data string, log Logger) error {
 		log("Saved info for %d games", len(metaSet))
 	}
 	if len(boxSet) > 0 {
-		box, bp := loadOrNewDat(data, "BOX.DAT", 131104)
-		icon, ip := loadOrNewDat(data, "ICON.DAT", 32800)
+		box, bp, boxOK := loadOrNewDat(data, "BOX.DAT", 131104, log)
+		icon, ip, iconOK := loadOrNewDat(data, "ICON.DAT", 32800, log)
 		n := 0
 		for _, g := range boxSet {
 			f, err := os.Open(artPath(root, g.Folder, "box"))
@@ -869,20 +885,29 @@ func applyEdits(root string, c *Card, data string, log Logger) error {
 			if err != nil {
 				continue
 			}
-			box.Set(g.Product, encodePVR565(img, 256))
-			icon.Set(g.Product, encodePVR565(img, 128))
+			if boxOK {
+				box.Set(g.Product, encodePVR565(img, 256))
+			}
+			if iconOK {
+				icon.Set(g.Product, encodePVR565(img, 128))
+			}
 			n++
 		}
-		if err := box.Write(bp); err != nil {
-			return err
+		if boxOK {
+			if err := box.Write(bp); err != nil {
+				return err
+			}
 		}
-		if err := icon.Write(ip); err != nil {
-			return err
+		if iconOK {
+			if err := icon.Write(ip); err != nil {
+				return err
+			}
 		}
-		log("Saved box art for %d games", n)
+		if boxOK || iconOK {
+			log("Saved box art for %d games", n)
+		}
 	}
-	if len(vmuSet) > 0 {
-		d, p := loadOrNewDat(data, "VMU.DAT", vmuBytes)
+	if d, p, ok := loadOrNewDat(data, "VMU.DAT", vmuBytes, log); len(vmuSet) > 0 && ok {
 		for _, g := range vmuSet {
 			if b, err := os.ReadFile(artPath(root, g.Folder, "vmu")); err == nil && len(b) == vmuBytes {
 				d.Set(g.Product, b)

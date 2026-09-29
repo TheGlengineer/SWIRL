@@ -221,7 +221,10 @@ func mergeOnlineDB(data string, c *Card, log Logger) error {
 	counts := map[string]int{}
 	for _, d := range []dat{{"BOX.DAT", 131104}, {"ICON.DAT", 32800}, {"META.DAT", metaSize}} {
 		idx := datIndex(filepath.Join(dbDir(), d.name))
-		card, path := loadOrNewDat(data, d.name, d.chunk)
+		card, path, ok := loadOrNewDat(data, d.name, d.chunk, log)
+		if !ok {
+			continue
+		}
 		var want []string
 		for _, g := range c.Games {
 			if g.Product == "" || !idx[g.Product] {
