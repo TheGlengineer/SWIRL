@@ -131,6 +131,10 @@ void settings_init(void);
 void settings_load(void);
 void settings_save(void);
 void settings_validate(void);
+/* SWIRL: the style becomes SWIRL the first time SWIRL runs with a card (remembered in SWIRL.DAT) */
+void settings_swirl_once(void);
+/* SWIRL: 1 once when the settings changed at start up and need saving (the SWIRL style taken over) */
+int settings_take_dirty(void);
 /* SWIRL: a memory card that attached after start up; 1 when its OPENMENU.CFG changed the settings */
 int settings_late_card(void);
 /* SWIRL: no OPENMENU.CFG was found at start up and none has been written yet */

@@ -298,9 +298,35 @@ static int needs_fix(const gd_item *disc) {
   return !strncmp(disc->name, "PSO VER.2", 9) || !strncmp(disc->name, "SONIC ADVENTURE 2", 17);
 }
 
+/* An entry whose type is "other" (the Virtual Folder Bundle's word for an audio CD or anything that is not a
+   Dreamcast game) cannot go through the loader. The image is selected and the console goes to its own menu,
+   which plays or starts what is in the drive; that is how openMenu itself started every disc. */
+static int is_other_disc(const gd_item *disc) {
+  return !strcasecmp(disc->type, "other");
+}
+
+static void launch_bios_exit(gd_item *disc) {
+  sw_trace("launch: disc %u (%.12s) to the console's menu", disc->slot_num, disc->product);
+  if (gdemu_set_img_num((uint16_t)disc->slot_num) != 0) {
+    launch_failed("GDEMU did not answer the image change");
+    return;
+  }
+  thd_sleep(200);
+  send_game_id(disc);
+  if (wait_cd_ready() != 0) {
+    launch_failed("The disc did not become ready");
+    return;
+  }
+  arch_menu();
+}
+
 void dreamcast_launch_disc_ex(gd_item *disc, const launch_opts *o) {
   quiet();
   launch_error = NULL;
+  if (is_other_disc(disc)) {
+    launch_bios_exit(disc);
+    return;
+  }
   sw_trace("launch: disc %u (%.12s)", disc->slot_num, disc->product);
   if (!memory_fits()) {
     launch_error = "Out of memory: switch the console off and on";

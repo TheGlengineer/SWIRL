@@ -26,6 +26,7 @@
 #include "dc/pvr_texture.h"
 
 /* Images and such */
+#include "swirl/sw_lib.h"
 #include "swirl/sw_vmu.h"
 /* SWIRL draws its own VMU screen, so openmenu_lcd.h (the LCD picture) is not included */
 #if __has_include("openmenu_pal.h") && __has_include("openmenu_vmu.h")
@@ -47,7 +48,7 @@ static openmenu_settings savedata;
 static void settings_defaults(void) {
   savedata.identifier[0] = 'O';
   savedata.identifier[1] = 'M';
-  savedata.version = 2;
+  savedata.version = 1; /* SWIRL: always openMenu's version, so openMenu and the Virtual Folder Bundle read it */
   savedata.padding = 0;
   savedata.ui = UI_SWIRL;
   savedata.region = REGION_NTSC_U;
@@ -116,15 +117,40 @@ Exit_loop_1:
   sw_trace("OPENMENU.CFG: VMU %d/%d, cards %02x saves %02x, style %d", savefile_details.savefile_port,
            savefile_details.savefile_slot, savefile_details.valid_memcards, savefile_details.valid_saves, savedata.ui);
   settings_validate();
+  settings_swirl_once();
 }
 
-void settings_validate(void) {
-  if (savedata.version == 1) {
-    /* SWIRL: keep the user's openMenu settings, switch the style to SWIRL once */
-    savedata.version = 2;
+/* SWIRL: the first time SWIRL runs with a card (no SWIRL.DAT yet, or one from before this flag) the style becomes
+   SWIRL once and SWIRL.DAT remembers that. From then on the style in OPENMENU.CFG stands, whichever menu set it,
+   so a Classic style the owner chose, or openMenu run in between, is kept. */
+static int cfg_dirty; /* the style changed here; the menu saves the file once it is up */
+
+int settings_take_dirty(void) {
+  const int r = cfg_dirty;
+  cfg_dirty = 0;
+  return r;
+}
+
+void settings_swirl_once(void) {
+  if (sw_lib_prefs()->swirl_style_set)
+    return;
+  sw_lib_note_style_set();
+  if (savedata.ui != UI_SWIRL) {
+    sw_trace("style %d in OPENMENU.CFG: SWIRL takes over once", savedata.ui);
     savedata.ui = UI_SWIRL;
-    settings_save();
-  } else if (savedata.version != 2) {
+    cfg_dirty = 1;
+  }
+}
+
+/* SWIRL: OPENMENU.CFG keeps openMenu's version 1, whatever menu wrote it last. Upstream resets any other version
+   to defaults, so a version 2 file (SWIRL 2.14 previews wrote one) made the two menus reset each other on every
+   switch. A preview's version 2 file has the same layout and is read as version 1. The one thing SWIRL wants
+   from the file, its own style the first time it runs on a card, is remembered in SWIRL.DAT instead
+   (settings_swirl_once). */
+void settings_validate(void) {
+  if (savedata.version == 2)
+    savedata.version = 1;
+  if (savedata.version != 1) {
     settings_defaults();
     settings_save();
     return;
@@ -261,6 +287,7 @@ int settings_late_card(void) {
   cfg_missing = 0;
   sw_trace("OPENMENU.CFG: read from %c%d, attached late (style %d)", 'A' + port, slot, savedata.ui);
   settings_validate();
+  settings_swirl_once();
   if (savedata.ui != before.ui && !settings_style_ready(savedata.ui))
     savedata.ui = before.ui; /* the saved style needs theme files this disc lacks: stay */
   return memcmp(&before, &savedata, sizeof(savedata)) != 0;

@@ -601,6 +601,10 @@ void sw_lib_mark_dirty(void) {
 }
 int sw_lib_stats_loaded(void) { return loaded; }
 sw_prefs *sw_lib_prefs(void) { return &prefs; }
+void sw_lib_note_style_set(void) {
+  prefs.swirl_style_set = 1;
+  dirty = 1; /* not prefs_touched: a file merged in later still brings its own settings */
+}
 int sw_gameid_enabled(void) { return !prefs.gameid_off; }
 
 /* ---------- custom collections (COLLECT.TXT, written by SWIRL Card Manager) ---------- */

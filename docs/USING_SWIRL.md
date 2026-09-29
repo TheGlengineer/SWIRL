@@ -143,3 +143,12 @@ again), read back, and only then is the older copy removed. A VMU pulled or a VM
 through a save keeps the previous copy; SWIRL starts from the newest copy that reads back intact. A save needs
 room for the new copy on top of the one already on the card (2 to 8 blocks, more with a long history).
 Nothing is written to the SD card by the Dreamcast.
+
+The menu style, theme, beep, sort, filter and multidisc settings are openMenu's and live in `OPENMENU.CFG`,
+written in openMenu's own format (version 1) so openMenu and the Virtual Folder Bundle read it unchanged if
+you go back to them. The first time SWIRL runs with a card it switches the style to SWIRL once and remembers
+that in `SWIRL.DAT`; from then on the style in `OPENMENU.CFG` stands, whichever menu set it.
+
+An entry whose type is `other` (an audio CD, or anything that is not a Dreamcast game, as the Virtual Folder
+Bundle marks them) is selected on the GDEMU and then handed to the console's own menu, which plays or starts
+it, instead of going through the game loader.

@@ -387,8 +387,8 @@ static void trace_devices(void) {
    first seconds after the menu is up, and its files are read as if they had been there at start up. */
 #define SWIRL_LATE_CARD_MS 8000
 static void late_card_check(void) {
-  int changed = settings_late_card();
-  if (sw_lib_late_card())
+  int changed = sw_lib_late_card(); /* SWIRL.DAT first: its flag decides whether the CFG's style stands */
+  if (settings_late_card())
     changed = 1;
   if (!changed)
     return;

@@ -76,9 +76,10 @@ typedef struct sw_prefs {
   uint8_t saver_style; /* index into the screen saver list */
   uint8_t saver_min;   /* minutes without input before it starts, 1..30 */
   uint8_t gameid_off; /* 1: no Game ID for a VM2 / VMU Pro at launch (0, on, in older saves) */
-  uint8_t reserved[1];
+  uint8_t swirl_style_set; /* 1 once SWIRL has switched OPENMENU.CFG's style to SWIRL (done once per card) */
 } sw_prefs;
 sw_prefs *sw_lib_prefs(void);
+void sw_lib_note_style_set(void); /* SWIRL took the style over: remember it (saved, without touching the other settings) */
 int sw_lib_early_quality(void); /* before the screen is set up: 1 for high */
 int sw_lib_late_card(void);     /* a card that attached after start up: 1 when its SWIRL.DAT was taken in */
 
