@@ -11,6 +11,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"net"
 	"net/http"
@@ -865,6 +866,28 @@ func serve() {
 		}
 		bits := makeLogo(img, req.Opts)
 		writeJSON(w, map[string]any{"bits": bits, "png": "data:image/png;base64," + base64.StdEncoding.EncodeToString(vmuPNG(bits))})
+	}))
+	// the Report page: the scanned QR text in, the decoded report and the GitHub issue text out. Nothing
+	// leaves this PC; the user copies the text into an issue.
+	mux.HandleFunc("/api/report", post(func(m map[string]any) (any, error) {
+		rep, err := ParseReport(str(m, "text"))
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"report": rep, "issue": IssueBody(rep, version, str(m, "card"))}, nil
+	}))
+	mux.HandleFunc("/api/report/symbols", guard(func(w http.ResponseWriter, r *http.Request) {
+		data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<20))
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		p, err := saveSymbols(r.URL.Query().Get("name"), data)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, map[string]any{"path": p})
 	}))
 	mux.HandleFunc("/api/ping", guard(func(w http.ResponseWriter, r *http.Request) { writeJSON(w, "ok") }))
 	mux.HandleFunc("/api/quit", guard(func(w http.ResponseWriter, r *http.Request) {
