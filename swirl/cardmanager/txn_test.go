@@ -680,7 +680,7 @@ func TestCardFaultsAdd(t *testing.T) {
 	// CM-9: the copy fails part way
 	for _, n := range []int{1, 2, 3, 5} {
 		n := n
-		rows = append(rows, txnRow{name: fmt.Sprintf("CM9_add_write_fails_at_%d", n), menu: "swirl", games: 3,
+		rows = append(rows, txnRow{name: fmt.Sprintf("CM9_add_write_fails_at_%d", n), fixed: true, menu: "swirl", games: 3,
 			faults: func(root string) []*fault { return []*fault{{op: "Write", path: root, n: n, err: syscall.ENOSPC}} },
 			run:    add, extra: noNewFolders})
 	}
@@ -1024,4 +1024,40 @@ func TestRenumberJournal(t *testing.T) {
 			t.Fatalf("warnings %q", c.Warnings)
 		}
 	})
+}
+
+// A5: an add copies into NN.part and renames it when complete; a copy cut short leaves nothing GDEMU sees,
+// and the next scan removes the unfinished folder.
+func TestAddThroughPart(t *testing.T) {
+	src := t.TempDir()
+	writeTestGDI(t, filepath.Join(src, "New Game"), "NEW GAME", "T-00077N")
+	root := txnCard(t, "swirl", 2)
+	p, err := planAdd(root, []string{filepath.Join(src, "New Game")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// power lost during the third file
+	useFaults(t, &fault{op: "Write", path: root, n: 3, panic: true})
+	func() {
+		defer func() { recover() }()
+		runCopy(p, root, func(float64) {})
+	}()
+	cardfs = realFS{}
+	if fileExists(filepath.Join(root, "04")) || !fileExists(filepath.Join(root, "04.part")) {
+		t.Fatalf("after the cut: %v", listDir(root))
+	}
+	c, _ := ScanCard(root)
+	if len(c.Games) != 2 || fileExists(filepath.Join(root, "04.part")) || len(c.Warnings) == 0 || !strings.Contains(c.Warnings[0], "04.part") {
+		t.Fatalf("scan: %d games, warnings %q, %v", len(c.Games), c.Warnings, listDir(root))
+	}
+	// the same add then works, and leaves no .part behind
+	if err := runCopy(p, root, func(float64) {}); err != nil {
+		t.Fatal(err)
+	}
+	if !fileExists(filepath.Join(root, "04", "track03.bin")) || len(partFolders(root)) != 0 {
+		t.Fatalf("after the add: %v", listDir(root))
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, "04", "name.txt")); len(b) == 0 {
+		t.Fatal("name.txt was not written into the new folder")
+	}
 }

@@ -346,3 +346,29 @@ func hiddenFolderWarnings(root string) []string {
 	}
 	return warn
 }
+
+// partFolders lists the NN.part folders an add copies into.
+func partFolders(root string) []string {
+	var out []string
+	entries, _ := os.ReadDir(root)
+	for _, e := range entries {
+		if e.IsDir() && strings.HasSuffix(e.Name(), ".part") && folderRe.MatchString(strings.TrimSuffix(e.Name(), ".part")) {
+			out = append(out, e.Name())
+		}
+	}
+	return out
+}
+
+// recoverParts runs at a scan while the card is not being written: an NN.part folder is a copy that
+// never finished, so it is removed and reported.
+func recoverParts(root string) []string {
+	var warn []string
+	for _, p := range partFolders(root) {
+		if err := cardfs.RemoveAll(filepath.Join(root, p)); err != nil {
+			warn = append(warn, fmt.Sprintf("Folder %s is an unfinished copy of a game and could not be removed (%v). Delete it by hand.", p, err))
+			continue
+		}
+		warn = append(warn, fmt.Sprintf("Removed folder %s, an unfinished copy of a game from an add that was interrupted. Add that game again.", p))
+	}
+	return warn
+}

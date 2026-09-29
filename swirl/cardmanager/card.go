@@ -140,9 +140,10 @@ func ScanCard(root string) (*Card, error) {
 	}
 	tidyMacFiles(root)
 	var fixed []string
-	if fileExists(recoverPath(root)) || fileExists(stagePath(root)) || fileExists(journalPath(root)) {
+	if fileExists(recoverPath(root)) || fileExists(stagePath(root)) || fileExists(journalPath(root)) || len(partFolders(root)) > 0 {
 		if unlock, ok := tryLockCard(root, "Scan"); ok { // never while the card is being written
 			fixed = append(recoverRenumber(root), recoverMenu(root)...)
+			fixed = append(fixed, recoverParts(root)...)
 			unlock()
 		}
 	}

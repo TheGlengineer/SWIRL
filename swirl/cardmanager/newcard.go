@@ -285,7 +285,63 @@ func copyStream(in io.Reader, dst string, onBytes func(int64)) error {
 	return out.Close()
 }
 
+// runCopy copies a plan onto the card. Each numbered folder is filled as NN.part and renamed to NN only
+// when everything in it is copied, so a failed or stopped copy never leaves a half game where GDEMU looks.
 func runCopy(p *copyPlan, root string, onPct func(float64)) error {
+	parts := map[string]bool{}
+	for _, it := range p.Items {
+		if top, _, ok := strings.Cut(filepath.ToSlash(it.Dst), "/"); ok && folderRe.MatchString(top) {
+			parts[top] = true
+		}
+	}
+	var tops []string
+	for top := range parts {
+		if fileExists(filepath.Join(root, top)) {
+			return fmt.Errorf("folder %s is already on the card", top)
+		}
+		tops = append(tops, top)
+	}
+	sort.Slice(tops, func(i, j int) bool { return naturalLess(tops[i], tops[j]) })
+	for _, top := range tops {
+		if err := cardfs.RemoveAll(filepath.Join(root, top+".part")); err != nil { // left by an earlier failed copy
+			return err
+		}
+	}
+	cleanup := func(err error) error {
+		var errs []error
+		for _, top := range tops {
+			if e := cardfs.RemoveAll(filepath.Join(root, top+".part")); e != nil {
+				errs = append(errs, fmt.Errorf("removing the unfinished copy %s.part: %w", top, e))
+			}
+		}
+		return errors.Join(append([]error{err}, errs...)...)
+	}
+	if err := copyItems(p, root, onPct); err != nil {
+		return cleanup(err)
+	}
+	for i, top := range tops {
+		part := filepath.Join(root, top+".part")
+		if err := cardfs.SyncDir(part); err != nil {
+			return cleanup(err)
+		}
+		if err := cardfs.Rename(part, filepath.Join(root, top)); err != nil {
+			tops = tops[i:] // the folders before this one are complete and stay
+			return cleanup(fmt.Errorf("renaming %s.part to %s: %w", top, top, err))
+		}
+	}
+	cardfs.SyncDir(root)
+	return nil
+}
+
+// partPath is where a plan item is written: inside NN.part for a numbered folder.
+func partPath(root, dst string) string {
+	if top, rest, ok := strings.Cut(filepath.ToSlash(dst), "/"); ok && folderRe.MatchString(top) {
+		return filepath.Join(root, top+".part", filepath.FromSlash(rest))
+	}
+	return filepath.Join(root, dst)
+}
+
+func copyItems(p *copyPlan, root string, onPct func(float64)) error {
 	var done int64
 	progress := func(n int64) {
 		done += n
@@ -297,7 +353,7 @@ func runCopy(p *copyPlan, root string, onPct func(float64)) error {
 	var names []copyItem
 	byArc := map[string]map[string]copyItem{}
 	for i, it := range p.Items {
-		dst := filepath.Join(root, it.Dst)
+		dst := partPath(root, it.Dst)
 		if it.Entry != "" {
 			if byArc[it.Src] == nil {
 				byArc[it.Src] = map[string]copyItem{}
@@ -325,7 +381,7 @@ func runCopy(p *copyPlan, root string, onPct func(float64)) error {
 		err := walkArchive(a, func(n string) bool { _, ok := want[n]; return ok }, func(n string, _ int64, r io.Reader) error {
 			it := want[n]
 			got++
-			if err := copyStream(r, filepath.Join(root, it.Dst), progress); err != nil {
+			if err := copyStream(r, partPath(root, it.Dst), progress); err != nil {
 				return fmt.Errorf("%s: %w", path.Base(n), err)
 			}
 			if got == len(want) {
@@ -342,7 +398,7 @@ func runCopy(p *copyPlan, root string, onPct func(float64)) error {
 	}
 	// proper names: the real title from the disc's serial, else a tidied file name
 	for _, it := range names {
-		dst := filepath.Join(root, it.Dst)
+		dst := partPath(root, it.Dst)
 		label := strings.TrimPrefix(it.Src, "text:")
 		ip, _, _ := readImageIP(filepath.Dir(dst))
 		name := properName(ip, label)
@@ -351,7 +407,7 @@ func runCopy(p *copyPlan, root string, onPct func(float64)) error {
 			return err
 		}
 		if name != label {
-			jobLog("Named %s: %s", filepath.Base(filepath.Dir(dst)), name)
+			jobLog("Named %s: %s", strings.TrimSuffix(filepath.Base(filepath.Dir(dst)), ".part"), name)
 		}
 	}
 	return nil
