@@ -213,6 +213,43 @@ static void send_game_id(const gd_item *disc) {
     gameid_send(disc);
 }
 
+/* ---------- SWIRL: memory bounds (SW-4) ----------
+   The loader's parameters go to 0x8CCFFF00, CodeBreaker's cheats to 0x8CD00000 and its CD loader to
+   0x8CE10000, all above the menu's memory. openMenu only printed where the menu's memory ended; a menu that had
+   grown past the line (a very large library, a leak) wrote its parameters over its own memory and the launch
+   came back wrong or not at all. A launch that would cross the line now stops with a message. The patches to
+   PELICAN.BIN and BLEEM.BIN are applied only to files long enough to hold them, and a cheat file must fit
+   between the cheat area and the CD loader. */
+#define LOADER_DATA 0x8CCFFF00u
+#define CHEAT_AREA 0x8CD00000u
+#define CB_LOADER_AREA 0x8CE10000u
+#define PELICAN_MIN_SIZE (310786u * 2u) /* the last patched 16 bit word, pelican[310785] */
+#define BLEEM_MIN_SIZE (0x7079Cu + 256u)  /* the controller table patch at 0x7079C (altctrl is under 256 bytes) */
+
+static uintptr_t heap_end(void) {
+  extern void *sbrk(intptr_t);
+  return (uintptr_t)sbrk(0);
+}
+
+/* 1 when the menu's memory ends below the loader's data (and says where it ends in the trace) */
+static int memory_fits(void) {
+  const uintptr_t end = heap_end();
+#ifdef SW_TEST_BIG_HEAP
+  {
+    /* test only: grow the menu's memory past the line, so the launch has to stop */
+    static volatile uint8_t *big;
+    if (!big && (big = malloc(12 * 1024 * 1024))) big[12 * 1024 * 1024 - 1] = 1;
+  }
+#endif
+  if (heap_end() > LOADER_DATA) {
+    sw_trace("launch: memory ends at %08lx, past the loader data at %08lx", (unsigned long)heap_end(),
+             (unsigned long)LOADER_DATA);
+    return 0;
+  }
+  (void)end;
+  return 1;
+}
+
 static void launch_loader(const char *region, int game_fix, const launch_opts *o);
 static void launch_loader(const char *region, int game_fix, const launch_opts *o) {
   static const launch_opts defaults = {LAUNCH_REGION_AUTO, 1, LAUNCH_BOOT_BOTH}; /* the full start, as openMenu */
@@ -235,13 +272,8 @@ static void launch_loader(const char *region, int game_fix, const launch_opts *o
   int status = 0, disc_type = 0;
   cdrom_get_status(&status, &disc_type);
   param.disc_type = (disc_type == CD_GDROM);
-  {
-    /* the loader's settings go to 0xACCFFF00 (0x8CCFFF00 cached): SWIRL's memory must end below it */
-    extern void *sbrk(intptr_t);
-    const uintptr_t heap_end = (uintptr_t)sbrk(0);
-    sw_trace("launch: disc ready (type %d), memory ends at %08lx (loader data at 8ccfff00)", disc_type,
-             (unsigned long)heap_end);
-  }
+  sw_trace("launch: disc ready (type %d), memory ends at %08lx (loader data at %08lx)", disc_type,
+           (unsigned long)heap_end(), (unsigned long)LOADER_DATA);
   param.need_game_fix = game_fix;
 
   /* BIOS version specific patches used by GDMENU / openMenu */
@@ -270,6 +302,10 @@ void dreamcast_launch_disc_ex(gd_item *disc, const launch_opts *o) {
   quiet();
   launch_error = NULL;
   sw_trace("launch: disc %u (%.12s)", disc->slot_num, disc->product);
+  if (!memory_fits()) {
+    launch_error = "Out of memory: switch the console off and on";
+    return;
+  }
   if (gdemu_set_img_num((uint16_t)disc->slot_num) != 0) {
     launch_failed("GDEMU did not answer the image change");
     return;
@@ -284,21 +320,34 @@ void dreamcast_launch_disc(gd_item *disc) {
   dreamcast_launch_disc_ex(disc, NULL);
 }
 
-/* read a whole file from the menu disc into a 32 byte aligned buffer */
-static uint8_t *load_file(const char *path, uint32_t *size_out) {
+/* read a whole file from the menu disc into a 32 byte aligned buffer; *raw_out is what to free */
+static uint8_t *load_file(const char *path, uint32_t *size_out, uint8_t **raw_out) {
+  *raw_out = NULL;
   file_t fd = fs_open(path, O_RDONLY);
   if (fd == FILEHND_INVALID)
     return NULL;
-  uint32_t size = fs_total(fd);
+  ssize_t size = fs_total(fd);
+  if (size <= 0 || size > 8 * 1024 * 1024) {
+    sw_trace("launch: %s is %ld bytes, not loaded", path, (long)size);
+    fs_close(fd);
+    return NULL;
+  }
   uint8_t *raw = malloc(size + 64);
   if (!raw) {
+    sw_trace("launch: no memory for %s (%ld bytes)", path, (long)size);
     fs_close(fd);
     return NULL;
   }
   uint8_t *buf = (uint8_t *)(((uint32_t)raw + 31) & ~31u);
-  fs_read(fd, buf, size);
+  const ssize_t got = fs_read(fd, buf, size);
   fs_close(fd);
-  *size_out = size;
+  if (got != size) {
+    sw_trace("launch: %s short read (%ld of %ld)", path, (long)got, (long)size);
+    free(raw);
+    return NULL;
+  }
+  *size_out = (uint32_t)size;
+  *raw_out = raw;
   return buf;
 }
 
@@ -324,40 +373,67 @@ int is_psx_disc(const gd_item *disc) {
 
 void dreamcast_launch_cb(gd_item *disc) {
   uint32_t cb_size = 0, cheat_size = 0;
-  uint8_t *cb_buf = load_file("/cd/PELICAN.BIN", &cb_size);
+  uint8_t *cb_raw = NULL, *cheat_raw = NULL;
+  launch_error = NULL;
+  uint8_t *cb_buf = load_file("/cd/PELICAN.BIN", &cb_size, &cb_raw);
   if (!cb_buf)
     return;
+  if (cb_size < PELICAN_MIN_SIZE) {
+    /* a different CodeBreaker version: the patches below would land outside it */
+    sw_trace("launch: PELICAN.BIN is %lu bytes, at least %lu needed", (unsigned long)cb_size, (unsigned long)PELICAN_MIN_SIZE);
+    launch_error = "PELICAN.BIN is not a version SWIRL can start";
+    free(cb_raw);
+    return;
+  }
   quiet();
 
   /* cheats for this game, else the full CodeBreaker list */
   char cheat_name[40];
   snprintf(cheat_name, sizeof(cheat_name), "/cd/cheats/%s.bin", disc->product);
   uint32_t csize = 0;
-  uint8_t *cheat_buf = load_file(cheat_name, &csize);
+  uint8_t *cheat_buf = load_file(cheat_name, &csize, &cheat_raw);
   if (!cheat_buf) {
     /* SWIRL Card Manager's disc writer turns "-" into "_" (T-8101N.BIN is stored as T_8101N.BIN) */
     for (char *c = cheat_name + 11; *c; c++)
       if (*c == '-') *c = '_';
-    cheat_buf = load_file(cheat_name, &csize);
+    cheat_buf = load_file(cheat_name, &csize, &cheat_raw);
   }
   if (!cheat_buf)
-    cheat_buf = load_file("/cd/cheats/FCDCHEATS.BIN", &csize);
+    cheat_buf = load_file("/cd/cheats/FCDCHEATS.BIN", &csize, &cheat_raw);
   if (cheat_buf && csize > 640 && !strncmp((const char *)cheat_buf, "XploderDC Cheats", 16)) {
     cheat_size = csize - 640;
     cheat_buf += 640;
     if (!((uint32_t *)cheat_buf)[0])
       cheat_size = 0;
   }
+  if (cheat_size > CB_LOADER_AREA - CHEAT_AREA) {
+    /* the cheats would run into the CD loader's place */
+    sw_trace("launch: cheat file is %lu bytes, at most %lu fit", (unsigned long)cheat_size,
+             (unsigned long)(CB_LOADER_AREA - CHEAT_AREA));
+    launch_error = "The cheat file is too large for CodeBreaker";
+    free(cb_raw);
+    free(cheat_raw);
+    return;
+  }
+  if (!memory_fits()) {
+    launch_error = "Out of memory: switch the console off and on";
+    free(cb_raw);
+    free(cheat_raw);
+    return;
+  }
 
-  launch_error = NULL;
   if (gdemu_set_img_num((uint16_t)disc->slot_num) != 0) {
     launch_failed("GDEMU did not answer the image change");
+    free(cb_raw);
+    free(cheat_raw);
     return;
   }
   thd_sleep(200);
   send_game_id(disc);
   if (wait_cd_ready() != 0) {
     launch_failed("The game's disc did not become ready");
+    free(cb_raw);
+    free(cheat_raw);
     return;
   }
 
@@ -374,7 +450,7 @@ void dreamcast_launch_cb(gd_item *disc) {
     pelican[10819] = (cheat_size >> 16);
     pelican[10820] = 0;
     pelican[10821] = 0x8CD0;
-    memcpy((void *)0xACD00000, cheat_buf, cheat_size);
+    memcpy((void *)(CHEAT_AREA | 0x20000000u), cheat_buf, cheat_size);
   }
 
   if (disc_type != CD_GDROM) {
@@ -402,7 +478,7 @@ void dreamcast_launch_cb(gd_item *disc) {
     pelican[310708] = 0x0018;
     pelican[310784] = 0x0000;
     pelican[310785] = 0x8CE1;
-    memcpy((void *)0xACE10000, cb_loader_data, cb_loader_size);
+    memcpy((void *)(CB_LOADER_AREA | 0x20000000u), cb_loader_data, cb_loader_size);
   }
 
   arch_exec(cb_buf, cb_size);
@@ -410,19 +486,33 @@ void dreamcast_launch_cb(gd_item *disc) {
 
 void bleem_launch(gd_item *disc) {
   uint32_t size = 0;
-  uint8_t *buf = load_file("/cd/BLEEM.BIN", &size);
+  uint8_t *raw = NULL;
+  launch_error = NULL;
+  uint8_t *buf = load_file("/cd/BLEEM.BIN", &size, &raw);
   if (!buf)
     return;
+  if (size < BLEEM_MIN_SIZE || (uint32_t)altctrl_size > 256) {
+    sw_trace("launch: BLEEM.BIN is %lu bytes, at least %lu needed", (unsigned long)size, (unsigned long)BLEEM_MIN_SIZE);
+    launch_error = "BLEEM.BIN is not a version SWIRL can start";
+    free(raw);
+    return;
+  }
+  if (!memory_fits()) {
+    launch_error = "Out of memory: switch the console off and on";
+    free(raw);
+    return;
+  }
   quiet();
-  launch_error = NULL;
   if (gdemu_set_img_num((uint16_t)disc->slot_num) != 0) {
     launch_failed("GDEMU did not answer the image change");
+    free(raw);
     return;
   }
   thd_sleep(200);
   send_game_id(disc);
   if (wait_cd_ready() != 0) {
     launch_failed("The game's disc did not become ready");
+    free(raw);
     return;
   }
 
