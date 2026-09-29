@@ -3,6 +3,21 @@
 SWIRL (the menu) and SWIRL Card Manager share one version number. Card Manager patch releases (2.11.1)
 may ship without menu changes; the menu then keeps its major.minor version (2.11).
 
+## [2.14.0-preview.4]
+
+**This is a preview for testing.** Card Manager offers it to anyone who chose **Try the preview**.
+
+### Report a problem
+
+- SWIRL now keeps a log of what it does from power on and counts anything that goes wrong: a save that failed, a picture it could not use, a launch that came back, a line in OPENMENU.INI it could not read. **System, Diagnostics** on the Dreamcast lists them in plain words, and **A** there shows the whole log as QR codes. After a crash or a hang the codes are on the screen already; hold **X** while the console turns on for the start up log
+- Card Manager has a new **Report a problem** page. Scan the codes with your phone and paste the text, in any order, or drop photos of the screen on the page. It shows the report in plain words: what happened, the console and what was plugged in, each warning and what it means, where a crash stopped, and the steps SWIRL took. **Copy for GitHub** puts a ready to paste issue on the clipboard with the raw report attached. Nothing is sent anywhere by itself
+- The **Report a problem** button on the preview bar opens this page, and About explains the console side under **Diagnostics**
+
+### What to test
+
+- On the Dreamcast, open **System**, **Diagnostics**, press **A**, and scan the codes with your phone. Paste what it read into **Report a problem** in Card Manager: does the page tell the story of what you did?
+- Photograph the TV instead and drop the photos on the page. A sharp photo with the whole code in the frame should read; say so in an issue if yours does not
+
 ## [2.14.0-preview.3]
 
 **This is a preview for testing.** Card Manager offers it to anyone who chose **Try the preview**.

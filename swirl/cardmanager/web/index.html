@@ -820,6 +820,11 @@ kbd{font-family:Barlow,sans-serif;font-size:.78rem;font-weight:600;color:var(--t
         <dt><kbd>Esc</kbd></dt><dd>Close a window</dd>
       </dl></section>
 
+      <section class="abcard"><h4><svg><use href="#i-report"/></svg>Diagnostics</h4>
+        <p>SWIRL keeps a log of what it does from power on and counts anything that goes wrong (a save that failed, a picture it could not use, a launch that came back). <span class="where">System, Diagnostics</span> on the Dreamcast lists the warnings in plain words; <kbd>A</kbd> there shows the whole log as QR codes. After a crash or a hang the codes are already on the screen, and holding <kbd>X</kbd> while the console turns on shows the start up log.</p>
+        <p>Scan the codes with your phone, or photograph the screen, and bring them to <span class="where">Report a problem</span> in the list on the left: it decodes the report on this PC and writes the text for a GitHub issue. <button type="button" class="btn small" id="abReport">Open Report a problem</button></p>
+      </section>
+
       <section class="abcard"><h4><svg><use href="#i-games"/></svg>Managing games</h4><dl>
         <dt>Add</dt><dd><span class="where">Games, Add games</span>: tick games, folders, disc files or archives. Games already on the card are skipped</dd>
         <dt>Remove</dt><dd>Tick games, then <span class="where">Remove selected</span>. They go to SWIRL_BACKUP on the card, not straight to the bin</dd>
@@ -2307,6 +2312,7 @@ function rpRender(r) {
   $("rpCopyMsg").textContent = "";
 }
 $("rpDecode").onclick = () => rpDecode();
+$("abReport").onclick = () => { $("aboutDlg").close(); show("report"); };
 $("rpClear").onclick = () => { $("rpText").value = ""; rpParts.clear(); rpReport = null; $("rpOut").hidden = true; $("rpMsg").textContent = ""; };
 let rpTimer = 0;
 $("rpText").oninput = () => { clearTimeout(rpTimer); rpTimer = setTimeout(() => rpDecode(), 600); };
