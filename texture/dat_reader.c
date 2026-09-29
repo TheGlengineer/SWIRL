@@ -116,35 +116,44 @@ int DAT_load_parse(dat_file *bin, const char *path) {
   }
 
   /* Parse file table to Hash table */
-  unsigned int dropped = 0;
+  unsigned int dropped = 0, first_index = 0;
+  const char *first_why = NULL;
+  char first_id[12] = "";
   for (unsigned int i = 0; i < file_header.num_chunks; i++) {
     bin_item_raw raw;
     if (fread(&raw, 1, sizeof(bin_item_raw), (FD_TYPE)bin->handle) != sizeof(bin_item_raw))
       break;
     raw.ID[sizeof(raw.ID) - 1] = '\0';
-    if ((long)((unsigned long long)raw.offset * bin->chunk_size + bin->chunk_size) > file_size ||
-        (unsigned long long)raw.offset * bin->chunk_size > 0x7FFFFFFFULL) {
-      dropped++;
-      continue;
-    }
+    const char *why = NULL;
     bin_item *item = &bin->items[bin->num_chunks];
     memcpy(item->ID, raw.ID, sizeof(item->ID));
     item->offset = raw.offset;
-    if (item->ID[0] == '\0') {
-      dropped++;
-      continue;
+    if ((long)((unsigned long long)raw.offset * bin->chunk_size + bin->chunk_size) > file_size ||
+        (unsigned long long)raw.offset * bin->chunk_size > 0x7FFFFFFFULL) {
+      why = "outside the file";
+    } else if (item->ID[0] == '\0') {
+      why = "empty ID";
+    } else {
+      bin_item *dup;
+      HASH_FIND_STR(bin->hash, item->ID, dup);
+      if (dup)
+        why = "repeated ID";
     }
-    bin_item *dup;
-    HASH_FIND_STR(bin->hash, item->ID, dup);
-    if (dup) {
+    if (why) {
+      if (!dropped) {
+        first_why = why;
+        first_index = i;
+        memcpy(first_id, item->ID, sizeof(first_id));
+      }
       dropped++;
       continue;
     }
     HASH_ADD_STR(bin->hash, ID, item);
     bin->num_chunks++;
   }
-  if (dropped)
-    sw_warn(SW_WARN_DAT_FILE, "%s: %u entries dropped (chunk outside the file, empty or repeated ID)", path, dropped);
+  if (dropped) /* the detail names the first one so a report says which entry and why */
+    sw_warn(SW_WARN_DAT_FILE, "%s: %u of %u dropped, #%u '%s' %s", path, dropped, (unsigned)file_header.num_chunks,
+            first_index, first_id, first_why);
 
   /* Leave our handle in a handy place in case we need to read after */
   if (bin->num_chunks)

@@ -57,8 +57,8 @@ func parseDat(b []byte) (*datFile, error) {
 		id := string(bytes.TrimRight(rec[:12], "\x00"))
 		idx := int(binary.LittleEndian.Uint32(rec[12:]))
 		off := idx * cs
-		if off < 0 || off+cs > len(b) {
-			continue
+		if off < 0 || off+cs > len(b) || id == "" {
+			continue // the menu drops these too (dat_reader.c), so they are not carried into a rebuilt file
 		}
 		if _, dup := d.Chunks[id]; !dup {
 			d.Order = append(d.Order, id)
@@ -100,7 +100,12 @@ func datID(id string) string {
 }
 
 func (d *datFile) Write(path string) error {
-	ids := append([]string(nil), d.Order...)
+	var ids []string
+	for _, id := range d.Order {
+		if id != "" {
+			ids = append(ids, id)
+		}
+	}
 	sort.Strings(ids)
 	n := len(ids)
 	first := (16 + 16*n + d.ChunkSize - 1) / d.ChunkSize
