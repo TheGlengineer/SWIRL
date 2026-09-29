@@ -104,6 +104,7 @@ input[type=checkbox]{accent-color:var(--orange);width:1rem;height:1rem;margin:0}
 .stat span{color:var(--dim);font-size:.78rem;display:block}
 .stat b{display:block;font-family:Sora,sans-serif;font-size:1.15rem;margin-top:.15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .stat b.sm{font-size:.95rem;margin-top:.3rem}
+.stat small.sm{color:var(--dim);font-size:.78rem}
 .brand .beta{text-decoration:none;margin-left:.5rem;padding:.08rem .45rem;border-radius:999px;border:1px solid var(--orange);color:var(--orange);font-family:Barlow,sans-serif;font-size:.7rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
 .badge{display:inline-block;border-radius:999px;padding:.12rem .55rem;font-size:.78rem;font-weight:600;background:#243049;color:var(--text);font-family:Barlow,sans-serif}
 .badge.swirl{background:#3a2410;color:#ffc58e}
@@ -1037,11 +1038,15 @@ async function scan() {
   }
   const c = card;
   const art = c.games.filter(g => g.hasArt).length, meta = c.games.filter(g => g.hasMeta).length;
+  // SWIRL counts titles: the discs of a multi disc game are one entry there, so say both numbers when they differ
+  const extraDiscs = (c.sets || []).reduce((a, s) => a + Math.max(0, (s.folders || []).length - 1), 0);
+  const titles = c.games.length - extraDiscs;
+  const countText = extraDiscs ? `${titles} games on ${c.games.length} discs` : `${c.games.length} games`;
   const warnCount = (c.warnings || []).length + ((c.duplicates || []).length ? 1 : 0) + (!c.hasBox && !c.hasIcon && c.games.length ? 1 : 0);
   $("cardInfo").innerHTML = `
     <div class="summary">
       <div class="stat"><span>Menu in 01</span><b class="sm">${menuBadge(c)}</b></div>
-      <div class="stat"><span>Games</span><b>${c.games.length}</b></div>
+      <div class="stat"><span>Games</span><b>${titles}</b>${extraDiscs ? `<small class="sm"> on ${c.games.length} discs</small>` : ""}</div>
       <div class="stat"><span>With box art</span><b>${art}</b></div>
       <div class="stat"><span>With descriptions</span><b>${meta}</b></div>
     </div>
@@ -1060,14 +1065,14 @@ async function scan() {
   $("cardFlag").hidden = !warnCount;
   $("cardLed").className = "led " + (warnCount || c.menuType !== "SWIRL" ? "warn" : "ok");
   $("cardChipName").textContent = c.root;
-  $("cardChipInfo").textContent = `${c.menuType === "SWIRL" ? "SWIRL" : c.menuType === "None" ? "No menu" : c.menuType === "Game" ? "Game in 01" : c.menuType === "Unknown" ? "Unreadable image in 01" : c.menuType} · ${c.games.length} games`;
-  $("gamesSub").textContent = `${c.games.length} games · ${art} with box art · ${meta} with descriptions. Folders 02 and up, in the order GDEMU and SWIRL list them.`;
+  $("cardChipInfo").textContent = `${c.menuType === "SWIRL" ? "SWIRL" : c.menuType === "None" ? "No menu" : c.menuType === "Game" ? "Game in 01" : c.menuType === "Unknown" ? "Unreadable image in 01" : c.menuType} · ${countText}`;
+  $("gamesSub").textContent = `${countText} · ${art} with box art · ${meta} with descriptions. Folders 02 and up, in the order GDEMU and SWIRL list them.`;
   $("fillArt").disabled = !c.games.length;
   if (view === "card" && !warnCount) show("games");
   const blocked = c.menuType === "Game" || c.menuType === "Unknown" || (!c.games.length && c.menuType === "None");
   $("install").disabled = blocked;
   $("install").textContent = c.menuType === "SWIRL" ? "Update SWIRL" : "Install SWIRL";
-  log(blocked ? "This card can't be updated yet (see the notes under SD card)." : c.games.length ? `Ready. ${c.games.length} games found on ${c.root}` : `Ready. ${c.root} has SWIRL but no games yet. Add them in Games.`);
+  log(blocked ? "This card can't be updated yet (see the notes under SD card)." : c.games.length ? `Ready. ${countText} found on ${c.root}` : `Ready. ${c.root} has SWIRL but no games yet. Add them in Games.`);
   renderBackups();
   loadDB();
   loadGDEMU();
