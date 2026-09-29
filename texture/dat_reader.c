@@ -13,12 +13,28 @@
 #else
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #endif
 
 #include <external/uthash.h>
 
 #include "../gdrom/gdrom_fs.h"
 #include "../inc/dat_format.h"
+
+/* SWIRL: a DAT that cannot be used is reported in the start up trace on the Dreamcast, on stdout in the tools */
+#if defined(_arch_dreamcast) && !defined(STANDALONE_BINARY)
+#include "../ui/swirl/sw_trace.h"
+#else
+#define sw_trace(...)    \
+  do {                   \
+    printf(__VA_ARGS__); \
+    printf("\n");        \
+  } while (0)
+#endif
+
+/* SWIRL: what a DAT may claim (the biggest shipped DAT is BOX.DAT, 128 KB chunks, one per game) */
+#define DAT_MAX_CHUNKS (16384)
+#define DAT_MAX_CHUNK_SIZE (1024 * 1024)
 
 /* Define configure constants */
 /* only defined when building the binary tool */
@@ -64,27 +80,74 @@ int DAT_load_parse(dat_file *bin, const char *path) {
 
   printf("DAT:Open %s (%s)\n", filename_safe, path);
 
-  fread(&file_header, sizeof(bin_header), 1, bin_fd);
-  if (file_header.magic.rich.version != 1) {
+  /* SWIRL: nothing in the header is trusted. The counts must fit the file, the table allocation is checked,
+     every ID gets a NUL and an entry whose chunk lies outside the file is dropped. */
+  fseek(bin_fd, 0, SEEK_END);
+  long file_size = ftell(bin_fd);
+  fseek(bin_fd, 0, SEEK_SET);
+
+  if (fread(&file_header, 1, sizeof(bin_header), bin_fd) != sizeof(bin_header) ||
+      file_header.magic.rich.version != 1) {
     printf("DAT:Error Incorrect input file format!\n");
+    fclose(bin_fd);
+    return 1;
+  }
+  if (file_size < 0 || file_header.chunk_size == 0 || file_header.chunk_size > DAT_MAX_CHUNK_SIZE ||
+      file_header.num_chunks > DAT_MAX_CHUNKS ||
+      (long)(sizeof(bin_header) + (size_t)file_header.num_chunks * sizeof(bin_item_raw)) > file_size) {
+    sw_trace("%s: %u chunks of %u bytes do not fit a %ld byte file, not used", path, (unsigned)file_header.num_chunks,
+             (unsigned)file_header.chunk_size, file_size);
+    fclose(bin_fd);
     return 1;
   }
 
   /* setup basic bin file info */
   bin->chunk_size = file_header.chunk_size;
-  bin->num_chunks = file_header.num_chunks;
+  bin->num_chunks = 0;
   bin->handle = (void *)bin_fd;
-  bin->items = malloc(bin->num_chunks * sizeof(bin_item));
+  bin->items = file_header.num_chunks ? malloc(file_header.num_chunks * sizeof(bin_item)) : NULL;
   bin->hash = NULL;
-
-  /* Parse file table to Hash table */
-  for (unsigned int i = 0; i < file_header.num_chunks; i++) {
-    fread(&bin->items[i], sizeof(bin_item_raw), 1, (FD_TYPE)bin->handle);
-    HASH_ADD_STR(bin->hash, ID, &bin->items[i]);
+  if (file_header.num_chunks && !bin->items) {
+    sw_trace("%s: no memory for %u entries", path, (unsigned)file_header.num_chunks);
+    fclose(bin_fd);
+    bin->handle = NULL;
+    return 1;
   }
 
+  /* Parse file table to Hash table */
+  unsigned int dropped = 0;
+  for (unsigned int i = 0; i < file_header.num_chunks; i++) {
+    bin_item_raw raw;
+    if (fread(&raw, 1, sizeof(bin_item_raw), (FD_TYPE)bin->handle) != sizeof(bin_item_raw))
+      break;
+    raw.ID[sizeof(raw.ID) - 1] = '\0';
+    if ((long)((unsigned long long)raw.offset * bin->chunk_size + bin->chunk_size) > file_size ||
+        (unsigned long long)raw.offset * bin->chunk_size > 0x7FFFFFFFULL) {
+      dropped++;
+      continue;
+    }
+    bin_item *item = &bin->items[bin->num_chunks];
+    memcpy(item->ID, raw.ID, sizeof(item->ID));
+    item->offset = raw.offset;
+    if (item->ID[0] == '\0') {
+      dropped++;
+      continue;
+    }
+    bin_item *dup;
+    HASH_FIND_STR(bin->hash, item->ID, dup);
+    if (dup) {
+      dropped++;
+      continue;
+    }
+    HASH_ADD_STR(bin->hash, ID, item);
+    bin->num_chunks++;
+  }
+  if (dropped)
+    sw_trace("%s: %u entries dropped (chunk outside the file, empty or repeated ID)", path, dropped);
+
   /* Leave our handle in a handy place in case we need to read after */
-  fseek((FD_TYPE)bin->handle, bin->items[0].offset * bin->chunk_size, SEEK_SET);
+  if (bin->num_chunks)
+    fseek((FD_TYPE)bin->handle, bin->items[0].offset * bin->chunk_size, SEEK_SET);
 
   return 0;
 }
@@ -127,10 +190,10 @@ uint32_t DAT_get_index_by_ID(const dat_file *bin, const char *ID) {
 
 int DAT_read_file_by_ID(const dat_file *bin, const char *ID, void *buf) {
   uint32_t offset = DAT_get_offset_by_ID(bin, ID);
-  if (offset) {
+  if (offset && bin->handle) {
+    /* SWIRL: a short read is a failure; the buffer would hold the previous picture */
     fseek((FD_TYPE)bin->handle, offset, SEEK_SET);
-    fread(buf, bin->chunk_size, 1, (FD_TYPE)bin->handle);
-    return 1;
+    return fread(buf, 1, bin->chunk_size, (FD_TYPE)bin->handle) == bin->chunk_size;
   } else {
     return 0;
   }
@@ -138,10 +201,9 @@ int DAT_read_file_by_ID(const dat_file *bin, const char *ID, void *buf) {
 
 int DAT_read_file_by_num(const dat_file *bin, uint32_t chunk_num, void *buf) {
   uint32_t offset = chunk_num * bin->chunk_size;
-  if (chunk_num <= bin->num_chunks) {
+  if (chunk_num < bin->num_chunks && bin->handle) { /* SWIRL: was <=, one past the table */
     fseek((FD_TYPE)bin->handle, offset, SEEK_SET);
-    fread(buf, bin->chunk_size, 1, (FD_TYPE)bin->handle);
-    return 1;
+    return fread(buf, 1, bin->chunk_size, (FD_TYPE)bin->handle) == bin->chunk_size;
   } else {
     return 0;
   }
