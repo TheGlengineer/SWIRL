@@ -52,8 +52,15 @@ If the card was set up with GDMENUCardManager, openMenu or GDMENU, it already fo
 (folder `01` for the menu, `02` and up for games). Click **Update SWIRL** at the top right.
 
 - Only folder `01` is rebuilt. Game folders are never changed by an update.
-- The previous menu is moved to `SWIRL_BACKUP` on the card, and the **Backups** page can put it back.
-- Existing box art and game info in the menu disc are kept.
+- The previous menu is moved to `SWIRL_BACKUP` on the card. The menu that was there before SWIRL is kept for
+  good, and the **Backups** page has **Go back to openMenu** (or GDMENU) next to it.
+- Existing box art and game info in the menu disc are kept, and so is what the old list knew: names, regions
+  and dates you had set become SWIRL edits.
+- On a card from the Virtual Folder Bundle, the virtual folders become collections and `DISCDB.JSON` is kept
+  in step with the folders from then on.
+- If a game on the card has no VGA mode of its own (Hydro Thunder is one), the SD card page asks how your
+  Dreamcast is connected. Answer **VGA cable** to have it patched, or **TV** to leave it. You can change the
+  answer under **About**.
 
 ## 3b. An empty or new card
 
@@ -98,4 +105,5 @@ Use **Settings > Apps > SWIRL Card Manager > Uninstall**, or the **Uninstall** b
 It asks whether to also delete the downloaded art database, emulator files and settings (kept in
 `%LOCALAPPDATA%\SWIRL Card Manager`). Your SD cards are never touched.
 
-To go back to your old menu on a card, open **Backups** and click **Restore** next to it.
+To go back to your old menu on a card, open **Backups** and click **Go back to openMenu** (or GDMENU) next to
+the original, or **Restore** next to any other menu kept there.

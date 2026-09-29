@@ -7,10 +7,10 @@ with SWIRL, and SWIRL does not stop you from going back.
 SD card
 ├── 01/                 the menu disc: SWIRL (GDI with 5 tracks)
 ├── 02/                 first game disc
-├── 03/                 next game disc, and so on (no gaps: GDEMU stops at the first gap)
+├── 03/                 next game disc, and so on (no gaps: GDEMU stops at the first gap; up to 9999)
 ├── GDEMU.INI           GDEMU settings (optional)
 ├── SWIRL/              Card Manager's working files (never read by the Dreamcast)
-└── SWIRL_BACKUP/       previous menus and removed games
+└── SWIRL_BACKUP/       previous menus and their manifests, removed games, VGA patch undo files
 ```
 
 ## Game folders (02 and up)
@@ -19,8 +19,14 @@ Each game disc is one folder holding a `.gdi` with its tracks, or a `.cdi`, `.md
 Multi disc games use one folder per disc. SWIRL reads each disc's serial number from the image, which is
 how art, info and names are matched.
 
-Card Manager never changes the files inside a game folder once the game is on the card. Removing a game
-moves its folder to `SWIRL_BACKUP` and renumbers the folders after it.
+Card Manager never changes the files inside a game folder once the game is on the card, with one exception:
+a VGA patch you asked for changes a few bytes of a GDI in place, keeps the original bytes in
+`SWIRL_BACKUP/patches/` and writes a `patches.txt` note in the game folder saying what was applied and when.
+Removing a game moves its folder to `SWIRL_BACKUP` and renumbers the folders after it. Games are copied in as
+`NN.part` and renamed when complete, so a half copied game never looks like a real one.
+
+The Virtual Folder Bundle's `name.txt`, `serial.txt`, `type.txt` and `disc.txt` in a game folder are read and
+carried; `type.txt` saying `other` sends that entry to the console's own menu instead of the game loader.
 
 ## The menu disc (folder 01)
 
@@ -57,14 +63,23 @@ Card Manager keeps your edits here so they survive menu rebuilds and moving the 
 | `BGM.ADP` | Your own menu music, converted |
 | `BGM.THEME` | Marks that you chose the SWIRL theme music |
 | `card-id.txt` | A random ID so PC backups of this card are recognised |
+| `legacy_ini.json` | Keys from an openMenu or GDMENU `OPENMENU.INI` that SWIRL does not use, kept by product and written back |
+| `vfb-folders-imported.txt` | Marks that the Virtual Folder Bundle's virtual folders were made into collections once |
 
 ## SWIRL_BACKUP folder
 
-| Folder | Holds |
+| Folder or file | Holds |
 |---|---|
-| `01_YYYYMMDD_HHMMSS` | A previous menu, kept by every install. **Backups > Restore** puts it back. |
+| `01_original_<menu>_YYYYMMDD_HHMMSS` | The menu that was in `01` before SWIRL (openMenu, GDMENU, the Virtual Folder Bundle). Never pruned. **Backups > Go back to openMenu** puts it back. |
+| `01_YYYYMMDD_HHMMSS` | A previous menu, kept by every install. **Backups > Restore** puts it back. The newest few are kept. |
+| `<name>.json` | The manifest next to each menu backup: which menu, when, why, every file's size and which game was in which slot. Restore checks it. |
 | `removed_...` | Games you removed. Delete them from the Backups page to free the space. |
+| `patches/<folder>/<patch>.undo` | The original bytes of a VGA patch applied to that game folder. **Remove VGA patch** puts them back and renames the file `.undone`. |
+| `patches/<folder>/skip` | Marks that you removed the patch by hand, so Card Manager does not apply it again by itself |
+| `DISCDB_....JSON`, `.TXT` | A Virtual Folder Bundle database that could not be read, set aside with a note |
 
 ## What the Dreamcast writes
 
-Nothing on the SD card. Favorites, history, launch options and settings go to your VMU as `SWIRL.DAT`.
+Nothing on the SD card. Favorites, history, launch options and settings go to your VMU as `SWIRL.DAT`, with
+`SWIRL.BAK` as the second copy: a save writes the new copy under the other name, checks it, then retires the old
+one. openMenu's own settings (style, theme, sort) stay in `OPENMENU.CFG`, in openMenu's version 1 format.
