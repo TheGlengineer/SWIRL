@@ -101,10 +101,22 @@ int round(float x) {
    not count as a press in the new style (SWIRL would start the first game). Cleared once nothing is held. */
 static int input_latched;
 
-void reload_ui(void) {
+/* SWIRL: a style change asked for from inside a style's own input handler is applied once that handler has
+   returned, never while it is still running (upstream PR #45 da47477 deferred it the same way after a "random
+   freeze"). Before the main loop it is applied at once. */
+static int ui_reload_pending;
+
+static void apply_pending_reload(void) {
+  if (!ui_reload_pending)
+    return;
+  ui_reload_pending = 0;
   openmenu_settings *settings = settings_get();
   ui_set_choice(settings->ui);
   input_latched = 1;
+}
+
+void reload_ui(void) {
+  ui_reload_pending = 1;
 }
 
 static int init(void) {
@@ -149,6 +161,7 @@ static int init(void) {
   /* Load UI */
   sw_trace("style %d: loading", settings_get()->ui);
   reload_ui();
+  apply_pending_reload();
   sw_trace("style %d: ready", settings_get()->ui);
 
   return ret;
@@ -402,6 +415,7 @@ int main(int argc, char *argv[]) {
   int y_latched = 1, y_frames = 0;
   for (int frame = 0;; frame++) {
     z_reset();
+    apply_pending_reload();
     enum control input = translate_input(); /* also reads the controller for INPT_Button below */
     if (input_latched) {
       if (input == NONE)
@@ -435,6 +449,7 @@ int main(int argc, char *argv[]) {
     }
 #endif
     (*current_ui_handle_input)(input);
+    apply_pending_reload();
     draw();
     sw_trace_alive();
     if (frame == 0)
