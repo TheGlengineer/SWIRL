@@ -115,6 +115,7 @@ static int last_rv;        /* result of the last save */
 static int cur_copy = -1;  /* index into save_names of the newest valid copy on the card, -1 for none */
 static uint32_t cur_seq;   /* its write count */
 static int blocks_short;   /* blocks missing on the card after a save failed for space (-8) */
+static int retrying;       /* the menu will try the failed save again by itself */
 
 static void dev_name(maple_device_t *dev, char *out) {
   out[0] = 'A' + dev->port;
@@ -536,11 +537,11 @@ const char *sw_lib_save_status(char *buf, int len) {
   if (dirty || settings_dirty) {
     if (last_rv == -2) return "No VMU with space";
     if (last_rv == -8) {
-      snprintf(buf, len, "No space on VMU (needs %d block%s)", blocks_short, blocks_short == 1 ? "" : "s");
+      snprintf(buf, len, "Needs %d free block%s", blocks_short, blocks_short == 1 ? "" : "s");
       return buf;
     }
-    if (last_rv == -7) return "VMU busy, retrying";
-    if (last_rv) return "Not saved, retrying";
+    if (last_rv == -7) return retrying ? "VMU busy, retrying" : "VMU busy, not saved";
+    if (last_rv) return retrying ? "Not saved, retrying" : "Not saved: check the VMU";
     return "Unsaved changes";
   }
   if (saved_on[0]) {
@@ -560,6 +561,7 @@ int sw_lib_early_quality(void) {
 
 int sw_lib_dirty(void) { return dirty || settings_dirty; }
 int sw_lib_blocks_short(void) { return blocks_short; }
+void sw_lib_retrying(int on) { retrying = on; }
 void sw_lib_mark_dirty(void) {
   dirty = 1;
   prefs_touched = 1;

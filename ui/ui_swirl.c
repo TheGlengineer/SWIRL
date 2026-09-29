@@ -146,6 +146,7 @@ static int toast_frames;
 /* save debounce */
 static int save_countdown;
 static int save_tries; /* failed saves in a row (they are tried again a few times) */
+static int save_last;  /* result of the failed save being tried again (the banner says why) */
 /* The save banner, so nobody switches off with changes not yet on the VMU:
    "Unsaved changes. Saving in 3", then "Saving... please wait" until 2 s after the save is really done, then
    the outcome ("Saved to VMU", or why not). */
@@ -304,7 +305,7 @@ static const char *save_banner(char *buf, int len) {
   if (save_countdown > 0 && sw_lib_dirty()) {
     const int secs = (save_countdown + 59) / 60;
     if (save_tries > 0)
-      snprintf(buf, len, "VMU busy. Trying again in %d", secs);
+      snprintf(buf, len, "%s. Trying again in %d", save_last == -7 || save_last == -1 ? "VMU busy" : "Not saved", secs);
     else
       snprintf(buf, len, "Unsaved changes. Saving in %d", secs);
     return buf;
@@ -1808,7 +1809,7 @@ static void input_tabs(unsigned int btn, int pressed) {
                 save_hold = 120;
                 while (save_hold > 0) { idle_frame(); save_hold--; }
                 saving_now = 0;
-                snprintf(save_msg, sizeof(save_msg), "%s", r == 0 ? "Saved to VMU" : r == -2 ? "Not saved: no VMU with space" : "Not saved: check the VMU");
+                snprintf(save_msg, sizeof(save_msg), "%s", r == 0 ? "Saved to VMU" : r == -2 ? "Not saved: no VMU with space" : r == -8 ? "Not saved: no space on VMU" : "Not saved: check the VMU");
                 save_msg_frames = 60;
                 while (save_msg_frames > 0) { idle_frame(); save_msg_frames--; }
                 sw_vmu_shutdown(); /* the Classic styles draw their own VMU screen */
@@ -2432,8 +2433,11 @@ FUNCTION(UI_NAME, drawTR) {
       sw_lib_settings_dirty();
     }
     int r = sw_lib_save_async();
-    if (r == -7 || r == -1) /* card not answering, or a save still running: try again shortly */
+    if (r == -7 || r == -1) { /* card not answering, or a save still running: try again shortly */
       save_countdown = 120 * (save_tries < 5 ? ++save_tries : 5);
+      save_last = r;
+      sw_lib_retrying(1);
+    }
   }
   {
     int r;
@@ -2447,6 +2451,7 @@ FUNCTION(UI_NAME, drawTR) {
       save_outcome = 1;
       save_msg_frames = 150;
       sw_trace("save: result %d shown", r2);
+      sw_lib_retrying(0);
       if (r2 == 0) {
         snprintf(save_msg, sizeof(save_msg), "Saved to VMU");
         save_tries = 0;
@@ -2454,9 +2459,16 @@ FUNCTION(UI_NAME, drawTR) {
         /* no memory card, or no room: trying again won't help; the next change tries again */
         snprintf(save_msg, sizeof(save_msg), "No VMU with space. Changes not saved");
         save_tries = 0;
+      } else if (r2 == -8) {
+        /* the card that holds SWIRL.DAT is full: only freeing space helps */
+        const int n = sw_lib_blocks_short();
+        snprintf(save_msg, sizeof(save_msg), "No space on VMU. Free %d block%s in VMU saves", n, n == 1 ? "" : "s");
+        save_tries = 0;
       } else if (save_tries < 5) {
         /* a busy or slow card: try again after 2, 4, 6, 8 and 10 seconds */
         save_countdown = 120 * ++save_tries;
+        save_last = r2;
+        sw_lib_retrying(1);
         save_msg_frames = 0; /* the banner counts down to the next try */
       } else {
         snprintf(save_msg, sizeof(save_msg), "Not saved: check the VMU");
