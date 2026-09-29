@@ -220,8 +220,8 @@ func planAddTo(root string, sources []string, checkSpace bool) (*copyPlan, error
 		}
 		return nil, errors.New("pick at least one game")
 	}
-	if next-1 > 999 {
-		return nil, errors.New("GDEMU supports up to 999 folders")
+	if next-1 > 9999 {
+		return nil, errors.New("GDEMU supports up to 9999 folders")
 	}
 	if free, ok := freeSpace(root); checkSpace && ok && uint64(p.Total)+64<<20 > free {
 		return nil, fmt.Errorf("the games need %.1f GB but the card has %.1f GB free", float64(p.Total)/(1<<30), float64(free)/(1<<30))

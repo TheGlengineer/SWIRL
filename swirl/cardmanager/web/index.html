@@ -709,7 +709,7 @@ kbd{font-family:Barlow,sans-serif;font-size:.78rem;font-weight:600;color:var(--t
 <dialog id="healthDlg">
   <div class="edhead"><h3>Card health check</h3><span class="mono" id="healthWhen"></span></div>
   <div class="dbody" id="healthBody"></div>
-  <div class="edfoot"><span class="msg" id="healthMsg"></span><button class="btn" id="healthJunk" hidden>Move leftover system files to SWIRL_BACKUP</button><button class="btn primary" id="healthClose">Close</button></div>
+  <div class="edfoot"><span class="msg" id="healthMsg"></span><button class="btn" id="healthGaps" hidden>Close the gaps</button><button class="btn" id="healthJunk" hidden>Move leftover system files to SWIRL_BACKUP</button><button class="btn primary" id="healthClose">Close</button></div>
 </dialog>
 <dialog id="logoDlg">
   <div class="edhead"><h3>Make a VMU logo</h3><span class="mono">48 x 32 pixels, black and white</span></div>
@@ -991,12 +991,14 @@ async function scan() {
       <div class="stat"><span>With descriptions</span><b>${meta}</b></div>
     </div>
     ${(c.warnings || []).map(w => `<div class="warn">${esc(w)}</div>`).join("")}
+    ${c.gaps ? `<div class="row" style="margin-top:.5rem"><button class="btn small" id="closeGaps">Close the gaps (renumber the folders)</button></div>` : ""}
     ${(c.duplicates || []).length ? `<div class="warn"><b>Duplicate games:</b> ${c.duplicates.map(d => `${esc(d.name)} (folder ${esc(d.keep)}, extra ${d.extras.map(esc).join(", ")})`).join("; ")}.
       These are identical copies, not extra discs.
       <div class="row" style="margin-top:.5rem"><button class="btn small" id="dedupe">Remove extra copies (${(c.duplicates.reduce((a, d) => a + d.bytes, 0) / 1073741824).toFixed(1)} GB)</button></div></div>` : ""}
     ${!c.hasBox && !c.hasIcon && c.games.length ? `<div class="warn">No box art files on the card yet. Add them in Art and info, or SWIRL will show colored placeholders.</div>` : ""}`;
   renderGames();
   if ($("dedupe")) $("dedupe").onclick = dedupe;
+  if ($("closeGaps")) $("closeGaps").onclick = () => { if (confirm("Renumber the game folders so there are no gaps, then rebuild the menu?")) startJob("Closing the gaps", "/api/health/gaps", { root: card.root }); };
   vgaAfterScan();
   setNav(true);
   setCount("nGames", c.games.length);
@@ -1576,7 +1578,9 @@ async function runHealth() {
       <div class="stat"><span>Free</span><b class="sm">${r.totalBytes ? gb(r.freeBytes) : "?"}</b></div></div>
     <div>${(r.items || []).map(it => `<div class="hrow"><span class="dot ${it.level}"></span><span>${it.folder ? `<span class="mono">${esc(it.folder)}</span> ` : ""}${esc(it.message)}</span></div>`).join("")}</div>`;
   $("healthJunk").hidden = !(r.junkFiles || []).length;
+  $("healthGaps").hidden = !r.gaps;
 }
+$("healthGaps").onclick = () => { $("healthDlg").close(); startJob("Closing the gaps", "/api/health/gaps", { root: card.root }); };
 $("healthGo").onclick = runHealth;
 $("healthClose").onclick = () => $("healthDlg").close();
 $("healthJunk").onclick = async () => {

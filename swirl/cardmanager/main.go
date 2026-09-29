@@ -815,6 +815,7 @@ func serve() {
 		n, err := RemoveJunk(str(m, "root"))
 		return map[string]any{"moved": n}, err
 	}))
+	mux.HandleFunc("/api/health/gaps", post(func(m map[string]any) (any, error) { return nil, StartCloseGaps(str(m, "root")) }))
 	mux.HandleFunc("/api/games/arrange", post(func(m map[string]any) (any, error) { return nil, StartArrangeDiscs(str(m, "root")) }))
 	mux.HandleFunc("/api/preview", post(func(m map[string]any) (any, error) { return nil, StartPreview(str(m, "root"), str(m, "dats")) }))
 	mux.HandleFunc("/api/vmulogo", guard(func(w http.ResponseWriter, r *http.Request) {

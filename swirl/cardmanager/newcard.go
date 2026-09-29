@@ -208,11 +208,7 @@ func planCopy(src string) (*copyPlan, error) {
 	}
 	sort.Ints(numbered)
 	for _, n := range numbered {
-		name := fmt.Sprintf("%02d", n)
-		if _, err := os.Stat(filepath.Join(src, name)); err != nil {
-			name = strconv.Itoa(n)
-		}
-		if err := addTree(p, filepath.Join(src, name), fmt.Sprintf("%02d", n)); err != nil {
+		if err := addTree(p, filepath.Join(src, folderName(src, n)), fmt.Sprintf("%02d", n)); err != nil {
 			return nil, err
 		}
 		p.Games++
@@ -243,8 +239,8 @@ func planCopy(src string) (*copyPlan, error) {
 		next++
 		p.Games++
 	}
-	if next > 999 {
-		return nil, errors.New("GDEMU supports up to 999 folders")
+	if next > 9999 {
+		return nil, errors.New("GDEMU supports up to 9999 folders")
 	}
 	return p, nil
 }

@@ -72,6 +72,8 @@ type Card struct {
 	SwirlVer   string `json:"swirlVersion"`
 	// SwirlRelease is the version SWIRL reports in About ("2.10"); empty for early builds
 	SwirlRelease string `json:"swirlRelease,omitempty"`
+	// Gaps is set when the game folder numbers skip (GDEMU stops at the first gap)
+	Gaps bool `json:"gaps,omitempty"`
 	// DatIssues names the DAT files on the menu disc the menu cannot read (wrong version, short table)
 	DatIssues []string `json:"datIssues,omitempty"`
 	HasBox    bool     `json:"hasBox"`
@@ -86,7 +88,9 @@ type Card struct {
 	Sets       []DiscSet    `json:"sets"`
 }
 
-var folderRe = regexp.MustCompile(`^\d{2,3}$`)
+// folderRe matches a GDEMU game folder: 01..09, 10..99, 100..999, 1000..9999 (GDMENUCardManager and the
+// Virtual Folder Bundle write four digits past 999)
+var folderRe = regexp.MustCompile(`^\d{2,4}$`)
 
 func swirlHash(b []byte) string {
 	h := sha1.Sum(b)
@@ -237,6 +241,7 @@ func ScanCard(root string) (*Card, error) {
 	vfbDB := readVFBDatabase(root)
 	editsMoved := false
 	var nums []int
+	byNum := map[int]string{}
 	for _, e := range entries {
 		if !e.IsDir() || !folderRe.MatchString(e.Name()) {
 			continue
@@ -245,15 +250,17 @@ func ScanCard(root string) (*Card, error) {
 		if n <= 1 {
 			continue
 		}
+		if first, dup := byNum[n]; dup { // 02 and 002 are both folder 2; GDEMU reads one of them
+			c.Warnings = append(c.Warnings, fmt.Sprintf("Folders %s and %s are both number %d. GDEMU reads only one of them; rename or remove one.", first, e.Name(), n))
+			continue
+		}
+		byNum[n] = e.Name()
 		nums = append(nums, n)
 	}
 	sort.Ints(nums)
 	gapWarned := false
 	for i, n := range nums {
-		folder := fmt.Sprintf("%02d", n)
-		if _, err := os.Stat(filepath.Join(root, folder)); err != nil {
-			folder = strconv.Itoa(n)
-		}
+		folder := byNum[n]
 		g := Game{Folder: folder, Slot: n, Disc: "1/1", Region: "JUE", Version: "V1.000", Date: "20000101", VGA: true}
 		dir := filepath.Join(root, folder)
 		ip, format, err := readImageIP(dir)
@@ -331,7 +338,10 @@ func ScanCard(root string) (*Card, error) {
 		c.Games = append(c.Games, g)
 		if n != i+2 && !gapWarned {
 			gapWarned = true
-			c.Warnings = append(c.Warnings, fmt.Sprintf("Folder numbers skip a number before %s. GDEMU expects 02, 03, 04 ... with no gaps; renumber with GDMENUCardManager.", folder))
+			c.Warnings = append(c.Warnings, fmt.Sprintf("Folder numbers skip a number before %s. GDEMU expects 02, 03, 04 ... with no gaps and stops at the first one; Close the gaps (under Health and preview) renumbers the folders.", folder))
+		}
+		if n != i+2 {
+			c.Gaps = true
 		}
 	}
 	for i := range c.Games {

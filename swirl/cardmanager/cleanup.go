@@ -86,8 +86,10 @@ func numberedFolders(root string) []int {
 	return nums
 }
 
+// folderName is the folder on the card that holds game n, whichever way its number is written (02, 2,
+// 002, 0002); a folder that does not exist yet is named the GDEMU way (02, 100, 1000).
 func folderName(root string, n int) string {
-	for _, cand := range []string{fmt.Sprintf("%02d", n), strconv.Itoa(n), fmt.Sprintf("%03d", n)} {
+	for _, cand := range []string{fmt.Sprintf("%02d", n), strconv.Itoa(n), fmt.Sprintf("%03d", n), fmt.Sprintf("%04d", n)} {
 		if st, err := os.Stat(filepath.Join(root, cand)); err == nil && st.IsDir() {
 			return cand
 		}
@@ -96,7 +98,7 @@ func folderName(root string, n int) string {
 }
 
 // renumber closes gaps: the game folders become 02, 03, 04 ... in their current order. SWIRL edits and
-// art follow their game.
+// art follow their game. The renames are journaled (renumberTxn), so a failure part way is undone.
 func renumber(root string, log Logger) (int, error) {
 	var order []string
 	for _, n := range numberedFolders(root) {
