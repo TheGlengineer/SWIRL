@@ -50,7 +50,11 @@ uint8_t crayon_savefile_check_for_save(crayon_savefile_details_t * savefile_deta
 
 	memset(&pkg, 0, sizeof(pkg));
 	if(vmu_pkg_parse(pkg_out, pkg_size, &pkg) < 0){ /* SWIRL: KOS 2.2 added size arg */
-		sw_trace("%s: damaged (crc), treated as no save", savename);
+		static int warned; /* once: the cards are checked again before every save */
+		if(!warned){
+			warned = 1;
+			sw_warn(SW_WARN_CFG_DAMAGED, "%s: bad crc, replaced at the next save", savename + 5);
+		}
 		free(pkg_out);
 		return 2;
 	}
@@ -367,7 +371,7 @@ uint8_t crayon_savefile_load(crayon_savefile_details_t * savefile_details){
 	memset(&pkg, 0, sizeof(pkg));
 	if(vmu_pkg_parse(pkg_out, pkg_size, &pkg) < 0 || !pkg.data ||
 		pkg.data_len < (int)savefile_details->savefile_size){ /* SWIRL: KOS 2.2 added size arg */
-		sw_trace("%s: damaged (crc or length), not loaded", savename);
+		sw_warn(SW_WARN_CFG_DAMAGED, "%s: bad crc or length, not loaded", savename + 5);
 		free(pkg_out);
 		rv = 3;
 		goto clear_bits;
