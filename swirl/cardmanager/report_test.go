@@ -301,8 +301,8 @@ func TestReportIssueBody(t *testing.T) {
 	symbolsOverride = filepath.Join(t.TempDir(), "none.elf")
 	defer func() { symbolsOverride = "" }()
 	r, _ := ParseReport(crashReport)
-	body := IssueBody(r, "2.14.0-preview.4", "SWIRL 2.14 on the card, 25 games")
-	for _, want := range []string{"## What happened", "| SWIRL | 2.14.0-preview.3 |", "| Build | a747bc2 (uncommitted changes) |", "| Reason | R1 crash |", "| Card Manager | 2.14.0-preview.4 |", "- pc 8c000002", "## Card\n\nSWIRL 2.14 on the card, 25 games", "```\nSWIRL 2.14.0-preview.3 a747bc2-dirty R1\n", "x=8c000002 8c032720 8c0323f0 8c010100\n"} {
+	body := IssueBody(r, "2.14.0", "SWIRL 2.14 on the card, 25 games")
+	for _, want := range []string{"## What happened", "| SWIRL | 2.14.0-preview.3 |", "| Build | a747bc2 (uncommitted changes) |", "| Reason | R1 crash |", "| Card Manager | 2.14.0 |", "- pc 8c000002", "## Card\n\nSWIRL 2.14 on the card, 25 games", "```\nSWIRL 2.14.0-preview.3 a747bc2-dirty R1\n", "x=8c000002 8c032720 8c0323f0 8c010100\n"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("issue body lacks %q:\n%s", want, body)
 		}
