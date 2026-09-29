@@ -25,7 +25,7 @@ import (
 //go:embed web
 var webFS embed.FS
 
-const version = "2.14.0-preview.3"
+const version = "2.14.0-preview.4"
 
 var (
 	mu       sync.Mutex

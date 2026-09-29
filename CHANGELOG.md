@@ -5,7 +5,49 @@ may ship without menu changes; the menu then keeps its major.minor version (2.11
 
 ## [2.14.0-preview.4]
 
-**This is a preview for testing.** Card Manager offers it to anyone who chose **Try the preview**.
+**This is a preview for testing.** Card Manager offers it to anyone who chose **Try the preview**. It carries everything planned for 2.14.0 and for the 2.14.1 that was going to follow it; the stable 2.14.0 is this preview after the hardware checks.
+
+### Games with no VGA mode
+
+- A few games (Hydro Thunder is one) have no VGA output of their own: over a VGA cable they reach the SEGA screen and then the display shows nothing. Card Manager now carries community VGA patches for such games and applies them in place on the card, a few bytes, with an undo. The Games tab shows **Needs patch**, **Patched**, or **No (patch removed)**, and **Edit** has **Apply VGA patch** and **Remove VGA patch** with the patch author
+- The first time a card holds a game that needs a patch, the SD card page asks how your Dreamcast is connected. **VGA cable**: those games are patched at once, and any game you add later that needs one is patched when it is found. **TV**: nothing is patched. Change the answer under **About**. A patch you removed by hand stays off
+- First patch in the catalog: Hydro Thunder v1.020 (USA) by TapamN. You can add your own: a `catalog.json` and `.dcp` files in Card Manager's `patches` folder
+
+### Card Manager: going back is always possible
+
+- The menu that was on the card before SWIRL (openMenu, GDMENU, the Virtual Folder Bundle) is kept as `01_original_...` and never pruned. Backups lists it first with **Go back to openMenu**
+- Whatever is in folder 01 is recognised: a GDI or CDI menu, a game, an unknown image. A game in 01 blocks the install with a message instead of being moved
+- Every menu backup has a manifest (which menu, when, why, which games were in which slot). A backup with a missing or short file is not restored; one whose games no longer match the card asks first
+- An art or info file (BOX, ICON, META, VMU, SHOT.DAT) that Card Manager cannot read is kept and reported, never replaced with an empty one; the scan checks DAT versions
+- Coming from the Virtual Folder Bundle: `DISCDB.JSON` is kept in step with the folders when games are added, removed or renumbered (Glen's own card had folder 17 as Hydro Thunder while the database said Dino Crisis); virtual folders become collections once; `type.txt` and `disc.txt` are carried; a database that cannot be read is set aside with a note
+- The same corrected Sega serials as the menu, from one table (`serials.tsv`)
+- Folder numbers up to 9999, and **Close the gaps** in the health check for the numbering gaps GDEMU stops at (done through the journal, so a failure undoes itself)
+- Taking over from openMenu or GDMENU keeps what their list knew: names, regions, VGA and dates that differ from the disc become SWIRL edits, unknown keys are carried and written back, `BLEEM.BIN` comes along from a GDMENU disc
+
+### Card Manager: safer writes
+
+- One lock per card: two operations can no longer run into each other
+- The cover grid closes the menu disc before any write, so a Windows rename can no longer fail half way (the cause of a card left without a menu)
+- Replacing the menu is two folder renames with a staged copy; a restore copies the backup instead of moving it
+- Renumbering is journaled and undone on failure; added games are copied as `NN.part` and renamed when complete; every card write is flushed to the card
+
+### Menu: memory safety in the inherited code
+
+- A bad line, a five digit or stray slot, or an under reported count in OPENMENU.INI is skipped and reported instead of crashing, hanging the boot or dropping every game after it
+- A picture that does not fit its slot or has a bad header shows the missing picture instead of corrupting video memory; theme files are checked by size and header, not only by name
+- The Classic styles no longer freeze on a long unbroken description, and custom themes on the card are listed and load
+- A DAT file with a bad header or table is refused or trimmed instead of read past its end; a damaged OPENMENU.CFG is reported, never copied from an unset pointer
+- A multi disc set with more than six entries no longer shifts the slot table in the Classic list
+
+### Menu: saves, memory cards and launches
+
+- Two copies of SWIRL.DAT on the VMU: a save writes the new copy, checks it, then retires the old one, so a card pulled mid write never loses your library. Older SWIRL builds read the file unchanged
+- A full VMU says **No space on VMU. Free N blocks** instead of "check the VMU", and System no longer says "retrying" when nothing retries
+- A memory card that answers after start up (a VM2 switching cards, a slow VMU) is read within eight seconds instead of ignored until the next power on
+- OPENMENU.CFG stays openMenu's version 1 on the VMU, so stock openMenu and the Virtual Folder Bundle keep reading your settings when you switch back; the "SWIRL took over once" flag lives in SWIRL.DAT
+- A game marked `type=other` (an audio CD, a demo disc) goes to the console's own menu
+- A launch that would write over the loader's memory stops with a message instead of corrupting it; CodeBreaker, Bleem and cheat files are checked for size before loading
+- A disc change under a read no longer freezes the menu; the sort choice and an older SWIRL.DAT are saved on their own
 
 ### Report a problem
 
@@ -15,6 +57,10 @@ may ship without menu changes; the menu then keeps its major.minor version (2.11
 
 ### What to test
 
+- Start every game you own once. Anything that does not reach the game: note the name and what the screen did
+- Pull the VMU out during **Saving... please wait** once, put it back, power cycle: your favourites and history should still be there and Diagnostics should say one copy was damaged
+- If you have a VM2 or VMU Pro: power on with it switching cards; SWIRL should pick it up within eight seconds
+- Coming from the Virtual Folder Bundle: after Update SWIRL, restore the original menu from Backups and check the Bundle still sees every game and your settings
 - On the Dreamcast, open **System**, **Diagnostics**, press **A**, and scan the codes with your phone. Paste what it read into **Report a problem** in Card Manager: does the page tell the story of what you did?
 - Photograph the TV instead and drop the photos on the page. A sharp photo with the whole code in the frame should read; say so in an issue if yours does not
 
