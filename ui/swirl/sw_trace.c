@@ -2,12 +2,6 @@
 #include "sw_trace.h"
 #include "sw_version.h"
 #define SWIRL_REPORT_VERSION SWIRL_VERSION
-#ifndef SWIRL_BUILD
-#define SWIRL_BUILD "dev" /* swirl/build.sh passes the short git hash */
-#endif
-#ifndef SWIRL_VERSION_STR
-#define SWIRL_VERSION_STR SWIRL_VERSION /* the full version (2.14.0-preview.3) comes from swirl/build.sh */
-#endif
 
 #include <arch/arch.h>
 #include <arch/irq.h>

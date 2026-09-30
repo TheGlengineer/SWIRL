@@ -1297,7 +1297,8 @@ func addExtras(root string, c *Card, data string, log Logger) error {
 	return nil
 }
 
-var swirlReleaseRe = regexp.MustCompile(`Version (\d+\.\d+(?:\.\d+)?)\x00`)
+// the About panel's text: "Version 2.14\x00" up to 2.14.x, "Version 2.15.0-preview.1 (9e69da7)\x00" from 2.15
+var swirlReleaseRe = regexp.MustCompile(`Version (\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z.]+)?)[ \x00]`)
 
 // swirlRelease reads the version a SWIRL menu binary shows in System > About SWIRL.
 func swirlRelease(b []byte) string {

@@ -1050,7 +1050,9 @@ static void draw_system(float slide) {
   }
   sw_rrect(x, 310, 228, 126, 8, C_PANEL);
   sw_text(SWF_UI, x + 16, 322, 14, C_WHITE, "About SWIRL");
-  sw_text_right(SWF_SMALL, x + 212, 324, 12, C_DIM, "Version " SWIRL_VERSION);
+  /* the full version and the build id, so a photo of this panel says exactly what is on the card (the
+     Diagnostics screen shows the same); Card Manager reads the "Version ..." string out of the binary */
+  sw_text_right(SWF_SMALL, x + 212, 324, 12, C_DIM, "Version " SWIRL_VERSION_STR " (" SWIRL_BUILD ")");
   sw_text(SWF_SMALL, x + 16, 344, 12, C_TEXT, "Created by Glen Huszar");
   sw_text(SWF_SMALL, x + 16, 360, 12, C_ORANGE, "github.com/TheGlengineer");
   sw_text_wrap(SWF_SMALL, x + 16, 380, 11, C_DIM,

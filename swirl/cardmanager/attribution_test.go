@@ -22,7 +22,7 @@ func TestSwirlVersionMatches(t *testing.T) {
 	if parts := strings.SplitN(version, ".", 3); len(parts) == 3 {
 		mv = parts[0] + "." + parts[1]
 	}
-	if !bytes.Contains(swirlBinary, []byte("Version "+mv+"\x00")) {
+	if !bytes.Contains(swirlBinary, []byte("Version "+mv)) {
 		t.Fatalf("the embedded SWIRL menu does not report version %s; update ui/swirl/sw_version.h and rebuild it", mv)
 	}
 }
@@ -30,7 +30,7 @@ func TestSwirlVersionMatches(t *testing.T) {
 // About shows the SWIRL version found on the card.
 func TestSwirlReleaseRead(t *testing.T) {
 	mv := strings.Join(strings.SplitN(version, ".", 3)[:2], ".")
-	if got := swirlRelease(swirlBinary); got != mv {
-		t.Fatalf("swirlRelease = %q, want %q", got, mv)
+	if got := swirlRelease(swirlBinary); got != mv && !strings.HasPrefix(got, mv+".") {
+		t.Fatalf("swirlRelease = %q, want %q or %q.x", got, mv, mv)
 	}
 }
