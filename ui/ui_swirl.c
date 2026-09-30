@@ -40,6 +40,7 @@
 #include "swirl/sw_audio.h"
 #include "swirl/sw_gfx.h"
 #include "swirl/sw_trace.h"
+#include <dc/flashrom.h>
 #include "swirl/sw_lib.h"
 #include "swirl/sw_vmu.h"
 #include "swirl/sw_version.h"
@@ -190,6 +191,10 @@ static uint8_t *shot_buf;
 /* assets */
 static image img_logo_src;
 static int have_logo;
+/* where the logo sits inside img_logo_src: the crop of openMenu's theme picture (cards written before 2.15), or
+   a band of Card Manager's HDRLOGO.PVR sheet (row 0 the orange USA and Japan logo, row 32 the blue European one),
+   chosen by the console's own region (F1) */
+static int logo_x, logo_y;
 
 /* ---------- helpers ---------- */
 static uint32_t mix(uint32_t a, uint32_t b, float t) {
@@ -645,8 +650,8 @@ static void draw_header(void) {
   /* logo plate: the Sega Dreamcast logo is taken from the NTSC-U theme background on the SD card */
   if (have_logo) {
     sw_rrect(32, 20, 122, 26, 5, 0xFFFFFFFF);
-    const float u0 = 4.f / img_logo_src.width, v0 = 34.f / img_logo_src.height;
-    const float u1 = 118.f / img_logo_src.width, v1 = 54.f / img_logo_src.height;
+    const float u0 = (float)logo_x / img_logo_src.width, v0 = (float)logo_y / img_logo_src.height;
+    const float u1 = (float)(logo_x + 114) / img_logo_src.width, v1 = (float)(logo_y + 20) / img_logo_src.height;
     sw_image_uv(&img_logo_src, 36, 23, 114, 20, u0, v0, u1, v1, C_WHITE, C_WHITE, C_WHITE, C_WHITE);
   } else {
     sw_text(SWF_HEAD, 32, 20, 20, C_WHITE, "SWIRL");
@@ -2047,15 +2052,34 @@ FUNCTION(UI_NAME, init) {
   /* the Sega Dreamcast logo for the header, from openMenu's USA theme picture (Card Manager adds it to
      menu discs that lack it). Checked by opening the file, because EMPTY.PVR may be missing too. */
   have_logo = 0;
-  file_t lf = fs_open("/cd/THEME/NTSC_U/BG_U_L.PVR", O_RDONLY);
+  /* Card Manager's 32 KB logo sheet first (2.15 cards): a European console takes the blue band, any other the
+     orange one. Without it, the 512 KB theme picture the logo was always cut from. */
+  file_t lf = fs_open("/cd/HDRLOGO.PVR", O_RDONLY);
   if (lf != FILEHND_INVALID) {
+    fs_close(lf);
+    t = texman_create();
+    draw_load_texture_buffer("HDRLOGO.PVR", &img_logo_src, texman_get_tex_data(t));
+    have_logo = img_logo_src.texture && img_logo_src.width >= 128 && img_logo_src.height >= 64;
+    if (have_logo) {
+      texman_reserve_memory(img_logo_src.width, img_logo_src.height, 2);
+      logo_x = 0;
+      logo_y = flashrom_get_region() == FLASHROM_REGION_EUROPE ? 32 : 0;
+      sw_trace("header logo: HDRLOGO.PVR, %s", logo_y ? "blue (Europe)" : "orange");
+    }
+  }
+  if (!have_logo && (lf = fs_open("/cd/THEME/NTSC_U/BG_U_L.PVR", O_RDONLY)) != FILEHND_INVALID) {
     fs_close(lf);
     t = texman_create();
     draw_load_texture_buffer("THEME/NTSC_U/BG_U_L.PVR", &img_logo_src, texman_get_tex_data(t));
     have_logo = img_logo_src.texture && img_logo_src.width >= 128;
-    if (have_logo)
+    if (have_logo) {
       texman_reserve_memory(img_logo_src.width, img_logo_src.height, 2);
+      logo_x = 4;
+      logo_y = 34;
+      sw_trace("header logo: theme picture (no HDRLOGO.PVR on this card)");
+    }
   }
+  if (!have_logo) sw_trace("header logo: none, showing the name");
 
   sw_trace("SWIRL: graphics");
   sw_gfx_init();
