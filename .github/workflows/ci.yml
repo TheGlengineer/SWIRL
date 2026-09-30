@@ -57,7 +57,7 @@ jobs:
           cache: false
 
       - name: Vet
-        run: go vet ./... && GOOS=windows go vet ./... && GOOS=darwin go vet ./...
+        run: go vet ./... && GOOS=windows go vet ./... && GOOS=darwin go vet ./... && GOOS=linux go vet ./...
 
       - name: Test
         run: go test ./...
@@ -65,10 +65,15 @@ jobs:
       - name: Build the Windows exe
         run: GOOS=windows GOARCH=amd64 go build -ldflags "-H windowsgui -s -w -X main.updateRepo=${{ github.repository }}" -o SWIRL-Card-Manager.exe .
 
+      - name: Build the Linux binary
+        run: GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.updateRepo=${{ github.repository }}" -o SWIRL-Card-Manager .
+
       - uses: actions/upload-artifact@v7
         with:
           name: SWIRL-Card-Manager-exe
-          path: swirl/cardmanager/SWIRL-Card-Manager.exe
+          path: |
+            swirl/cardmanager/SWIRL-Card-Manager.exe
+            swirl/cardmanager/SWIRL-Card-Manager
 
   cardmanager-windows:
     name: SWIRL Card Manager (Windows)

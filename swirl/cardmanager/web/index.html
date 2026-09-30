@@ -1429,9 +1429,10 @@ function brRender() {
     const cb = d.querySelector("input");
     if (cb) { cb.onclick = ev => ev.stopPropagation(); cb.onchange = () => brPick(cb.value, cb.checked); }
     d.onclick = () => {
+      // a pickable row (game folder, disc or archive) ticks on click; plain folders still navigate
+      if (cb && !cb.disabled) { cb.checked = !cb.checked; brPick(cb.value, cb.checked); return; }
       if (d.dataset.dir) { brLoad(d.dataset.p); return; }
       if (br.pickFile) { if (d.dataset.kind === "music" || d.dataset.kind === "file") brDone(d.dataset.p); return; }
-      if (cb && !cb.disabled) { cb.checked = !cb.checked; brPick(cb.value, cb.checked); }
     };
   });
   const games = items.filter(e => pickable(e));
@@ -1959,7 +1960,7 @@ async function ncPick(path) {
     const d = await api("/api/diskinfo?root=" + encodeURIComponent(path));
     const gb = (d.sizeBytes / 1e9).toFixed(1);
     $("ncDisk").innerHTML = `<div class="diskcard" style="margin-top:.5rem"><b>${esc(d.model)}</b>, ${gb} GB${d.bus ? ", " + esc(d.bus) : ""}<br>
-      <span class="hint">${IS_MAC ? "On this card" : "Drive letters on this card"}: ${esc((d.letters || [d.root]).join(" "))}</span></div>
+      <span class="hint">${IS_MAC ? "On this card" : IS_LINUX ? "Mount points on this card" : "Drive letters on this card"}: ${esc((d.letters || [d.root]).join(" "))}</span></div>
       ${d.ok ? "" : `<div class="warn">${esc(d.reason)}</div>`}`;
     if (d.ok) nc.disk = d;
   } catch (e) { $("ncDisk").innerHTML = `<div class="warn">${esc(e.message)}</div>`; }
@@ -2026,10 +2027,12 @@ $("ncGo").onclick = async () => {
 // ---------- this app on the PC ----------
 let appInfo = null;
 const IS_MAC = /Mac/.test(navigator.platform || navigator.userAgent || "");
+const IS_LINUX = /Linux/.test(navigator.platform || navigator.userAgent || "");
 async function loadApp() {
   try { appInfo = await api("/api/app"); } catch (e) { return; }
   const a = appInfo, P = $("appPanel");
   if (a.platform === "darwin") { applyMac(); return loadAppMac(a, P); }
+  if (a.platform === "linux") { applyLinux(); P.hidden = true; return; }
   if (a.platform !== "windows") { P.hidden = true; return; }
   P.hidden = false;
   $("appSwitch").hidden = $("appUninstall").hidden = true; $("appInstall").hidden = false; $("appDeskRow").hidden = false;
@@ -2077,6 +2080,15 @@ function loadAppMac(a, P) {
     $("appText").textContent = "Copies the app into your Applications folder so you can open it from Launchpad and it can update itself. Nothing else on your Mac is changed.";
     $("appInstall").textContent = "Move to Applications";
   }
+}
+// Linux wording for the rest of the page
+function applyLinux() {
+  $("root").placeholder = "Or type the card's path, for example /run/media/james/SWIRL";
+  $("ncSrc").placeholder = "Folder with your games, or a backup of your old card";
+  $("brPath").placeholder = "Type or paste a folder, for example ~/Downloads/Dreamcast, then press Enter";
+  $("ncConfirm").placeholder = "Type CONFIRM to erase the card";
+  $("ncConfirm").maxLength = 7;
+  $("ncAdmin").textContent = "Linux will ask for your password to format the card.";
 }
 // macOS wording for the rest of the page
 function applyMac() {

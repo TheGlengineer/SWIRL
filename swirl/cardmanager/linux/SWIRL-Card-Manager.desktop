@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=SWIRL Card Manager
+Comment=Set up GDEMU SD cards with the SWIRL menu
+Exec=SWIRL-Card-Manager
+Icon=swirl
+Terminal=false
+Categories=Utility;

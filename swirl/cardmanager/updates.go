@@ -34,8 +34,14 @@ var (
 
 // platformAsset is the release file this platform installs from.
 func platformAsset() string {
-	if runtime.GOOS == "darwin" {
+	switch runtime.GOOS {
+	case "darwin":
 		return "SWIRL-Card-Manager-macOS.zip"
+	case "linux":
+		if runtime.GOARCH == "amd64" {
+			return "SWIRL-Card-Manager-linux-amd64.gz"
+		}
+		return ""
 	}
 	return "SWIRL-Card-Manager.exe"
 }

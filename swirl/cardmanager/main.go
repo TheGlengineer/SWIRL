@@ -972,6 +972,9 @@ func main() {
 	formatDisk := flag.String("format-disk", "", "internal: format the card at this drive (runs as administrator)")
 	diskNum := flag.Int("disk", -1, "internal: disk number that -format-disk must match")
 	statusFile := flag.String("status", "", "internal: progress file for -format-disk")
+	formatUID := flag.Int("format-uid", -1, "internal: uid that should own the freshly formatted card")
+	formatGID := flag.Int("format-gid", -1, "internal: gid that should own the freshly formatted card")
+	formatUser := flag.String("format-user", "", "internal: user to mount the freshly formatted card under")
 	captureVMU := flag.String("capture-vmu", "", "boot one disc (.gdi or .cdi) and print the VMU pictures it draws")
 	uninstall := flag.Bool("uninstall", false, "remove SWIRL Card Manager from this PC (used by Settings > Apps)")
 	quiet := flag.Bool("quiet", false, "with -uninstall: no questions, remove everything")
@@ -1008,7 +1011,7 @@ func main() {
 			fmt.Printf("%s: shown %.1fs, first at %.1fs\n", p, s.Seconds, s.First)
 		}
 	case *formatDisk != "":
-		os.Exit(runFormatHelper(*formatDisk, *diskNum, *statusFile))
+		os.Exit(runFormatHelper(*formatDisk, *diskNum, *statusFile, *formatUID, *formatGID, *formatUser))
 	case *formatImage != "":
 		f, err := os.OpenFile(*formatImage, os.O_RDWR|os.O_CREATE, 0o644)
 		if err == nil {

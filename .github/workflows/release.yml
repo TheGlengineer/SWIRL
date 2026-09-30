@@ -150,9 +150,94 @@ jobs:
             dist/SWIRL-Card-Manager-macOS.zip
             dist/SWIRL-Card-Manager-macOS.dmg
 
+  linux:
+    needs: windows
+    runs-on: ubuntu-22.04
+    env:
+      VERSION: ${{ needs.windows.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist-windows
+          path: dist-windows
+
+      - name: Use the menu built from source
+        run: cp dist-windows/1ST_READ.BIN swirl/cardmanager/assets/1ST_READ.BIN
+
+      # the key comes from the files that decide the build, worked out before building
+      - name: Flycast cache key
+        id: fckey
+        run: echo "key=flycast-linux-$(cat swirl/vmucap/build_linux.sh swirl/vmucap/vmucap_flycast.patch swirl/vmucap/vmucap.cpp | shasum -a 256 | cut -c1-20)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the Linux build of Flycast
+        id: flycast
+        uses: actions/cache/restore@v6
+        with:
+          path: swirl/cardmanager/assets/swirl-vmucap-linux.gz
+          key: ${{ steps.fckey.outputs.key }}
+
+      - name: Build Flycast for Linux
+        if: steps.flycast.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential cmake git libgl1-mesa-dev libegl1-mesa-dev             libx11-dev libxrandr-dev libxext-dev libxrender-dev libxi-dev libxinerama-dev             libxcursor-dev libxss-dev libasound2-dev libpulse-dev libcurl4-openssl-dev zlib1g-dev
+          WORK="$RUNNER_TEMP/flycast-build" swirl/vmucap/build_linux.sh
+
+      # saved straight away, so a later failing step does not throw the build away
+      - name: Save the Linux build of Flycast
+        if: steps.flycast.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: swirl/cardmanager/assets/swirl-vmucap-linux.gz
+          key: ${{ steps.fckey.outputs.key }}
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.22'
+          cache: false
+
+      - name: Install AppImage packaging tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq desktop-file-utils libfuse2 wget file
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+          ./appimagetool-x86_64.AppImage --appimage-extract >/dev/null
+          # the bare binary needs its bundled libraries, so wrap it
+          printf '#!/bin/sh\nLD_LIBRARY_PATH=%s/squashfs-root/usr/lib exec %s/squashfs-root/usr/bin/appimagetool "$@"\n' "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE" | sudo tee /usr/local/bin/appimagetool >/dev/null
+          sudo chmod +x /usr/local/bin/appimagetool
+          appimagetool --version
+
+      - name: Test Card Manager for Linux
+        working-directory: swirl/cardmanager
+        run: GOOS=linux go vet ./... && go test ./...
+
+      - name: Build Card Manager for Linux
+        working-directory: swirl/cardmanager
+        run: |
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath             -ldflags "-s -w -X main.updateRepo=${{ github.repository }}"             -o ../../dist/SWIRL-Card-Manager .
+          gzip -9 -k ../../dist/SWIRL-Card-Manager
+          mv ../../dist/SWIRL-Card-Manager.gz ../../dist/SWIRL-Card-Manager-linux-amd64.gz
+          rm ../../dist/SWIRL-Card-Manager
+
+      - name: Package the AppImage
+        working-directory: swirl/cardmanager
+        run: linux/make_appimage.sh "$VERSION" "${{ github.repository }}" ../../dist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-linux
+          path: |
+            dist/SWIRL-Card-Manager-linux-amd64.gz
+            dist/SWIRL-Card-Manager-linux-x86_64.AppImage
+
   # publishes the Windows files even if the Mac beta build fails; the Mac files are added when they exist
   publish:
-    needs: [windows, macos]
+    needs: [windows, macos, linux]
     if: ${{ !cancelled() && needs.windows.result == 'success' }}
     runs-on: ubuntu-22.04
     env:
@@ -171,7 +256,7 @@ jobs:
         run: |
           cd dist
           ls -la
-          sha256sum $(ls SWIRL-Card-Manager.exe SWIRL-Card-Manager-macOS.dmg SWIRL-Card-Manager-macOS.zip 1ST_READ.BIN SWIRL-*-symbols.elf 2>/dev/null) > SHA256SUMS.txt
+          sha256sum $(ls SWIRL-Card-Manager.exe SWIRL-Card-Manager-macOS.dmg SWIRL-Card-Manager-macOS.zip SWIRL-Card-Manager-linux-amd64.gz SWIRL-Card-Manager-linux-x86_64.AppImage 1ST_READ.BIN SWIRL-*-symbols.elf 2>/dev/null) > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Release notes
@@ -199,6 +284,13 @@ jobs:
           ---
           **Install or update**
           - **Windows:** download `SWIRL-Card-Manager.exe` and run it.
+          NOTES
+          if [ -f dist/SWIRL-Card-Manager-linux-x86_64.AppImage ]; then
+            cat >> notes.md <<'NOTES'
+          - **Linux:** download `SWIRL-Card-Manager-linux-x86_64.AppImage`, make it executable and run it (or the plain `SWIRL-Card-Manager-linux-amd64.gz`; formatting a card asks for your password).
+          NOTES
+          fi
+          cat >> notes.md <<'NOTES'
           - **Mac (beta):** download `SWIRL-Card-Manager-macOS.dmg`, open it and drag the app to Applications. The first time, macOS asks you to allow it: see [Getting started](https://github.com/${{ github.repository }}/blob/master/docs/GETTING_STARTED.md#on-a-mac). The Mac version is new, so please [report anything that does not work](https://github.com/${{ github.repository }}/issues/new/choose).
           - Already installed? Click **Update now** in Card Manager. Then click **Update SWIRL** to put the new menu on your card.
           NOTES
@@ -206,6 +298,9 @@ jobs:
           esac
           if [ ! -f dist/SWIRL-Card-Manager-macOS.dmg ]; then
             printf '\n_The Mac beta was not built for this release; Mac users can keep using the previous version._\n' >> notes.md
+          fi
+          if [ ! -f dist/SWIRL-Card-Manager-linux-x86_64.AppImage ]; then
+            printf '\n_The Linux AppImage was not built for this release; Linux users can keep using the previous version._\n' >> notes.md
           fi
           cat notes.md
 
@@ -216,7 +311,7 @@ jobs:
           # "2.14.0-preview.1" is published as a pre-release named "SWIRL 2.14.0 preview 1"
           TITLE="SWIRL $VERSION"; PRE=""
           case "$VERSION" in *-preview.*) TITLE="SWIRL ${VERSION%%-*} preview ${VERSION##*.}"; PRE="--prerelease";; *-*) PRE="--prerelease";; esac
-          FILES=$(ls dist/SWIRL-Card-Manager.exe dist/SWIRL-Card-Manager-macOS.dmg dist/SWIRL-Card-Manager-macOS.zip dist/1ST_READ.BIN dist/SWIRL-*-symbols.elf dist/SHA256SUMS.txt 2>/dev/null || true)
+          FILES=$(ls dist/SWIRL-Card-Manager.exe dist/SWIRL-Card-Manager-macOS.dmg dist/SWIRL-Card-Manager-macOS.zip dist/SWIRL-Card-Manager-linux-amd64.gz dist/SWIRL-Card-Manager-linux-x86_64.AppImage dist/1ST_READ.BIN dist/SWIRL-*-symbols.elf dist/SHA256SUMS.txt 2>/dev/null || true)
           if gh release view "$TAG" >/dev/null 2>&1; then
             # a release made on github.com first: add the files and the notes from CHANGELOG.md
             gh release upload "$TAG" $FILES --clobber
