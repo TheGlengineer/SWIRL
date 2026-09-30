@@ -3,16 +3,27 @@
 SWIRL (the menu) and SWIRL Card Manager share one version number. Card Manager patch releases (2.11.1)
 may ship without menu changes; the menu then keeps its major.minor version (2.11).
 
+## [2.14.3]
+
+A correction. 2.14.2's release note said that 2.14.0 and 2.14.1 lost favourites and play history for people upgrading from 2.13. That was wrong: the bug was never there. A SWIRL.DAT written by the real 2.13.3 build loads in the real 2.14.0 build with its favourites intact; the report came from a misread of the file layout, checked against test files made from that same misread instead of from a real build. Nobody lost anything, and 2.14.2's repair could not act on a real file. Sorry for the alarm.
+
+**Tested on:** the emulator harness with a save file written by the 2.13.3 build, read by the 2.14.0, 2.14.2 and 2.14.3 builds (favourites intact each time). The same files are now part of the repository's checks.
+
+### Changed
+
+- The repair and warning W20 from 2.14.2 are removed. The save file keeps the version number 2.14.2 gave it (the bytes are the same as 2.13's; the file now says which version wrote it)
+- The save file layout lives in one file that builds on a PC, with checks that read a file written by every released version, so a claim about the upgrade path is tested against real files before anything is built on it
+
 ## [2.14.2]
 
-A hotfix for anyone who upgraded from 2.13 with favourites or play history. Install it with Update SWIRL as soon as you can; the sooner the menu runs it, the more it can put back.
+A hotfix that turned out to fix nothing (see 2.14.3). It is safe: the repair it added only acts on a file whose entries match none of the card's games, which a real file never is, and the version number it gives the save file is kept.
 
-**Tested on:** the emulator harness with a SWIRL.DAT written the way 2.13.3 writes it (read whole, saved again in the current layout) and with the file 2.14.0 makes of that (put back, one entry short). Not yet run on a console; the change is in the save file reader only.
+**Tested on:** the emulator harness. Not run on a console.
 
-### Fixed
+### Changed
 
-- **Favourites and history from 2.13 were lost on upgrade.** 2.14.0 added one settings byte to SWIRL.DAT and read every older file as if it had always been there, so a file saved by 2.11 to 2.13.3 came in with every entry one byte out of place: favourites and play counts belonged to no game, and the next save wrote that back. 2.14.2 reads a 2.13 file correctly, and when it finds a file that 2.14.0 or 2.14.1 already rewrote it moves the entries back where they were. Everything comes back except the last entry in the file, which 2.14.0 had already dropped. The Diagnostics screen shows warning **W20** once when that repair has run
-- The save file layout is now version 3; a 2.14.0 or 2.14.1 menu still reads it
+- The save file is stamped version 3 (same bytes as before)
+- Removed in 2.14.3: a "repair" for a byte shift in 2.13 save files that never existed, and warning W20
 
 ### Not in this release
 
