@@ -3,6 +3,29 @@
 SWIRL (the menu) and SWIRL Card Manager share one version number. Card Manager patch releases (2.11.1)
 may ship without menu changes; the menu then keeps its major.minor version (2.11).
 
+## [2.14.1]
+
+Card Manager only; the menu is the 2.14.0 build. Linux joins macOS as a beta of the app, and two things the 2.14.0 release run turned up are fixed.
+
+**Tested on:** the Linux app and AppImage against a card on Ubuntu 24.04 (install SWIRL over openMenu, add, reorder and remove games, backup, update check, desktop install, the format safety rules), and the menu disc it built booted in the emulator. The port's own author formatted and filled a real 128 GB card on Arch Linux. The Mac app is built and checked by the automated tests on a Mac; it has still not had a full run on a real Mac, which is why it stays a beta.
+
+### Linux (beta)
+
+- SWIRL Card Manager runs on x86-64 Linux, as a static binary or an AppImage, with every feature of the Windows app: cards found through the desktop's mounts, New card from scratch (root through PolicyKit or sudo, confirmed by typing CONFIRM, refusing the disk that holds Linux and anything not removable), Install on this PC under `~/.local/share` with an application menu entry, self update, Preview and VMU capture through the patched Flycast. Written and tested on real hardware by jkoehler11 (pull request #11)
+- The filesystem root can never be scanned as a card, so Add games cannot write game folders onto the system disk
+- In the game picker, clicking a game's row ticks it; plain folders still open
+
+### Fixed
+
+- **Windows:** right after Card Manager writes the new menu disc, the antivirus or the search indexer often holds a file in it open for a moment, and the swap into folder 01 (or the cleanup of an unfinished copy) failed with "Access is denied". Renames and deletes on the card now try again for up to four seconds. Seen on GitHub's Windows runner, which runs Defender, in two tests that pass on a quiet PC
+- Update SWIRL keeps the old menu's IP.BIN; its boot file name is now always 1ST_READ.BIN, so a damaged name in the old menu cannot produce a menu the BIOS will not start
+
+### Known limits
+
+- Everything under 2.14.0's **Known limits** still applies
+- **Linux:** formatting was proven on one distribution (Arch) and one reader; udisks mounts the fresh card under `/media/<user>` or `/run/media/<user>`, and if it does not appear, unplug and replug the card and use Install SWIRL. Only x86-64 builds are published; arm64 works from source
+- **macOS:** unchanged from 2.14.0 and still a beta
+
 ## [2.14.0]
 
 The hardening release. Everything from previews 1 to 4 (VM2 and VMU Pro game cards, the animated VMU screen, the full boot sequence, bounded GDEMU waits) plus what was planned for 2.14.1, in one stable version. The audit behind it, the fix plan and the test harness are in the repo's history; what matters is below.

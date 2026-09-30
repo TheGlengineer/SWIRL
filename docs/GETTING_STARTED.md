@@ -11,7 +11,7 @@ This guide takes you from download to playing, on a card that already has games 
 
 ## 1. Get SWIRL Card Manager
 
-On a Mac, skip to [On a Mac](#on-a-mac) below, then carry on from step 2.
+On a Mac, skip to [On a Mac](#on-a-mac) below; on Linux, to [On Linux](#on-linux). Then carry on from step 2.
 
 1. Open the [latest release](https://github.com/TheGlengineer/SWIRL/releases/latest) and download **SWIRL-Card-Manager.exe**.
 2. Double click it. Because the app is not code signed, Windows SmartScreen may show "Windows protected your PC". Click **More info**, then **Run anyway**. This is only needed the first time.
@@ -30,7 +30,7 @@ You can also keep running the downloaded exe. Installing just makes it easier to
 
 ### On a Mac
 
-The Mac version is a **beta**: it has every feature of the Windows app and has been tested on real Macs, but it is new. If something does not work, please [report it](https://github.com/TheGlengineer/SWIRL/issues/new/choose) and pick "SWIRL Card Manager on a Mac (beta)".
+The Mac version is a **beta**: it has every feature of the Windows app, it is built and checked by the automated tests on a Mac, but it has not yet had a full run on a real Mac against a real card. If something does not work, please [report it](https://github.com/TheGlengineer/SWIRL/issues/new/choose) and pick "SWIRL Card Manager on a Mac (beta)".
 
 1. From the [latest release](https://github.com/TheGlengineer/SWIRL/releases/latest), download **SWIRL-Card-Manager-macOS.dmg** and open it.
 2. Drag **SWIRL Card Manager** onto **Applications**, then eject the disk image.
@@ -40,6 +40,18 @@ The Mac version is a **beta**: it has every feature of the Windows app and has b
 6. The first time it reads your SD card, macOS asks whether SWIRL Card Manager may access files on a removable volume. Click **Allow**. It may ask the same for your Downloads or Documents folder when you browse there.
 
 Everything else works as on Windows, including New card from scratch (macOS asks for your password to format the card), Preview in Flycast and VMU screen capture. Updates install themselves from inside the app.
+
+### On Linux
+
+The Linux version is a **beta**: it has every feature of the Windows app. Formatting, installing SWIRL and adding games were tested on a real 128 GB card on Arch Linux by the contributor who wrote the port, and everything except formatting was run again on Ubuntu 24.04 before release, but it is new. If something does not work, please [report it](https://github.com/TheGlengineer/SWIRL/issues/new/choose).
+
+1. From the [latest release](https://github.com/TheGlengineer/SWIRL/releases/latest), download **SWIRL-Card-Manager-linux-x86_64.AppImage** (any x86-64 distribution with glibc). If your system cannot run AppImages, download **SWIRL-Card-Manager-linux-amd64.gz** instead, `gunzip` it and `chmod +x` the binary.
+2. Make the AppImage executable (right click > Properties > Permissions, or `chmod +x`) and run it.
+3. The app opens in its own window using Chromium, Chrome, Edge, Brave or Vivaldi if one is installed, otherwise in a tab of your default browser.
+4. Put the card in the reader and let your desktop mount it. It appears in the app's drive list under `/media` or `/run/media`. If it does not, type the mount point into the box.
+5. **Install on this PC** on the SD card page copies the app to `~/.local/share/swirl-card-manager` and adds it to your application menu. No root needed; updates install themselves from inside the app.
+
+New card from scratch writes the raw disk, which needs root: Linux asks for your password through PolicyKit (or sudo in a terminal when there is no PolicyKit agent). You confirm by typing `CONFIRM`. The app refuses the disk that holds Linux and any drive that is not removable or on USB, and it needs a card mounted first so it can tell which device it is.
 
 ## 2. Pick your SD card
 
