@@ -3,6 +3,31 @@
 SWIRL (the menu) and SWIRL Card Manager share one version number. Card Manager patch releases (2.11.1)
 may ship without menu changes; the menu then keeps its major.minor version (2.11).
 
+## [2.15.0-preview.1]
+
+The first 2.15 preview: the header logo by region, the About panel says which build is on the card, and the checks behind the save file that 2.14.3 introduced. Small on purpose, so a hardware run can cover all of it.
+
+### Menu
+
+- **The header logo follows the console's region.** A European Dreamcast shows the blue Sega Dreamcast logo, an American or Japanese one the orange logo, both cut from openMenu's own theme picture by Card Manager (the blue one is the same picture with the swirl's hue changed). The menu reads them from a 32 KB file instead of the 512 KB theme picture, so the console starts about a second sooner. A card written by an older Card Manager keeps showing the orange logo as before
+- **About SWIRL** shows the full version and the build id, the same line the Diagnostics screen shows, so a photo of the panel says exactly what is on the card
+- The memory check at each stage now also traces the three memory pools (main RAM below the loader ceiling, video RAM, sound RAM). Measured on the emulator at 25, 46, 250 and 1000 games in both picture quality modes: main RAM stays above 10.5 MB free whatever the card, video RAM is the tight one (about 1.5 MB free on High, 2.2 MB on Standard)
+
+### Card Manager
+
+- Update SWIRL writes the logo file (`HDRLOGO.PVR`) into the menu disc
+- The rebuild log says how long each stage took (scanning, gathering, building, copying, the swap). These numbers from real cards decide what the 2.15 scan cache should hold
+- A copy onto the card closes its file on every way out, so a failure in the middle of an add on Windows cannot leave the unfinished folder locked until the app is restarted
+
+### What to test on the console
+
+1. Update SWIRL from this exe, boot: About SWIRL shows `2.15.0-preview.1, build ...` and Diagnostics shows no warnings
+2. The header: orange logo on an American or Japanese console, blue on a European one. Please send a photo of the header
+3. Boot time from power on to the Home tab, against 2.14.3 on the same card (a stopwatch is fine)
+4. Favourites and history from before the update are still there
+5. Launch two games; in game reset from Crazy Taxi comes back to SWIRL
+6. From the Card Manager log after the update: the "in N s" lines, copied into a message
+
 ## [2.14.3]
 
 A correction. 2.14.2's release note said that 2.14.0 and 2.14.1 lost favourites and play history for people upgrading from 2.13. That was wrong: the bug was never there. A SWIRL.DAT written by the real 2.13.3 build loads in the real 2.14.0 build with its favourites intact; the report came from a misread of the file layout, checked against test files made from that same misread instead of from a real build. Nobody lost anything, and 2.14.2's repair could not act on a real file. Sorry for the alarm.
