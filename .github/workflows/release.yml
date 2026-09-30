@@ -184,7 +184,7 @@ jobs:
         if: steps.flycast.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq build-essential cmake git libgl1-mesa-dev libegl1-mesa-dev             libx11-dev libxrandr-dev libxext-dev libxrender-dev libxi-dev libxinerama-dev             libxcursor-dev libxss-dev libasound2-dev libpulse-dev libcurl4-openssl-dev zlib1g-dev
+          sudo apt-get install -y -qq build-essential cmake git libgl1-mesa-dev libegl1-mesa-dev             libx11-dev libxrandr-dev libxext-dev libxrender-dev libxi-dev libxinerama-dev             libxcursor-dev libxss-dev libasound2-dev libpulse-dev libcurl4-openssl-dev zlib1g-dev libudev-dev
           WORK="$RUNNER_TEMP/flycast-build" swirl/vmucap/build_linux.sh
 
       # saved straight away, so a later failing step does not throw the build away

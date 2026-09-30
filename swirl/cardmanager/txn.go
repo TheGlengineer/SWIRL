@@ -62,6 +62,10 @@ type recoverInfo struct {
 // swapMenu makes stage the new 01. The current 01, if it holds anything, is renamed to backup first
 // (backup is then required). The error says exactly where both menus are when something fails.
 func swapMenu(root, stage, backup string) error {
+	// Card Manager's own cover reader may still hold a track of the old menu open; on Windows that alone
+	// makes the rename of 01 fail. The card lock closes it for the app's requests, and this closes it for
+	// every other way in (the command line, the tests, a future caller that forgets the lock).
+	closeMenuReaders()
 	menuDir := filepath.Join(root, "01")
 	moved := false
 	if entries, err := cardfs.ReadDir(menuDir); err == nil {

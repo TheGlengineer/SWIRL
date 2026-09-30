@@ -5,7 +5,7 @@
 # Runs on an Ubuntu/Debian x86-64 box with the build deps installed:
 #   sudo apt-get install -y build-essential cmake git libgl1-mesa-dev libegl1-mesa-dev \
 #     libx11-dev libxrandr-dev libxext-dev libxrender-dev libxi-dev libxinerama-dev \
-#     libxcursor-dev libxss-dev libasound2-dev libpulse-dev libcurl4-openssl-dev zlib1g-dev
+#     libxcursor-dev libxss-dev libasound2-dev libpulse-dev libcurl4-openssl-dev zlib1g-dev libudev-dev
 #
 # SDL2 and libzip are built from Flycast's own copies (USE_HOST_SDL=OFF, USE_HOST_LIBZIP=OFF)
 # so the binary carries everything except the system libc and OpenGL, matching the self-contained
