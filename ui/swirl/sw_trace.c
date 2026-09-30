@@ -747,10 +747,22 @@ static void on_exception(irq_t code, irq_context_t *ctx, void *data) {
 /* walks the memory allocator's lists: damage shows up here (a crash in mallinfo) instead of later, somewhere
    unrelated. The trace says when the check ran. */
 #include <malloc.h>
+#include <dc/sound/sound.h>
+#include "../../texture/simple_texture_allocator.h"
 void sw_mem_check(const char *when) {
   struct mallinfo mi = mallinfo();
-  if (when)
+  if (when) {
     sw_trace("memory ok %s (%u KB free of %u)", when, (unsigned)mi.fordblks / 1024, (unsigned)mi.arena / 1024);
+    /* the three pools an app or a bigger library would draw on (T15): main RAM below the loader's ceiling
+       (sbrk grows toward 0x8CCFFF00), video RAM outside the texture scratch, and sound RAM */
+    extern void *sbrk(intptr_t);
+    const uintptr_t brk = (uintptr_t)sbrk(0);
+    const unsigned head_kb = brk < 0x8CCFFF00u ? (unsigned)(0x8CCFFF00u - brk) / 1024 : 0;
+    sw_trace("memory pools %s: ram %u KB below the ceiling, vram %u KB free + %u KB scratch, sound %u KB free", when,
+             head_kb, (unsigned)pvr_mem_available() / 1024,
+             texman_inited() ? (unsigned)texman_get_space_available() / 1024 : 0u,
+             (unsigned)snd_mem_available() / 1024);
+  }
 }
 
 void sw_trace_init(void) {
