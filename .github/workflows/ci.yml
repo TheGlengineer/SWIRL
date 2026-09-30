@@ -69,3 +69,20 @@ jobs:
         with:
           name: SWIRL-Card-Manager-exe
           path: swirl/cardmanager/SWIRL-Card-Manager.exe
+
+  cardmanager-windows:
+    name: SWIRL Card Manager (Windows)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: swirl/cardmanager
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.22'
+          cache: false
+
+      - name: Test on Windows (the rename and lock behaviour the card writes depend on)
+        run: go test ./...

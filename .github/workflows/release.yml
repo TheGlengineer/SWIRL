@@ -74,6 +74,7 @@ jobs:
             -ldflags "-H windowsgui -s -w -X main.updateRepo=${{ github.repository }}" \
             -o ../../dist/SWIRL-Card-Manager.exe .
           cp ../build/gdemu/1ST_READ.BIN ../../dist/1ST_READ.BIN
+          cp ../../themeMenu.elf "../../dist/SWIRL-${VERSION}-symbols.elf"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -170,7 +171,7 @@ jobs:
         run: |
           cd dist
           ls -la
-          sha256sum $(ls SWIRL-Card-Manager.exe SWIRL-Card-Manager-macOS.dmg SWIRL-Card-Manager-macOS.zip 1ST_READ.BIN 2>/dev/null) > SHA256SUMS.txt
+          sha256sum $(ls SWIRL-Card-Manager.exe SWIRL-Card-Manager-macOS.dmg SWIRL-Card-Manager-macOS.zip 1ST_READ.BIN SWIRL-*-symbols.elf 2>/dev/null) > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Release notes
@@ -215,7 +216,7 @@ jobs:
           # "2.14.0-preview.1" is published as a pre-release named "SWIRL 2.14.0 preview 1"
           TITLE="SWIRL $VERSION"; PRE=""
           case "$VERSION" in *-preview.*) TITLE="SWIRL ${VERSION%%-*} preview ${VERSION##*.}"; PRE="--prerelease";; *-*) PRE="--prerelease";; esac
-          FILES=$(ls dist/SWIRL-Card-Manager.exe dist/SWIRL-Card-Manager-macOS.dmg dist/SWIRL-Card-Manager-macOS.zip dist/1ST_READ.BIN dist/SHA256SUMS.txt 2>/dev/null)
+          FILES=$(ls dist/SWIRL-Card-Manager.exe dist/SWIRL-Card-Manager-macOS.dmg dist/SWIRL-Card-Manager-macOS.zip dist/1ST_READ.BIN dist/SWIRL-*-symbols.elf dist/SHA256SUMS.txt 2>/dev/null)
           if gh release view "$TAG" >/dev/null 2>&1; then
             # a release made on github.com first: add the files and the notes from CHANGELOG.md
             gh release upload "$TAG" $FILES --clobber
