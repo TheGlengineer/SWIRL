@@ -815,6 +815,7 @@ func openMenuReaders() int {
 // write is over. Linux renames open files, so only the Windows runner proves the rename itself succeeds.
 func TestLockClosesMenuReaders(t *testing.T) {
 	root := txnCard(t, "swirl", 3)
+	t.Cleanup(closeMenuReaders) // the last cover request leaves a reader open on purpose; Windows cannot delete the temp folder under it
 	GameThumb(root, "02", "T00002N", false)
 	if openMenuReaders() == 0 {
 		t.Fatal("the cover grid did not open the menu disc; the test proves nothing")

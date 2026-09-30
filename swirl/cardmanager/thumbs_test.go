@@ -38,8 +38,9 @@ func TestGameThumbs(t *testing.T) {
 			t.Fatalf("thumb size %v %v", m.Bounds(), err)
 		}
 	}
-	// after Update SWIRL the art comes from the menu disc's ICON.DAT / BOX.DAT
-	if err := installSwirl(card, "", false, t.Logf); err != nil {
+	// after Update SWIRL the art comes from the menu disc's ICON.DAT / BOX.DAT. The real update takes the card
+	// lock, which closes the cover readers first; on Windows an open reader would block the folder rename.
+	if err := InstallSwirl(card, "", t.Logf); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := GameThumb(card, "../x", "", false); err == nil {

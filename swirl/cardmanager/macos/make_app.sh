@@ -41,6 +41,14 @@ STAGE="$(mktemp -d)"
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 rm -f "$OUT/SWIRL-Card-Manager-macOS.dmg"
-hdiutil create -volname "SWIRL Card Manager" -srcfolder "$STAGE" -ov -format UDZO "$OUT/SWIRL-Card-Manager-macOS.dmg" >/dev/null
+# GitHub's Mac runners sometimes answer "Resource busy" to the first create: try a few times before giving up
+for attempt in 1 2 3 4 5; do
+  if hdiutil create -volname "SWIRL Card Manager" -srcfolder "$STAGE" -ov -format UDZO "$OUT/SWIRL-Card-Manager-macOS.dmg" >/dev/null; then
+    break
+  fi
+  if [ "$attempt" = 5 ]; then echo "hdiutil create failed five times" >&2; exit 1; fi
+  echo "hdiutil create failed (attempt $attempt), trying again in 10 s" >&2
+  sleep 10
+done
 rm -rf "$STAGE"
 ls -l "$OUT"

@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -41,6 +42,9 @@ func TestBackupToPC(t *testing.T) {
 		t.Fatal("a destination on the card was accepted")
 	}
 
+	if runtime.GOOS == "windows" {
+		t.Skip("a second volume is needed for the backup itself; the temp folders are all on one drive")
+	}
 	dest := t.TempDir()
 	if err := StartBackup(BackupRequest{Root: card, Dest: dest}); err != nil {
 		t.Fatal(err)

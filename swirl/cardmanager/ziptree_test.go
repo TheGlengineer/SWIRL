@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -30,8 +31,11 @@ func TestZipTreeKeepsModesAndLinks(t *testing.T) {
 	}
 	app := findApp(dst)
 	st, err := os.Stat(filepath.Join(app, "Contents", "MacOS", "Test"))
-	if err != nil || st.Mode().Perm()&0o100 == 0 {
-		t.Fatal("executable bit lost", err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS != "windows" && st.Mode().Perm()&0o100 == 0 { // Windows has no executable bit
+		t.Fatal("executable bit lost")
 	}
 	if l, err := os.Readlink(filepath.Join(app, "Contents/Frameworks/X.framework/Versions/Current")); err != nil || l != "A" {
 		t.Fatal("link lost", l, err)

@@ -216,7 +216,7 @@ jobs:
           # "2.14.0-preview.1" is published as a pre-release named "SWIRL 2.14.0 preview 1"
           TITLE="SWIRL $VERSION"; PRE=""
           case "$VERSION" in *-preview.*) TITLE="SWIRL ${VERSION%%-*} preview ${VERSION##*.}"; PRE="--prerelease";; *-*) PRE="--prerelease";; esac
-          FILES=$(ls dist/SWIRL-Card-Manager.exe dist/SWIRL-Card-Manager-macOS.dmg dist/SWIRL-Card-Manager-macOS.zip dist/1ST_READ.BIN dist/SWIRL-*-symbols.elf dist/SHA256SUMS.txt 2>/dev/null)
+          FILES=$(ls dist/SWIRL-Card-Manager.exe dist/SWIRL-Card-Manager-macOS.dmg dist/SWIRL-Card-Manager-macOS.zip dist/1ST_READ.BIN dist/SWIRL-*-symbols.elf dist/SHA256SUMS.txt 2>/dev/null || true)
           if gh release view "$TAG" >/dev/null 2>&1; then
             # a release made on github.com first: add the files and the notes from CHANGELOG.md
             gh release upload "$TAG" $FILES --clobber
