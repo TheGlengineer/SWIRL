@@ -50,7 +50,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Test library
-        run: pip3 install -q pillow && python3 swirl/tools/make_test_library.py
+        run: pip3 install -q pillow && mkdir -p swirl/build && python3 swirl/tools/make_test_library.py
       - name: Host checks
         run: tests/host/run.sh
 
