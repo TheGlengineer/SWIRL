@@ -45,7 +45,7 @@ func TestZipTreeKeepsModesAndLinks(t *testing.T) {
 	if err := copyTreeKeep(app, cp); err != nil {
 		t.Fatal(err)
 	}
-	if st, _ := os.Stat(filepath.Join(cp, "Contents", "MacOS", "Test")); st.Mode().Perm()&0o100 == 0 {
+	if st, _ := os.Stat(filepath.Join(cp, "Contents", "MacOS", "Test")); runtime.GOOS != "windows" && st.Mode().Perm()&0o100 == 0 {
 		t.Fatal("copy lost the executable bit")
 	}
 	if l, _ := os.Readlink(filepath.Join(cp, "Contents/Frameworks/X.framework/Versions/Current")); l != "A" {

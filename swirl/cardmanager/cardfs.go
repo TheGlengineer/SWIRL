@@ -28,13 +28,19 @@ var cardfs cardFS = realFS{}
 
 type realFS struct{}
 
-func (realFS) Rename(oldpath, newpath string) error         { return os.Rename(oldpath, newpath) }
+func (realFS) Rename(oldpath, newpath string) error {
+	return withBusyRetry(func() error { return os.Rename(oldpath, newpath) })
+}
 func (realFS) Create(name string) (io.WriteCloser, error)   { return os.Create(name) }
 func (realFS) MkdirAll(path string, perm os.FileMode) error { return os.MkdirAll(path, perm) }
-func (realFS) Remove(name string) error                     { return os.Remove(name) }
-func (realFS) RemoveAll(path string) error                  { return os.RemoveAll(path) }
-func (realFS) Stat(name string) (os.FileInfo, error)        { return os.Stat(name) }
-func (realFS) ReadDir(name string) ([]os.DirEntry, error)   { return os.ReadDir(name) }
+func (realFS) Remove(name string) error {
+	return withBusyRetry(func() error { return os.Remove(name) })
+}
+func (realFS) RemoveAll(path string) error {
+	return withBusyRetry(func() error { return os.RemoveAll(path) })
+}
+func (realFS) Stat(name string) (os.FileInfo, error)      { return os.Stat(name) }
+func (realFS) ReadDir(name string) ([]os.DirEntry, error) { return os.ReadDir(name) }
 
 func (realFS) SyncFile(f io.WriteCloser) error {
 	if s, ok := f.(interface{ Sync() error }); ok {
