@@ -1050,19 +1050,20 @@ static void draw_system(float slide) {
   }
   sw_rrect(x, 310, 228, 126, 8, C_PANEL);
   sw_text(SWF_UI, x + 16, 322, 14, C_WHITE, "About SWIRL");
+  sw_text_right(SWF_SMALL, x + 212, 324, 12, C_DIM, "Version " SWIRL_VERSION);
   /* the full version and the build id, so a photo of this panel says exactly what is on the card (the
-     Diagnostics screen shows the same); Card Manager reads the "Version ..." string out of the binary */
-  sw_text_right(SWF_SMALL, x + 212, 324, 12, C_DIM, "Version " SWIRL_VERSION_STR " (" SWIRL_BUILD ")");
-  sw_text(SWF_SMALL, x + 16, 344, 12, C_TEXT, "Created by Glen Huszar");
-  sw_text(SWF_SMALL, x + 16, 360, 12, C_ORANGE, "github.com/TheGlengineer");
-  sw_text_wrap(SWF_SMALL, x + 16, 380, 11, C_DIM,
+     Diagnostics screen shows the same) */
+  sw_text(SWF_SMALL, x + 16, 340, 11, C_DIM, SWIRL_VERSION_STR ", build " SWIRL_BUILD);
+  sw_text(SWF_SMALL, x + 16, 357, 12, C_TEXT, "Created by Glen Huszar");
+  sw_text(SWF_SMALL, x + 16, 373, 12, C_ORANGE, "github.com/TheGlengineer");
+  sw_text_wrap(SWF_SMALL, x + 16, 391, 11, C_DIM,
                "Built on openMenu by mrneo240. Fonts: Sora and Barlow (OFL).", 196, 13, 2);
   {
     char db[40];
     const int n = sw_warn_count();
     if (n) snprintf(db, sizeof(db), "Diagnostics: %d warning%s", n, n == 1 ? "" : "s");
     else snprintf(db, sizeof(db), "Diagnostics: no warnings");
-    sw_text(SWF_SMALL, x + 16, 416, 11, n ? C_ORANGE : C_DIM, db);
+    sw_text(SWF_SMALL, x + 16, 421, 11, n ? C_ORANGE : C_DIM, db);
   }
 
   const char *foot[] = {"L / R  Tabs", "Left / Right  Change", "A  Select"};
