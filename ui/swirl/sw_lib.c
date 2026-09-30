@@ -59,6 +59,16 @@ typedef struct __attribute__((packed)) save_blob {
   sw_stat stats[MAX_STATS];
 } save_blob;
 
+/* The SWL2 layout has had two sizes of prefs block. SWIRL 2.11 to 2.13.3 wrote 15 bytes (version 2, no tail);
+   2.14.0 and 2.14.1 added swirl_style_set and wrote 16 bytes with the SEQ1 tail, still calling it version 2,
+   and read every file as 16, so a 2.13 file's stats came in shifted by one byte (I8). From 2.15 the 16 byte
+   layout is version 3, a version 2 file is told apart by its length, and stats a 2.14.0 boot shifted and
+   saved back are put right again once the game list is known (see sw_lib_repair_shifted). */
+#define PREFS_V2_OLD 15
+#define SAVE_VERSION 3
+static int loaded_suspect; /* the copy read was written by 2.14.0 or 2.14.1: its stats may be shifted */
+static void sw_lib_repair_shifted(void);
+
 typedef struct __attribute__((packed)) save_blob_v1 {
   char magic[4];
   uint16_t version;
@@ -196,6 +206,19 @@ static int parse_save(const uint8_t *buf, int size, sw_prefs *p, sw_stat *st, in
   const int room_v1 = (pkg.data_len - (int)(sizeof(save_blob_v1) - sizeof(sw_stat) * MAX_STATS)) / (int)sizeof(sw_stat);
   const save_blob *b = (const save_blob *)pkg.data;
   if (!memcmp(b->magic, "SWL2", 4)) {
+    /* a version 2 file whose length is exactly the old head plus whole stats was written by 2.11 to 2.13
+       (15 byte prefs, no tail); everything else is the 16 byte layout */
+    const int old_head = 8 + PREFS_V2_OLD;
+    const int old_layout = b->version < 3 && pkg.data_len == old_head + (int)b->count * (int)sizeof(sw_stat);
+    if (old_layout) {
+      memset(p, 0, sizeof(*p));
+      memcpy(p, &b->prefs, PREFS_V2_OLD);
+      if (p->saver_min < 1 || p->saver_min > 30) p->saver_min = 5;
+      *n = b->count > MAX_STATS ? MAX_STATS : b->count;
+      memcpy(st, pkg.data + old_head, *n * sizeof(sw_stat));
+      *upgraded = 1; /* saved again in the current layout at the first chance */
+      return 0;
+    }
     *p = b->prefs;
     /* saves from before the screen saver settings have zeros there */
     if (p->saver_min < 1 || p->saver_min > 30) p->saver_min = 5;
@@ -208,6 +231,7 @@ static int parse_save(const uint8_t *buf, int size, sw_prefs *p, sw_stat *st, in
       memcpy(&t, pkg.data + tail_at, sizeof(t));
       if (!memcmp(t.tag, "SEQ1", 4)) *seq = t.seq;
     }
+    if (b->version < 3) *upgraded = 2; /* 2.14.0 or 2.14.1 wrote it: the stats may be shifted */
     return 0;
   }
   if (!memcmp(b->magic, "SWL1", 4)) {
@@ -280,6 +304,8 @@ static int take_in_file(int merge) {
     sw_warn(SW_WARN_DAT_DAMAGED, "SWIRL.DAT: one copy damaged, using %s", save_names[best]);
   cur_copy = best;
   cur_seq = best_seq;
+  loaded_suspect = upgraded == 2;
+  if (upgraded == 1) dirty = 1; /* an older layout: write it back in the current one */
   if (!merge) {
     prefs = fprefs;
     num_stats = fn;
@@ -329,7 +355,7 @@ static int build_save(uint8_t **out, int *out_size, uint32_t seq) {
   save_blob *blob = (save_blob *)raw;
   memset(raw, 0, sizeof(raw));
   memcpy(blob->magic, "SWL2", 4);
-  blob->version = 2;
+  blob->version = SAVE_VERSION;
   blob->count = num_stats;
   blob->prefs = prefs;
   memcpy(blob->stats, stats, num_stats * sizeof(sw_stat));
@@ -720,6 +746,7 @@ int sw_lib_init(void) {
      for example a memory card that answered late. Each read takes about half a second. */
   if (!loaded && load_state != LOAD_DAMAGED) /* a damaged file does not heal; it is replaced by the first save */
     load_stats();
+  sw_lib_repair_shifted();
   load_custom();
   sw_trace_games(num_games);
   return 0;
@@ -774,6 +801,61 @@ sw_game *sw_lib_game(int idx) {
   if (idx < 0 || idx >= num_games)
     return NULL;
   return &games[idx];
+}
+
+/* how many of n stats name a game on this card */
+static int stats_matching(const sw_stat *st, int n) {
+  int hits = 0;
+  for (int i = 0; i < n; i++)
+    for (int j = 0; j < num_games; j++)
+      if (games[j].key == st[i].key) {
+        hits++;
+        break;
+      }
+  return hits;
+}
+
+/* A 2.14.0 or 2.14.1 boot that read a 2.13 file took the stats one byte late, then saved that back (I8). The
+   bytes are all still there, one position along: stat i of the original is the last byte of what was saved
+   as prefs (or of saved stat i-1) followed by the first eleven bytes of saved stat i. The last original stat
+   was dropped by that read's length check and is gone; the first byte of the first one may have been overwritten
+   by the style flag, so that one is searched for among the games on the card. The shifted reading is used only when it
+   names more of this card's games than the file as it is. */
+static void sw_lib_repair_shifted(void) {
+  if (!loaded_suspect || num_stats < 1 || num_games == 0)
+    return;
+  loaded_suspect = 0;
+  uint8_t raw[1 + MAX_STATS * sizeof(sw_stat)];
+  raw[0] = prefs.swirl_style_set;
+  memcpy(raw + 1, stats, num_stats * sizeof(sw_stat));
+  sw_stat shifted[MAX_STATS];
+  /* raw holds 1 + 12n bytes: exactly the n original stats that the 2.14 read kept, one byte along */
+  const int n = num_stats;
+  memcpy(shifted, raw, n * sizeof(sw_stat));
+  const int whole = n;
+  /* the first key's low byte came from the style flag: try every value against the card */
+  {
+    const uint32_t k = shifted[0].key & 0xFFFFFF00u;
+    for (int v = 0; v < 256; v++) {
+      const uint32_t cand = k | (uint32_t)v;
+      int found = 0;
+      for (int j = 0; j < num_games && !found; j++) found = games[j].key == cand;
+      if (found) {
+        shifted[0].key = cand;
+        break;
+      }
+    }
+  }
+  const int as_is = stats_matching(stats, num_stats), fixed = stats_matching(shifted, whole);
+  sw_trace("SWIRL.DAT: 2.14.0 layout check: %d of %d stats name a game as read, %d of %d shifted", as_is, num_stats,
+           fixed, whole);
+  if (fixed <= as_is)
+    return;
+  memcpy(stats, shifted, whole * sizeof(sw_stat));
+  num_stats = whole;
+  prefs.swirl_style_set = 1; /* the byte it lived in was the style flag; SWIRL has been the style since 2.14 */
+  dirty = 1;
+  sw_warn(SW_WARN_DAT_SHIFTED, "SWIRL.DAT: favourites and history from 2.13 put back (%d games)", fixed);
 }
 
 sw_stat *sw_stat_get(const sw_game *g, int create) {

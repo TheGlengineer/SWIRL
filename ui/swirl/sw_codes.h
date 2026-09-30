@@ -23,7 +23,8 @@
   X(SW_WARN_SCAN, 16, "controller-scan", "A controller port did not answer at start up")                    \
   X(SW_WARN_STEP, 17, "startup-step", "A start up step failed")                                              \
   X(SW_WARN_STYLE, 18, "style-files", "The saved style needs theme files this disc lacks")                  \
-  X(SW_WARN_DISC, 19, "disc-read", "The menu disc could not be read")
+  X(SW_WARN_DISC, 19, "disc-read", "The menu disc could not be read")                                        \
+  X(SW_WARN_DAT_SHIFTED, 20, "swirl-dat-shifted", "Favourites and history from 2.13 were put back")
 
 enum sw_code {
 #define X(name, num, key, words) name = num,
