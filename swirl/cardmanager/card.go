@@ -564,6 +564,11 @@ func buildMenuImageInto(root, datDir string, allowEmpty bool, log Logger) (strin
 		}
 		if b, err := d.readSectors(d.highDensityStart(), 16); err == nil {
 			if ip, ok := parseIP(b); ok {
+				// the old menu's IP.BIN is kept (region, dates, its own product code), but the boot file is
+				// always SWIRL's 1ST_READ.BIN: a damaged or unusual name here would make a menu the BIOS
+				// cannot start, with nothing on the card to say why
+				b = append([]byte(nil), b...)
+				copy(b[0x60:0x70], []byte("1ST_READ.BIN    "))
 				ipBytes, menuIP = b, ip
 			}
 		}
