@@ -89,6 +89,7 @@ reused, only added.
 | W17 | startup-step | A start up step failed |
 | W18 | style-files | The saved style needs theme files this disc lacks |
 | W19 | disc-read | The menu disc could not be read |
+| W20 | swirl-dat-shifted | SWIRL 2.14.0 or 2.14.1 had read a 2.13 SWIRL.DAT with its favourites and history one byte out of place; this build put them back and saved the file in the current layout. Seen once per memory card |
 
 System > Diagnostics lists the warnings since power on in these words, with the count and the first detail
 (six to a page, Up and Down scroll), and the About card on the System tab says how many there are. Card

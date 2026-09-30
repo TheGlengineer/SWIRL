@@ -18,3 +18,4 @@ W16	controller-scan	A controller port did not answer at start up
 W17	startup-step	A start up step failed
 W18	style-files	The saved style needs theme files this disc lacks
 W19	disc-read	The menu disc could not be read
+W20	swirl-dat-shifted	Favourites and history from 2.13 were put back
