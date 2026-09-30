@@ -21,3 +21,8 @@ while read -r kind path expected; do
   fi
 done < <(python3 "$HERE/mkcases.py" "$BASE/OPENMENU.INI" "$BASE/META.DAT" "$OUT/cases")
 [ $fail = 0 ] && echo "host parser check: all cases pass" || exit 1
+
+# the SWIRL.DAT reader against a file from every released layout (tests/host/savefiles/README.md)
+gcc -std=gnu11 -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -I"$ROOT" \
+  -o "$OUT/save_check" "$HERE/save_check.c" "$ROOT/ui/swirl/sw_save.c"
+"$OUT/save_check" "$HERE"/savefiles/*.bin
