@@ -520,10 +520,13 @@ func buildMenuImage(root, datDir string, allowEmpty bool, log Logger) (work, out
 }
 
 func buildMenuImageInto(root, datDir string, allowEmpty bool, log Logger) (string, string, *Card, error) {
+	// timings per stage in the log (T9): what a rebuild costs on a real card decides what a cache should hold
+	stage := stageTimer(log)
 	c, err := ScanCard(root)
 	if err != nil {
 		return "", "", nil, err
 	}
+	stage("Scanned the card")
 	if c.MenuType == "Game" {
 		return "", "", nil, errors.New("folder 01 holds a game, not a menu; nothing was changed")
 	}
@@ -629,7 +632,7 @@ func buildMenuImageInto(root, datDir string, allowEmpty bool, log Logger) (strin
 	if err := addExtras(root, c, data, log); err != nil {
 		return work, "", nil, err
 	}
-	addOpenMenuFiles(data, log) // header logo, plus what the Classic styles need
+	addOpenMenuFiles(data, log)   // header logo, plus what the Classic styles need
 	addHeaderLogoSheet(data, log) // the small two region logo texture (F1, SW-15)
 	bin := swirlBinary
 	if p := os.Getenv("SWIRL_1ST_READ"); p != "" { // development: test a new menu build
@@ -652,11 +655,26 @@ func buildMenuImageInto(root, datDir string, allowEmpty bool, log Logger) (strin
 		}
 	}
 
+	stage("Gathered the menu's files")
 	log("Building the menu disc")
 	if err := buildMenuDisc(data, low, out, ipBytes); err != nil {
 		return work, "", nil, err
 	}
+	stage("Built the menu disc")
 	return work, out, c, nil
+}
+
+// stageTimer returns a function that logs how long it has been since the previous call, when a stage took
+// more than a moment. The numbers tell where a rebuild spends its time on a real card.
+func stageTimer(log Logger) func(string) {
+	last := time.Now()
+	return func(what string) {
+		d := time.Since(last)
+		last = time.Now()
+		if d >= 250*time.Millisecond {
+			log("%s in %.1f s", what, d.Seconds())
+		}
+	}
 }
 
 func installSwirl(root, datDir string, allowEmpty bool, log Logger) error {
@@ -668,11 +686,13 @@ func installSwirl(root, datDir string, allowEmpty bool, log Logger) error {
 	if err != nil {
 		return err
 	}
+	timer := stageTimer(log)
 	// the new menu goes to SWIRL/.stage_01 first; 01 is only touched by the two renames of swapMenu
 	stage, err := stageFiles(root, out, []string{"disc.gdi", "track01.iso", "track02.raw", "track03.iso", "track04.raw", "track05.iso"})
 	if err != nil {
 		return fmt.Errorf("%w; the menu in 01 was not changed", err)
 	}
+	timer("Copied the menu disc to the card")
 	backup := ""
 	if entries, err := os.ReadDir(filepath.Join(root, "01")); err == nil && len(entries) > 0 {
 		backup = uniqueBackupPath(root, menuBackupPrefix(root, c))
@@ -680,6 +700,7 @@ func installSwirl(root, datDir string, allowEmpty bool, log Logger) error {
 	if err := swapMenu(root, stage, backup); err != nil {
 		return err
 	}
+	timer("Swapped it into folder 01")
 	if backup != "" {
 		if err := writeBackupManifest(root, backup, c, ""); err != nil {
 			log("The backup's manifest could not be written: %v", err)
