@@ -262,12 +262,22 @@ func copyStream(in io.Reader, dst string, onBytes func(int64)) error {
 	if err != nil {
 		return err
 	}
+	// closed on every way out, a panic included: on Windows an open handle would keep the unfinished
+	// NN.part folder from being removed until the app is restarted
+	closed := false
+	closeOut := func() error {
+		if closed {
+			return nil
+		}
+		closed = true
+		return out.Close()
+	}
+	defer closeOut()
 	buf := make([]byte, 4<<20)
 	for {
 		n, rerr := in.Read(buf)
 		if n > 0 {
 			if _, err := out.Write(buf[:n]); err != nil {
-				out.Close()
 				return err
 			}
 			onBytes(int64(n))
@@ -276,15 +286,13 @@ func copyStream(in io.Reader, dst string, onBytes func(int64)) error {
 			break
 		}
 		if rerr != nil {
-			out.Close()
 			return rerr
 		}
 	}
 	if err := cardfs.SyncFile(out); err != nil {
-		out.Close()
 		return err
 	}
-	return out.Close()
+	return closeOut()
 }
 
 // runCopy copies a plan onto the card. Each numbered folder is filled as NN.part and renamed to NN only
