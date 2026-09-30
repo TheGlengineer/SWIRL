@@ -3,6 +3,21 @@
 SWIRL (the menu) and SWIRL Card Manager share one version number. Card Manager patch releases (2.11.1)
 may ship without menu changes; the menu then keeps its major.minor version (2.11).
 
+## [2.14.2]
+
+A hotfix for anyone who upgraded from 2.13 with favourites or play history. Install it with Update SWIRL as soon as you can; the sooner the menu runs it, the more it can put back.
+
+**Tested on:** the emulator harness with a SWIRL.DAT written the way 2.13.3 writes it (read whole, saved again in the current layout) and with the file 2.14.0 makes of that (put back, one entry short). Not yet run on a console; the change is in the save file reader only.
+
+### Fixed
+
+- **Favourites and history from 2.13 were lost on upgrade.** 2.14.0 added one settings byte to SWIRL.DAT and read every older file as if it had always been there, so a file saved by 2.11 to 2.13.3 came in with every entry one byte out of place: favourites and play counts belonged to no game, and the next save wrote that back. 2.14.2 reads a 2.13 file correctly, and when it finds a file that 2.14.0 or 2.14.1 already rewrote it moves the entries back where they were. Everything comes back except the last entry in the file, which 2.14.0 had already dropped. The Diagnostics screen shows warning **W20** once when that repair has run
+- The save file layout is now version 3; a 2.14.0 or 2.14.1 menu still reads it
+
+### Not in this release
+
+- Everything on the 2.15 preview branch (About shows the build id, the memory pools trace, region logos)
+
 ## [2.14.1]
 
 Card Manager only; the menu is the 2.14.0 build. Linux joins macOS as a beta of the app, and two things the 2.14.0 release run turned up are fixed.
