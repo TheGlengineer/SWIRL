@@ -1,6 +1,8 @@
 /* Vendored from mrneo240/LibCrayonVmu_Archived @1c089e1 (Protofall, BSD-3). Patched for KallistiOS 2.2. */
 #define _DEFAULT_SOURCE /* strlcpy/strlcat under -std=c11 */
 #include "savefile.h"
+#include <arch/timer.h>
+#include "../../ui/swirl/sw_trace.h" /* SWIRL: damaged files are reported in the start up trace */
 
 //Note this assumes the vmu chosen is valid
 	//THIS CAN BE OPTIMISED
@@ -29,16 +31,38 @@ uint8_t crayon_savefile_check_for_save(crayon_savefile_details_t * savefile_deta
 
 	//Surely instead of doing the below I can just read the header and hence the app id?
 
+	/* SWIRL: a damaged file (bad CRC, short read) is "not a save", not a compare against unset fields */
+	if(pkg_size <= 0){
+		fs_close(fp);
+		return 2;
+	}
 	pkg_out = (uint8_t *)malloc(pkg_size);
-	fs_read(fp, pkg_out, pkg_size);
+	if(!pkg_out){
+		fs_close(fp);
+		return 2;
+	}
+	if(fs_read(fp, pkg_out, pkg_size) != (ssize_t)pkg_size){
+		fs_close(fp);
+		free(pkg_out);
+		return 2;
+	}
 	fs_close(fp);
 
-	vmu_pkg_parse(pkg_out, pkg_size, &pkg); /* SWIRL: KOS 2.2 added size arg */
-
-	free(pkg_out);
+	memset(&pkg, 0, sizeof(pkg));
+	if(vmu_pkg_parse(pkg_out, pkg_size, &pkg) < 0){ /* SWIRL: KOS 2.2 added size arg */
+		static int warned; /* once: the cards are checked again before every save */
+		if(!warned){
+			warned = 1;
+			sw_warn(SW_WARN_CFG_DAMAGED, "%s: bad crc, replaced at the next save", savename + 5);
+		}
+		free(pkg_out);
+		return 2;
+	}
 
 	//If the IDs don't match, then thats an error
-	if(strcmp(pkg.app_id, savefile_details->app_id)){
+	int id_ok = strncmp(pkg.app_id, savefile_details->app_id, sizeof(pkg.app_id)) == 0;
+	free(pkg_out);
+	if(!id_ok){
 		return 2;
 	}
 	return 0;
@@ -57,6 +81,11 @@ uint8_t crayon_savefile_check_for_device(int8_t port, int8_t slot, uint32_t func
 	if(!(vmu = maple_enum_dev(port, slot))){
 		return 2;
 	}
+#ifdef SW_TEST_LATE_VMU
+	if(timer_ms_gettime64() < 12000){ /* SWIRL test only: the cards attach 12 s after power on */
+		return 2;
+	}
+#endif
 
 	//Check the device is valid and it has a certain function
 	if(!vmu->valid || !(vmu->info.functions & function)){
@@ -317,11 +346,36 @@ uint8_t crayon_savefile_load(crayon_savefile_details_t * savefile_details){
 
 	pkg_size = fs_total(fp);
 
+	/* SWIRL: the read, the CRC and the data length are checked before anything is copied. The old code copied
+	   from pkg.data even when vmu_pkg_parse had failed and left it unset. A damaged file counts as "no save"
+	   (rv 3), so the caller creates fresh settings and the next save replaces it. */
+	if(pkg_size <= 0){
+		fs_close(fp);
+		rv = 3;
+		goto clear_bits;
+	}
 	pkg_out = (uint8_t *)malloc(pkg_size);
-	fs_read(fp, pkg_out, pkg_size);
+	if(!pkg_out){
+		fs_close(fp);
+		rv = 3;
+		goto clear_bits;
+	}
+	if(fs_read(fp, pkg_out, pkg_size) != (ssize_t)pkg_size){
+		fs_close(fp);
+		free(pkg_out);
+		rv = 3;
+		goto clear_bits;
+	}
 	fs_close(fp);
 
-	vmu_pkg_parse(pkg_out, pkg_size, &pkg); /* SWIRL: KOS 2.2 added size arg */
+	memset(&pkg, 0, sizeof(pkg));
+	if(vmu_pkg_parse(pkg_out, pkg_size, &pkg) < 0 || !pkg.data ||
+		pkg.data_len < (int)savefile_details->savefile_size){ /* SWIRL: KOS 2.2 added size arg */
+		sw_warn(SW_WARN_CFG_DAMAGED, "%s: bad crc or length, not loaded", savename + 5);
+		free(pkg_out);
+		rv = 3;
+		goto clear_bits;
+	}
 
 	//Read the pkg data into my struct
 	memcpy(savefile_details->savefile_data, pkg.data, savefile_details->savefile_size);	//Last param is num of bytes and sizeof returns in bytes
@@ -339,7 +393,8 @@ uint8_t crayon_savefile_load(crayon_savefile_details_t * savefile_details){
 	clear_bits:
 
 	// Load failed, so we assume there was a hotswap
-	if(rv > 1){
+	// SWIRL: a damaged file (rv 3) keeps the card, so the next save can replace it
+	if(rv == 2){
 		crayon_savefile_clear_vmu_bit(&savefile_details->valid_memcards, savefile_details->savefile_port,
 			savefile_details->savefile_slot);
 	}

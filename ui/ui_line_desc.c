@@ -339,6 +339,12 @@ FUNCTION(UI_NAME, init) {
   draw_load_texture_buffer("THEME/SHARED/ICON_WHITE.PVR", &txr_icons_white, texman_get_tex_data(temp));
   texman_reserve_memory(txr_icons_white.width, txr_icons_white.height, 2 /* 16Bit */);
 
+  /* SWIRL: a saved custom theme that is no longer on the disc falls back to the first region theme */
+  if ((int)region_current >= num_default_themes + num_custom_themes) {
+    printf("custom theme %d not on this disc, using the default theme\n", (int)region_current - num_default_themes);
+    region_current = REGION_NTSC_U;
+  }
+
   if ((int)region_current >= num_default_themes) {
     region_current -= num_default_themes;
     current_theme_colors = &custom_themes[region_current].colors;

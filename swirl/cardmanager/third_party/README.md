@@ -7,4 +7,7 @@
 - `x-sync`, `x-text`, `go4`, `yaml3`: copies of Go modules from their GitHub mirrors, needed only to
   regenerate `vendor/`. They are not kept in the repo; run `fetch-mirrors.sh` to get them back.
 
+`../web/jsqr.js` is jsQR 1.4.0 by Cosmo Wolfe (Apache 2.0, `../web/LICENSE-jsQR.txt`), unmodified: the
+Report page reads QR codes out of photos with it, in the browser.
+
 The 7z reader is `github.com/bodgit/sevenzip` (BSD 3-Clause), vendored in `../vendor`.

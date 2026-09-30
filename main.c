@@ -26,7 +26,9 @@
 #include "ui/dc/input.h"
 #include "ui/draw_prototypes.h"
 #include "ui/global_settings.h"
+#include "ui/swirl/sw_lib.h"
 #include "ui/swirl/sw_trace.h"
+#include "ui/swirl/sw_vmu.h"
 
 /* UI Collection */
 #include "ui/ui_grid.h"
@@ -100,10 +102,24 @@ int round(float x) {
    not count as a press in the new style (SWIRL would start the first game). Cleared once nothing is held. */
 static int input_latched;
 
-void reload_ui(void) {
+/* SWIRL: a style change asked for from inside a style's own input handler is applied once that handler has
+   returned, never while it is still running (upstream PR #45 da47477 deferred it the same way after a "random
+   freeze"). Before the main loop it is applied at once. */
+static int ui_reload_pending;
+
+static void apply_pending_reload(void) {
+  if (!ui_reload_pending)
+    return;
+  ui_reload_pending = 0;
   openmenu_settings *settings = settings_get();
+  sw_trace("style %d: loading", settings->ui);
   ui_set_choice(settings->ui);
+  sw_trace("style %d: ready", settings->ui);
   input_latched = 1;
+}
+
+void reload_ui(void) {
+  ui_reload_pending = 1;
 }
 
 static int init(void) {
@@ -119,7 +135,7 @@ static int init(void) {
   do {                                               \
     sw_trace("%s", #call);                           \
     if ((r = (call)) != 0) {                         \
-      sw_trace("  %s failed (%d)", #call, r);        \
+      sw_warn(SW_WARN_STEP, "%s failed (%d)", #call, r);  \
       ret++;                                         \
     }                                                \
   } while (0)
@@ -138,15 +154,29 @@ static int init(void) {
   /* SWIRL: never start a style this disc cannot run (hold Y at start up to force SWIRL) */
   settings_boot_guard();
 
+  /* SWIRL: the VMU logo intro plays while the style loads its pictures. The settings file has been read by now,
+     and the intro stops before SWIRL.DAT is touched; the Classic styles draw their own VMU screen. */
+  if (settings_get()->ui == UI_SWIRL) {
+    sw_trace("VMU logo intro");
+    sw_vmu_boot_start();
+  }
+
   /* Load UI */
-  sw_trace("style %d: loading", settings_get()->ui);
   reload_ui();
-  sw_trace("style %d: ready", settings_get()->ui);
+  apply_pending_reload();
 
   return ret;
 }
 
+/* set while a frame is being built: a blocking wait that starts inside the draw (the launch save runs from
+   the dashboard's own draw) must not start a second frame on top of it. KallistiOS keeps one scene open at a
+   time; a nested pvr_scene_begin leaves the outer frame drawing into a closed list, and every primitive after
+   that costs a serial warning. On a console with no serial cable those warnings go out at 57600 baud, which
+   turned a two second save into a launch that never came. */
+static int in_draw;
+
 static void draw(void) {
+  in_draw = 1;
   pvr_wait_ready();
   pvr_scene_begin();
 
@@ -165,11 +195,18 @@ static void draw(void) {
   pvr_list_finish();
 
   pvr_scene_finish();
+  in_draw = 0;
 }
 
-/* one frame, for SWIRL to keep the screen moving while a memory card save finishes */
+/* one frame, for SWIRL to keep the screen moving while a memory card save finishes. Called from inside a
+   frame, it only waits: the frame on screen stays up and the save worker carries on. */
 void main_draw_frame(void);
 void main_draw_frame(void) {
+  if (in_draw) {
+    thd_sleep(10);
+    sw_trace_alive(); /* the save worker is making progress; its card operations have their own limits */
+    return;
+  }
   z_reset();
   draw();
   sw_trace_alive();
@@ -344,7 +381,7 @@ void __wrap_maple_wait_scan(void) {
   const uint64_t start = timer_ms_gettime64();
   while (maple_state.scan_ready_mask != 0xf) {
     if (timer_ms_gettime64() - start > SWIRL_SCAN_WAIT_MS) {
-      sw_trace("controller scan incomplete after %d ms (ports %x)", SWIRL_SCAN_WAIT_MS, maple_state.scan_ready_mask);
+      sw_warn(SW_WARN_SCAN, "controller scan incomplete after %d ms (ports %x)", SWIRL_SCAN_WAIT_MS, maple_state.scan_ready_mask);
       return;
     }
     thd_pass();
@@ -360,6 +397,29 @@ static void trace_devices(void) {
         sw_trace("  %c%d %.20s %08lx", 'A' + p, u, d->info.product_name, (unsigned long)d->info.functions);
     }
 }
+
+/* SWIRL: a memory card the start up scan missed (a VM2 still switching, a slow VMU) is looked for during the
+   first seconds after the menu is up, and its files are read as if they had been there at start up. */
+#define SWIRL_LATE_CARD_MS 8000
+static void late_card_check(void) {
+  int changed = sw_lib_late_card(); /* SWIRL.DAT first: its flag decides whether the CFG's style stands */
+  if (settings_late_card())
+    changed = 1;
+  if (!changed)
+    return;
+  if ((int)settings_get()->ui != ui_choice_current) {
+    sw_trace("style %d from the late card", settings_get()->ui);
+    if (ui_choice_current == UI_SWIRL)
+      ui_swirl_leave();
+    reload_ui();
+  } else if (ui_choice_current == UI_SWIRL) {
+    ui_swirl_settings_changed();
+  }
+}
+
+/* SWIRL: X held at power on asks for the boot log (sampled with the Y check in settings_boot_guard) */
+static int boot_x;
+void main_note_boot_x(int held) { boot_x = held; }
 
 int main(int argc, char *argv[]) {
   /* unused */
@@ -378,6 +438,15 @@ int main(int argc, char *argv[]) {
   if (init())
     sw_trace("start up had errors (carrying on)");
   sw_trace_done();
+  if (boot_x) {
+    /* X held at power on: the boot log as QR codes, before the first picture (any style) */
+    sw_trace("X held at start: boot log");
+    if (settings_get()->ui == UI_SWIRL)
+      ui_swirl_boot_log();
+    else
+      sw_report_show(SW_REPORT_BOOT);
+    input_latched = 1; /* the X still down is not a press for the menu */
+  }
 #ifdef SW_TEST_CRASH
   { void (*volatile bad)(void) = (void (*)(void))0x8c000002; bad(); } /* test only: an early crash */
 #endif
@@ -392,8 +461,26 @@ int main(int argc, char *argv[]) {
      Classic styles leave to the BIOS on Y) until it is let go, and held for about a second it switches a
      Classic style to SWIRL, in case the check at start up missed it. */
   int y_latched = 1, y_frames = 0;
+  const uint64_t menu_up = timer_ms_gettime64();
+  int late_window_over = 0;
   for (int frame = 0;; frame++) {
     z_reset();
+    apply_pending_reload();
+    if (frame % 30 == 15 && !late_window_over) {
+      if (timer_ms_gettime64() - menu_up < SWIRL_LATE_CARD_MS) {
+        late_card_check();
+      } else {
+        /* no card brought a settings file: openMenu wrote a fresh one at start up, SWIRL writes it now */
+        late_window_over = 1;
+        if (settings_cfg_missing()) {
+          sw_trace("OPENMENU.CFG: none found, writing one");
+          if (ui_choice_current == UI_SWIRL)
+            ui_swirl_save_settings_soon();
+          else
+            settings_save();
+        }
+      }
+    }
     enum control input = translate_input(); /* also reads the controller for INPT_Button below */
     if (input_latched) {
       if (input == NONE)
@@ -427,6 +514,7 @@ int main(int argc, char *argv[]) {
     }
 #endif
     (*current_ui_handle_input)(input);
+    apply_pending_reload();
     draw();
     sw_trace_alive();
     if (frame == 0)

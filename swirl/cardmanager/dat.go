@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"os"
 	"sort"
 	"strings"
@@ -22,14 +23,33 @@ func newDat(chunk int) *datFile {
 	return &datFile{ChunkSize: chunk, Chunks: map[string][]byte{}}
 }
 
-func parseDat(b []byte) (*datFile, error) {
-	if len(b) < 16 || string(b[0:3]) != "DAT" || b[3] != 1 {
-		return nil, errors.New("not a DAT file")
+// checkDatHeader reads the 16 byte header of a DAT file of size bytes and says what is wrong with it.
+// The menu's reader (dat_reader.c) accepts the same files, so anything refused here is unreadable on
+// the Dreamcast too.
+func checkDatHeader(hdr []byte, size int64) (chunk, count int, err error) {
+	if len(hdr) < 16 || string(hdr[0:3]) != "DAT" {
+		return 0, 0, errors.New("not a DAT file")
 	}
-	cs := int(binary.LittleEndian.Uint32(b[4:]))
-	n := int(binary.LittleEndian.Uint32(b[8:]))
-	if cs <= 0 || n < 0 || 16+16*n > len(b) {
-		return nil, errors.New("bad DAT header")
+	if hdr[3] != 1 {
+		return 0, 0, fmt.Errorf("version %d, SWIRL reads version 1", hdr[3])
+	}
+	chunk = int(binary.LittleEndian.Uint32(hdr[4:]))
+	count = int(binary.LittleEndian.Uint32(hdr[8:]))
+	switch {
+	case chunk <= 0 || chunk > 1<<24:
+		return 0, 0, fmt.Errorf("chunk size %d makes no sense", chunk)
+	case count < 0 || count > 100000:
+		return 0, 0, fmt.Errorf("%d entries makes no sense", count)
+	case int64(16+16*count) > size:
+		return 0, 0, fmt.Errorf("the table of %d entries runs past the end of the file", count)
+	}
+	return chunk, count, nil
+}
+
+func parseDat(b []byte) (*datFile, error) {
+	cs, n, err := checkDatHeader(b, int64(len(b)))
+	if err != nil {
+		return nil, err
 	}
 	d := newDat(cs)
 	for i := 0; i < n; i++ {
@@ -37,8 +57,8 @@ func parseDat(b []byte) (*datFile, error) {
 		id := string(bytes.TrimRight(rec[:12], "\x00"))
 		idx := int(binary.LittleEndian.Uint32(rec[12:]))
 		off := idx * cs
-		if off < 0 || off+cs > len(b) {
-			continue
+		if off < 0 || off+cs > len(b) || id == "" {
+			continue // the menu drops these too (dat_reader.c), so they are not carried into a rebuilt file
 		}
 		if _, dup := d.Chunks[id]; !dup {
 			d.Order = append(d.Order, id)
@@ -80,7 +100,12 @@ func datID(id string) string {
 }
 
 func (d *datFile) Write(path string) error {
-	ids := append([]string(nil), d.Order...)
+	var ids []string
+	for _, id := range d.Order {
+		if id != "" {
+			ids = append(ids, id)
+		}
+	}
 	sort.Strings(ids)
 	n := len(ids)
 	first := (16 + 16*n + d.ChunkSize - 1) / d.ChunkSize

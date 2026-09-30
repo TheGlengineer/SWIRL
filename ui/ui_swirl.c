@@ -67,7 +67,7 @@ static uint32_t accent_col = 0xFFF28C28;
 enum tab { TAB_HOME = 0, TAB_LIBRARY, TAB_COLLECTIONS, TAB_SYSTEM, TAB_COUNT };
 static const char *tab_names[TAB_COUNT] = {"Home", "Library", "Collections", "System"};
 
-enum mode { MODE_TABS = 0, MODE_DETAIL, MODE_LAUNCH, MODE_PADTEST, MODE_OPTIONS, MODE_VMU, MODE_RESUME };
+enum mode { MODE_TABS = 0, MODE_DETAIL, MODE_LAUNCH, MODE_PADTEST, MODE_OPTIONS, MODE_VMU, MODE_RESUME, MODE_DIAG };
 
 #define MAX_LIST 1024
 #define MAX_COLS 40
@@ -146,6 +146,7 @@ static int toast_frames;
 /* save debounce */
 static int save_countdown;
 static int save_tries; /* failed saves in a row (they are tried again a few times) */
+static int save_last;  /* result of the failed save being tried again (the banner says why) */
 /* The save banner, so nobody switches off with changes not yet on the VMU:
    "Unsaved changes. Saving in 3", then "Saving... please wait" until 2 s after the save is really done, then
    the outcome ("Saved to VMU", or why not). */
@@ -304,12 +305,48 @@ static const char *save_banner(char *buf, int len) {
   if (save_countdown > 0 && sw_lib_dirty()) {
     const int secs = (save_countdown + 59) / 60;
     if (save_tries > 0)
-      snprintf(buf, len, "VMU busy. Trying again in %d", secs);
+      snprintf(buf, len, "%s. Trying again in %d", save_last == -7 || save_last == -1 ? "VMU busy" : "Not saved", secs);
     else
       snprintf(buf, len, "Unsaved changes. Saving in %d", secs);
     return buf;
   }
   return NULL;
+}
+
+/* the VMU shows the same save status as the banner, animated */
+static void vmu_status(void) {
+  int kind = SW_VMU_NONE, arg = 0;
+  if (mode == MODE_LAUNCH) {
+    kind = SW_VMU_NONE;
+  } else if (saving_now || sw_lib_busy()) {
+    kind = SW_VMU_WRITING;
+  } else if (save_hold > 0) {
+    kind = SW_VMU_SAVING;
+  } else if (save_msg_frames > 0) {
+    if (!strncmp(save_msg, "Saved", 5)) kind = SW_VMU_SAVED;
+    else if (strstr(save_msg, "space")) kind = SW_VMU_NO_SPACE;
+    else kind = SW_VMU_CHECK;
+  } else if (save_countdown > 0 && sw_lib_dirty()) {
+    if (save_tries > 0) {
+      kind = SW_VMU_BUSY;
+    } else {
+      kind = SW_VMU_COUNTDOWN;
+      arg = save_countdown;
+    }
+  }
+  sw_vmu_overlay(kind, arg);
+}
+
+/* every launcher calls this first: the music stops and the VMU thread ends, so nothing of SWIRL's is running
+   when the console is handed over (the Classic styles use it too once SWIRL has run) */
+static void before_launch(void) {
+  sw_mem_check("before launch");
+  sw_trace("launch: stopping music");
+  sw_audio_shutdown();
+  sw_mem_check("after music");
+  sw_trace("launch: stopping VMU screen");
+  sw_vmu_shutdown();
+  sw_mem_check("after VMU screen");
 }
 
 static void show_toast(const char *msg) {
@@ -896,8 +933,8 @@ static void draw_collections(float slide) {
 /* ---------- SYSTEM ---------- */
 enum {
   SYS_STYLE = 0, SYS_ACCENT, SYS_BACKDROP, SYS_QUALITY, SYS_MUSIC, SYS_MUSIC_VOL, SYS_SFX, SYS_SFX_VOL, SYS_RESUME, SYS_CLOCK,
-  SYS_RUMBLE, SYS_BEEP, SYS_ATTRACT, SYS_SAVER_STYLE, SYS_SAVER_TIME, SYS_SAVER_TEST, SYS_VMU, SYS_SAVE, SYS_PADTEST,
-  SYS_BIOS, SYS_COUNT
+  SYS_RUMBLE, SYS_BEEP, SYS_GAMEID, SYS_ATTRACT, SYS_SAVER_STYLE, SYS_SAVER_TIME, SYS_SAVER_TEST, SYS_VMU, SYS_SAVE, SYS_PADTEST,
+  SYS_BIOS, SYS_DIAG, SYS_COUNT
 };
 #define SYS_ROWS 9
 static int sys_top;
@@ -930,20 +967,25 @@ static const char *sys_value(int i, char *buf, int len) {
     case SYS_CLOCK: return p->clock24 ? "24 hour" : "12 hour";
     case SYS_RUMBLE: return p->rumble ? "On" : "Off";
     case SYS_BEEP: return s->beep == BEEP_ON ? "On" : "Off";
+    case SYS_GAMEID: return p->gameid_off ? "Off" : "On";
     case SYS_ATTRACT: return p->attract ? "On" : "Off";
     case SYS_SAVER_STYLE: return saver_names[p->saver_style % SAVER_COUNT];
     case SYS_SAVER_TIME: snprintf(buf, len, "After %d min", p->saver_min); return buf;
     case SYS_SAVER_TEST: return "Press A";
     case SYS_SAVE: return sw_lib_save_status(buf, len);
+    case SYS_DIAG:
+      if (!sw_warn_count()) return "No warnings";
+      snprintf(buf, len, "%d warning%s", sw_warn_count(), sw_warn_count() == 1 ? "" : "s");
+      return buf;
     default: return "";
   }
 }
 
 static const char *sys_names[SYS_COUNT] = {"Menu style", "Accent colour", "Backdrop", "Picture quality", "Menu music", "Music volume",
                                            "Navigation sounds", "Sound volume", "Start on", "Clock",
-                                           "Rumble on launch", "VMU beep on save", "Screen saver", "Screen saver style",
+                                           "Rumble on launch", "VMU beep on save", "VM2 / VMU Pro game cards", "Screen saver", "Screen saver style",
                                            "Start screen saver", "Preview screen saver", "VMU saves",
-                                           "Save settings to VMU", "Controller test", "Exit to Dreamcast BIOS"};
+                                           "Save settings to VMU", "Controller test", "Exit to Dreamcast BIOS", "Diagnostics"};
 
 static void show_logo_on_vmu(void) {
   sw_vmu_show_logo();
@@ -1011,8 +1053,15 @@ static void draw_system(float slide) {
   sw_text_right(SWF_SMALL, x + 212, 324, 12, C_DIM, "Version " SWIRL_VERSION);
   sw_text(SWF_SMALL, x + 16, 344, 12, C_TEXT, "Created by Glen Huszar");
   sw_text(SWF_SMALL, x + 16, 360, 12, C_ORANGE, "github.com/TheGlengineer");
-  sw_text_wrap(SWF_SMALL, x + 16, 382, 11, C_DIM,
-               "Built on openMenu by mrneo240. Fonts: Sora and Barlow (OFL).", 196, 14, 3);
+  sw_text_wrap(SWF_SMALL, x + 16, 380, 11, C_DIM,
+               "Built on openMenu by mrneo240. Fonts: Sora and Barlow (OFL).", 196, 13, 2);
+  {
+    char db[40];
+    const int n = sw_warn_count();
+    if (n) snprintf(db, sizeof(db), "Diagnostics: %d warning%s", n, n == 1 ? "" : "s");
+    else snprintf(db, sizeof(db), "Diagnostics: no warnings");
+    sw_text(SWF_SMALL, x + 16, 416, 11, n ? C_ORANGE : C_DIM, db);
+  }
 
   const char *foot[] = {"L / R  Tabs", "Left / Right  Change", "A  Select"};
   draw_footer(foot, 3, NULL);
@@ -1173,6 +1222,7 @@ static void tick_launch(void) {
     return;
   if (!saved_at) {
     sw_audio_shutdown();
+    sw_vmu_freeze(1); /* the game gets the VMU as it is; nothing more is sent, and no "saving" picture */
     sw_lib_save(); /* SWIRL.DAT and openMenu's settings; the launch screen stays up until it is done */
     saved_at = launch_frames;
     return;
@@ -1184,10 +1234,12 @@ static void tick_launch(void) {
     case KIND_BLEEM: bleem_launch((gd_item *)launch_item); break;
     default: dreamcast_launch_disc_ex((gd_item *)launch_item, &launch_o); break;
   }
-  /* only returns when a launcher file was missing */
+  /* only returns when the drive did not switch, the disc did not become ready, or a launcher file was missing */
+  sw_vmu_freeze(0);
+  sw_vmu_init(); /* the VMU thread was ended for the hand over */
   mode = MODE_TABS;
   sw_audio_init();
-  show_toast("That launcher is not on the menu disc");
+  show_toast(gdemu_launch_error() ? gdemu_launch_error() : "That launcher is not on the menu disc");
 }
 
 /* ---------- surprise me ---------- */
@@ -1340,7 +1392,7 @@ static void input_options(unsigned int btn, int pressed) {
     case OPT_BOOT: l.boot = (l.boot + d + 4) % 4; break;
     case OPT_RESET:
       if (btn != A) return;
-      l.region = SW_REGION_AUTO; l.vga = 1; l.boot = SW_BOOT_NONE;
+      l.region = SW_REGION_AUTO; l.vga = 1; l.boot = SW_BOOT_DEFAULT;
       show_toast("Launch options reset");
       break;
   }
@@ -1350,7 +1402,7 @@ static void input_options(unsigned int btn, int pressed) {
 
 static int launch_is_custom(const sw_game *g) {
   sw_launch l = sw_lib_launch_get(g);
-  return l.region != SW_REGION_AUTO || !l.vga || l.boot != SW_BOOT_NONE;
+  return l.region != SW_REGION_AUTO || !l.vga || l.boot != SW_BOOT_DEFAULT;
 }
 
 /* ---------- VMU save manager ---------- */
@@ -1605,6 +1657,80 @@ static void draw_padtest(void) {
   sw_text_center(SWF_SMALL, 320, 360, 12, C_DIM, "Hold B and Start together to leave");
 }
 
+/* ---------- diagnostics ---------- */
+/* The warnings collected since power on, in plain words, and the whole report as QR codes on A (the same
+   screen a crash shows, with reason "Diagnostics"), so "my settings do not save" can come with a code. */
+static int diag_top;
+#define DIAG_ROWS 6
+
+static void draw_diag(void) {
+  sw_rrect(60, 56, 520, 356, 12, 0xF00C1222);
+  sw_text(SWF_HEAD, 84, 72, 20, C_WHITE, "Diagnostics");
+  char vb[48];
+  snprintf(vb, sizeof(vb), "SWIRL %s, build %s", SWIRL_VERSION, sw_build_id());
+  sw_text_right(SWF_SMALL, 556, 78, 12, C_DIM, vb);
+  const int n = sw_warn_count();
+  if (!n) {
+    sw_text(SWF_BODY, 84, 112, 15, C_TEXT, "No warnings since power on.");
+    sw_text_wrap(SWF_SMALL, 84, 140, 12, C_DIM,
+                 "A warning is a problem SWIRL got past: a save that failed, a picture it could not use, a line in "
+                 "OPENMENU.INI it skipped. They are listed here with a code.",
+                 470, 16, 4);
+  } else {
+    if (diag_top > n - DIAG_ROWS) diag_top = n - DIAG_ROWS;
+    if (diag_top < 0) diag_top = 0;
+    for (int r = 0; r < DIAG_ROWS && diag_top + r < n; r++) {
+      int code = 0, count = 0;
+      const char *detail = "";
+      sw_warn_get(diag_top + r, &code, &count, &detail);
+      const float y = 104 + r * 44;
+      char cb[8];
+      snprintf(cb, sizeof(cb), "W%02d", code);
+      sw_text(SWF_UI, 84, y, 14, C_ORANGE, cb);
+      sw_text_clip(SWF_UI, 128, y, 14, C_WHITE, sw_code_words(code), 340);
+      if (count > 1) {
+        char nb[12];
+        snprintf(nb, sizeof(nb), "x%d", count);
+        sw_text_right(SWF_SMALL, 556, y + 2, 12, C_DIM, nb);
+      }
+      sw_text_clip(SWF_SMALL, 128, y + 20, 11, C_DIM, detail, 428);
+    }
+    if (n > DIAG_ROWS) {
+      char more[32];
+      snprintf(more, sizeof(more), "%d to %d of %d", diag_top + 1, diag_top + DIAG_ROWS < n ? diag_top + DIAG_ROWS : n, n);
+      sw_text_right(SWF_SMALL, 556, 340, 11, C_DIM, more);
+    }
+  }
+  sw_text_wrap(SWF_SMALL, 84, 356, 11, C_DIM,
+               "A shows the full report as QR codes to photograph for a bug report. It holds no game names beyond "
+               "the last few steps.",
+               470, 14, 2);
+  sw_text(SWF_SMALL, 84, 392, 12, C_TEXT, "Up / Down  Scroll");
+  sw_text(SWF_SMALL, 230, 392, 12, C_TEXT, "A  Show as QR codes");
+  sw_text_right(SWF_SMALL, 556, 392, 12, C_TEXT, "B  Back");
+}
+
+static void input_diag(unsigned int btn, int pressed) {
+  if (btn == UP && dir_pressed(btn) && diag_top > 0) diag_top--;
+  if (btn == DOWN && dir_pressed(btn) && diag_top + DIAG_ROWS < sw_warn_count()) diag_top++;
+  if (btn == B && pressed) mode = MODE_TABS;
+  if (btn == A && pressed) {
+    /* the report screen writes the picture itself and waits on the buttons: nothing of the menu runs meanwhile */
+    sw_lib_finish();
+    sw_audio_shutdown();
+    sw_report_show(SW_REPORT_USER);
+    sw_audio_init();
+    prev_btn = B; /* the B that closed the report is not a press here */
+  }
+}
+
+/* X held at power on: the boot log as QR codes, once the menu is up (main.c) */
+void ui_swirl_boot_log(void) {
+  sw_audio_shutdown();
+  sw_report_show(SW_REPORT_BOOT);
+  sw_audio_init();
+}
+
 /* ---------- input ---------- */
 static int dir_pressed(unsigned int btn) {
   /* initial press, then auto repeat after 16 frames every 4 frames */
@@ -1701,6 +1827,8 @@ static void input_tabs(unsigned int btn, int pressed) {
         int keep = lib_list[lib_sel];
         lib_sort = (lib_sort + 1) % SW_SORT_COUNT;
         sw_lib_prefs()->sort = lib_sort;
+        sw_lib_mark_dirty(); /* kept in SWIRL.DAT like the other settings */
+        save_countdown = 180;
         build_library();
         for (int i = 0; i < lib_len; i++)
           if (lib_list[i] == keep) lib_sel = i;
@@ -1768,9 +1896,10 @@ static void input_tabs(unsigned int btn, int pressed) {
                 save_hold = 120;
                 while (save_hold > 0) { idle_frame(); save_hold--; }
                 saving_now = 0;
-                snprintf(save_msg, sizeof(save_msg), "%s", r == 0 ? "Saved to VMU" : r == -2 ? "Not saved: no VMU with space" : "Not saved: check the VMU");
+                snprintf(save_msg, sizeof(save_msg), "%s", r == 0 ? "Saved to VMU" : r == -2 ? "Not saved: no VMU with space" : r == -8 ? "Not saved: no space on VMU" : "Not saved: check the VMU");
                 save_msg_frames = 60;
                 while (save_msg_frames > 0) { idle_frame(); save_msg_frames--; }
+                sw_vmu_shutdown(); /* the Classic styles draw their own VMU screen */
                 reload_ui();
                 return;
               }
@@ -1802,6 +1931,7 @@ static void input_tabs(unsigned int btn, int pressed) {
             sw_lib_settings_dirty(); /* kept in openMenu's settings file; saved with the rest */
             save_countdown = 180;
             break;
+          case SYS_GAMEID: p->gameid_off = !p->gameid_off; break;
           case SYS_ATTRACT: p->attract = !p->attract; break;
           case SYS_SAVER_STYLE: p->saver_style = (uint8_t)((p->saver_style + d + SAVER_COUNT) % SAVER_COUNT); break;
           case SYS_SAVER_TIME: p->saver_min = (uint8_t)((p->saver_min - 1 + d + 30) % 30 + 1); break;
@@ -1827,6 +1957,10 @@ static void input_tabs(unsigned int btn, int pressed) {
             changed_pref = 0;
             if (btn == A) mode = MODE_PADTEST;
             break;
+          case SYS_DIAG:
+            changed_pref = 0;
+            if (btn == A) { mode = MODE_DIAG; diag_top = 0; }
+            break;
           case SYS_BIOS:
             changed_pref = 0;
             if (btn == A) {
@@ -1836,6 +1970,9 @@ static void input_tabs(unsigned int btn, int pressed) {
               sw_lib_save();
               save_hold = 120;
               while (save_hold > 0) { idle_frame(); save_hold--; }
+              sw_vmu_shutdown();
+              sw_trace("leaving for the BIOS");
+              sw_watchdog_expect(60000);
               arch_menu();
             }
             break;
@@ -1868,6 +2005,26 @@ static void input_detail(unsigned int btn, int pressed) {
 }
 
 /* ---------- UI entry points ---------- */
+void ui_swirl_settings_changed(void) {
+  lib_sort = sw_lib_prefs()->sort % SW_SORT_COUNT;
+  apply_theme();
+  rebuild_all();
+  if (settings_take_dirty()) sw_lib_settings_dirty();
+  if (sw_lib_dirty() && save_countdown <= 0) save_countdown = 180; /* an older file taken in is written back */
+  show_toast("Memory card found: your settings are back");
+}
+
+void ui_swirl_save_settings_soon(void) {
+  sw_lib_settings_dirty();
+  if (save_countdown <= 0) save_countdown = 180;
+}
+
+void ui_swirl_leave(void) {
+  sw_lib_finish();
+  sw_audio_shutdown();
+  sw_vmu_shutdown();
+}
+
 /* drawing frames while a save finishes (see sw_lib_finish): pictures only, no timers or saves */
 static int waiting_for_save;
 void main_draw_frame(void);
@@ -1900,6 +2057,8 @@ FUNCTION(UI_NAME, init) {
   sw_trace("SWIRL: graphics");
   sw_gfx_init();
   sw_trace("SWIRL: VMU screen");
+  sw_vmu_boot_stop();
+  sw_mem_check("after power on intro"); /* the power on logo intro: it carries on from the menu, and SWIRL.DAT is next */
   sw_vmu_init();
   sw_trace("SWIRL: VMU.DAT, SHOT.DAT");
   if (!have_vmu_dat) {
@@ -1913,15 +2072,15 @@ FUNCTION(UI_NAME, init) {
   sw_trace("SWIRL: library and SWIRL.DAT");
   sw_lib_init();
   sw_lib_set_idle(idle_frame);
-  if (settings_boot_reset_take()) {
-    sw_lib_settings_dirty(); /* Y at start up: save the SWIRL style, or the Classic style comes back next time */
-    save_countdown = 180;
-  }
+  if (settings_boot_reset_take() || settings_take_dirty())
+    sw_lib_settings_dirty(); /* Y at start up, or SWIRL's first run with this card: the SWIRL style is saved */
+  if (sw_lib_dirty())
+    save_countdown = 180; /* also an older SWIRL.DAT taken in: it is written back in today's form */
   lib_sort = sw_lib_prefs()->sort % SW_SORT_COUNT;
   srand((unsigned)rtc_unix_secs());
   sw_trace("SWIRL: music");
   sw_audio_init(); /* no-op when already running */
-  gdemu_before_launch = sw_audio_shutdown;
+  gdemu_before_launch = before_launch;
   apply_theme();
   printf("SWIRL: %d games, stats %s\n", sw_lib_count(), sw_lib_stats_loaded() ? "loaded" : "new");
 }
@@ -1998,6 +2157,9 @@ FUNCTION_INPUT(UI_NAME, handle_input) {
       else if (btn == B && pressed) { mode = MODE_TABS; show_toast("Welcome back"); }
       break;
     case MODE_LAUNCH:
+      break;
+    case MODE_DIAG:
+      input_diag(btn, pressed);
       break;
     case MODE_PADTEST: {
       maple_device_t *dev = maple_enum_type(0, MAPLE_FUNC_CONTROLLER);
@@ -2386,12 +2548,16 @@ FUNCTION(UI_NAME, drawTR) {
       sw_lib_settings_dirty();
     }
     int r = sw_lib_save_async();
-    if (r == -7 || r == -1) /* card not answering, or a save still running: try again shortly */
+    if (r == -7 || r == -1) { /* card not answering, or a save still running: try again shortly */
       save_countdown = 120 * (save_tries < 5 ? ++save_tries : 5);
+      save_last = r;
+      sw_lib_retrying(1);
+    }
   }
   {
     int r;
     if (sw_lib_save_result(&r)) {
+      sw_mem_check("after save");
       save_outcome = r;
       save_hold = 120; /* "Saving..." stays up 2 s longer, so it is never switched off too soon */
     }
@@ -2399,6 +2565,8 @@ FUNCTION(UI_NAME, drawTR) {
       const int r2 = save_outcome;
       save_outcome = 1;
       save_msg_frames = 150;
+      sw_trace("save: result %d shown", r2);
+      sw_lib_retrying(0);
       if (r2 == 0) {
         snprintf(save_msg, sizeof(save_msg), "Saved to VMU");
         save_tries = 0;
@@ -2406,9 +2574,16 @@ FUNCTION(UI_NAME, drawTR) {
         /* no memory card, or no room: trying again won't help; the next change tries again */
         snprintf(save_msg, sizeof(save_msg), "No VMU with space. Changes not saved");
         save_tries = 0;
+      } else if (r2 == -8) {
+        /* the card that holds SWIRL.DAT is full: only freeing space helps */
+        const int n = sw_lib_blocks_short();
+        snprintf(save_msg, sizeof(save_msg), "No space on VMU. Free %d block%s in VMU saves", n, n == 1 ? "" : "s");
+        save_tries = 0;
       } else if (save_tries < 5) {
         /* a busy or slow card: try again after 2, 4, 6, 8 and 10 seconds */
         save_countdown = 120 * ++save_tries;
+        save_last = r2;
+        sw_lib_retrying(1);
         save_msg_frames = 0; /* the banner counts down to the next try */
       } else {
         snprintf(save_msg, sizeof(save_msg), "Not saved: check the VMU");
@@ -2418,6 +2593,9 @@ FUNCTION(UI_NAME, drawTR) {
     if (save_msg_frames > 0 && !save_hold) save_msg_frames--;
   }
 
+  vmu_status();
+  if (frame_no % 120 == 0)
+    sw_mem_check(NULL); /* every 2 s: damage stops here, close to when it happened */
   sw_vmu_tick();
   sw_audio_poll();
   tick_surprise();
@@ -2449,6 +2627,7 @@ FUNCTION(UI_NAME, drawTR) {
   sw_set_fade(1.f);
 
   if (mode == MODE_PADTEST) draw_padtest();
+  if (mode == MODE_DIAG) draw_diag();
   if (mode == MODE_OPTIONS) draw_options();
   if (mode == MODE_RESUME) draw_resume();
   if (mode == MODE_LAUNCH) draw_launch();

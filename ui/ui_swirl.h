@@ -18,3 +18,12 @@ FUNCTION(UI_NAME, setup);
 FUNCTION_INPUT(UI_NAME, handle_input);
 FUNCTION(UI_NAME, drawOP);
 FUNCTION(UI_NAME, drawTR);
+
+/* SWIRL: a memory card that attached after start up brought settings; the views and colours follow them */
+void ui_swirl_settings_changed(void);
+/* SWIRL: another style is about to start (its own music and VMU screen) */
+void ui_swirl_leave(void);
+/* SWIRL: openMenu's settings file needs writing; the save banner counts down to it */
+void ui_swirl_save_settings_soon(void);
+/* SWIRL: X was held at power on: show the boot log as QR codes (blocking, B returns) */
+void ui_swirl_boot_log(void);

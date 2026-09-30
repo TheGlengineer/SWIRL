@@ -345,7 +345,7 @@ func StartUpdate(kind string) error {
 		}
 	}
 	label := versionLabel(ver)
-	return runJob("Downloading SWIRL Card Manager "+label, "", func() error {
+	return runJob("", "Downloading SWIRL Card Manager "+label, "", func() error {
 		jobLog("Downloading version %s from github.com/%s", label, updateRepo)
 		exe, err := download(ver, url, size, sum)
 		if err != nil {

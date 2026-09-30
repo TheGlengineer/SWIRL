@@ -208,11 +208,7 @@ func planCopy(src string) (*copyPlan, error) {
 	}
 	sort.Ints(numbered)
 	for _, n := range numbered {
-		name := fmt.Sprintf("%02d", n)
-		if _, err := os.Stat(filepath.Join(src, name)); err != nil {
-			name = strconv.Itoa(n)
-		}
-		if err := addTree(p, filepath.Join(src, name), fmt.Sprintf("%02d", n)); err != nil {
+		if err := addTree(p, filepath.Join(src, folderName(src, n)), fmt.Sprintf("%02d", n)); err != nil {
 			return nil, err
 		}
 		p.Games++
@@ -243,8 +239,8 @@ func planCopy(src string) (*copyPlan, error) {
 		next++
 		p.Games++
 	}
-	if next > 999 {
-		return nil, errors.New("GDEMU supports up to 999 folders")
+	if next > 9999 {
+		return nil, errors.New("GDEMU supports up to 9999 folders")
 	}
 	return p, nil
 }
@@ -259,8 +255,10 @@ func copyWithProgress(src, dst string, onBytes func(int64)) error {
 }
 
 func copyStream(in io.Reader, dst string, onBytes func(int64)) error {
-	os.MkdirAll(filepath.Dir(dst), 0o755)
-	out, err := os.Create(dst)
+	if err := cardfs.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	out, err := cardfs.Create(dst)
 	if err != nil {
 		return err
 	}
@@ -282,10 +280,79 @@ func copyStream(in io.Reader, dst string, onBytes func(int64)) error {
 			return rerr
 		}
 	}
+	if err := cardfs.SyncFile(out); err != nil {
+		out.Close()
+		return err
+	}
 	return out.Close()
 }
 
+// runCopy copies a plan onto the card. Each numbered folder is filled as NN.part and renamed to NN only
+// when everything in it is copied, so a failed or stopped copy never leaves a half game where GDEMU looks.
 func runCopy(p *copyPlan, root string, onPct func(float64)) error {
+	parts := map[string]bool{}
+	for _, it := range p.Items {
+		if top, _, ok := strings.Cut(filepath.ToSlash(it.Dst), "/"); ok && folderRe.MatchString(top) {
+			parts[top] = true
+		}
+	}
+	var tops []string
+	for top := range parts {
+		if fileExists(filepath.Join(root, top)) {
+			return fmt.Errorf("folder %s is already on the card", top)
+		}
+		tops = append(tops, top)
+	}
+	sort.Slice(tops, func(i, j int) bool { return naturalLess(tops[i], tops[j]) })
+	for _, top := range tops {
+		if err := cardfs.RemoveAll(filepath.Join(root, top+".part")); err != nil { // left by an earlier failed copy
+			return err
+		}
+	}
+	cleanup := func(err error) error {
+		var errs []error
+		for _, top := range tops {
+			if e := cardfs.RemoveAll(filepath.Join(root, top+".part")); e != nil {
+				errs = append(errs, fmt.Errorf("removing the unfinished copy %s.part: %w", top, e))
+			}
+		}
+		return errors.Join(append([]error{err}, errs...)...)
+	}
+	if err := copyItems(p, root, onPct); err != nil {
+		return cleanup(err)
+	}
+	for i, top := range tops {
+		part := filepath.Join(root, top+".part")
+		if err := syncTree(part); err != nil {
+			return cleanup(err)
+		}
+		if err := cardfs.Rename(part, filepath.Join(root, top)); err != nil {
+			tops = tops[i:] // the folders before this one are complete and stay
+			return cleanup(fmt.Errorf("renaming %s.part to %s: %w", top, top, err))
+		}
+	}
+	return cardfs.SyncDir(root)
+}
+
+// syncTree flushes the entries of a folder and of every folder inside it.
+func syncTree(dir string) error {
+	return filepath.Walk(dir, func(p string, info os.FileInfo, err error) error {
+		if err != nil || !info.IsDir() {
+			return err
+		}
+		return cardfs.SyncDir(p)
+	})
+}
+
+// partPath is where a plan item is written: inside NN.part for a numbered folder.
+func partPath(root, dst string) string {
+	if top, rest, ok := strings.Cut(filepath.ToSlash(dst), "/"); ok && folderRe.MatchString(top) {
+		return filepath.Join(root, top+".part", filepath.FromSlash(rest))
+	}
+	return filepath.Join(root, dst)
+}
+
+func copyItems(p *copyPlan, root string, onPct func(float64)) error {
 	var done int64
 	progress := func(n int64) {
 		done += n
@@ -297,7 +364,7 @@ func runCopy(p *copyPlan, root string, onPct func(float64)) error {
 	var names []copyItem
 	byArc := map[string]map[string]copyItem{}
 	for i, it := range p.Items {
-		dst := filepath.Join(root, it.Dst)
+		dst := partPath(root, it.Dst)
 		if it.Entry != "" {
 			if byArc[it.Src] == nil {
 				byArc[it.Src] = map[string]copyItem{}
@@ -325,7 +392,7 @@ func runCopy(p *copyPlan, root string, onPct func(float64)) error {
 		err := walkArchive(a, func(n string) bool { _, ok := want[n]; return ok }, func(n string, _ int64, r io.Reader) error {
 			it := want[n]
 			got++
-			if err := copyStream(r, filepath.Join(root, it.Dst), progress); err != nil {
+			if err := copyStream(r, partPath(root, it.Dst), progress); err != nil {
 				return fmt.Errorf("%s: %w", path.Base(n), err)
 			}
 			if got == len(want) {
@@ -342,16 +409,15 @@ func runCopy(p *copyPlan, root string, onPct func(float64)) error {
 	}
 	// proper names: the real title from the disc's serial, else a tidied file name
 	for _, it := range names {
-		dst := filepath.Join(root, it.Dst)
+		dst := partPath(root, it.Dst)
 		label := strings.TrimPrefix(it.Src, "text:")
 		ip, _, _ := readImageIP(filepath.Dir(dst))
 		name := properName(ip, label)
-		os.MkdirAll(filepath.Dir(dst), 0o755)
-		if err := os.WriteFile(dst, []byte(asciiOnly(name)), 0o644); err != nil {
+		if err := writeCardFile(dst, []byte(asciiOnly(name))); err != nil {
 			return err
 		}
 		if name != label {
-			jobLog("Named %s: %s", filepath.Base(filepath.Dir(dst)), name)
+			jobLog("Named %s: %s", strings.TrimSuffix(filepath.Base(filepath.Dir(dst)), ".part"), name)
 		}
 	}
 	return nil
@@ -448,6 +514,14 @@ func runNewCard(req NewCardRequest, info *DiskInfo, plan *copyPlan) {
 		fail(err)
 		return
 	}
+	if cardKey(root) != cardKey(req.Root) { // the card came back under another name
+		unlock, err := lockCard(root, "New card")
+		if err != nil {
+			fail(err)
+			return
+		}
+		defer unlock()
+	}
 	jobLog("Formatted. The card is now %s (label SWIRL)", root)
 	jobUpdate(func(j *jobState) { j.Root, j.Pct = root, 0.10 })
 
@@ -523,20 +597,32 @@ func runNewCard(req NewCardRequest, info *DiskInfo, plan *copyPlan) {
 }
 
 func startNewCard(req NewCardRequest) error {
+	// the job is claimed before the checks, so a second window cannot start a second format meanwhile
 	jobMu.Lock()
 	if job.Running {
 		jobMu.Unlock()
 		return errors.New("a card is already being prepared")
 	}
+	job = jobState{Running: true, Stage: "Starting"}
 	jobMu.Unlock()
-	info, plan, err := checkNewCard(req)
+	release := func() { jobUpdate(func(j *jobState) { *j = jobState{} }) }
+	unlock, err := lockCard(req.Root, "New card")
 	if err != nil {
+		release()
 		return err
 	}
-	jobUpdate(func(j *jobState) { *j = jobState{Running: true, Stage: "Starting"} })
+	info, plan, err := checkNewCard(req)
+	if err != nil {
+		unlock()
+		release()
+		return err
+	}
 	if plan.Games > 0 {
 		jobLog("Found %d games to copy from %s", plan.Games, req.Source)
 	}
-	go runNewCard(req, info, plan)
+	go func() {
+		defer unlock()
+		runNewCard(req, info, plan)
+	}()
 	return nil
 }

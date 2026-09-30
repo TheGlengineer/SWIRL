@@ -134,6 +134,23 @@ typedef struct bm_font {
 static bm_font font_basilea;
 static int font_loaded = 0;
 
+/* SWIRL: the block sizes come from the file. A fixed size block is read up to the struct's size and the rest of
+   the block is skipped, so a long font name (the info block is 14 bytes plus the name) or a padded block can
+   never write past the variable. Returns 1 when the whole struct was read. */
+static int BMF_read_block(FD_TYPE fd, void *dst, size_t dst_size, size_t block_size) {
+  size_t want = block_size < dst_size ? block_size : dst_size;
+  memset(dst, 0, dst_size);
+  if (fread(dst, 1, want, fd) != want)
+    return 0;
+  if (block_size > want)
+    fseek(fd, (long)(block_size - want), SEEK_CUR);
+  return want == dst_size;
+}
+
+/* SWIRL: bounds for the char and kerning tables (the shipped font has 95 chars and 100 pairs) */
+#define BMF_MAX_CHARS (4096)
+#define BMF_MAX_KERNS (4096)
+
 static int BMF_parse_info(FD_TYPE fd, size_t block_size, bm_font *font) {
   DBG_PRINT("BMF found info block!\n");
   /* Unsure why youd want to have this around or on heap */
@@ -164,7 +181,8 @@ static int BMF_parse_info(FD_TYPE fd, size_t block_size, bm_font *font) {
   free(temp_info);
 #else
   bm_info temp_info;
-  fread(&temp_info, block_size, 1, fd);
+  if (!BMF_read_block(fd, &temp_info, sizeof(temp_info), block_size))
+    return 1;
 
   /* Fix fontSize, its negative ? */
   temp_info.fontSize *= -1;
@@ -192,7 +210,8 @@ static int BMF_parse_info(FD_TYPE fd, size_t block_size, bm_font *font) {
 static int BMF_parse_common(FD_TYPE fd, size_t block_size, bm_font *font) {
   DBG_PRINT("BMF found common block!\n");
   bm_common temp_common;
-  fread(&temp_common, block_size, 1, fd);
+  if (!BMF_read_block(fd, &temp_common, sizeof(temp_common), block_size))
+    return 1;
 
   font->width = temp_common.scaleW;
   font->height = temp_common.scaleH;
@@ -238,13 +257,19 @@ static int BMF_parse_chars(FD_TYPE fd, size_t block_size, bm_font *font) {
   int num_chars = block_size / sizeof(bm_char);
   bm_char_ex temp_char;
 
+  /* SWIRL: bounded by the file, never by the count alone */
+  if (num_chars > BMF_MAX_CHARS)
+    num_chars = BMF_MAX_CHARS;
   font->num_chars = num_chars;
 
   DBG_PRINT("BMF %d chars present\n", num_chars);
 
   /* Read one at a time to font charset */
   for (int i = 0; i < num_chars; i++) {
-    fread(&temp_char, sizeof(bm_char), 1, fd);
+    if (fread(&temp_char, 1, sizeof(bm_char), fd) != sizeof(bm_char)) {
+      font->num_chars = i;
+      break;
+    }
     if (temp_char.id < 256) {
       /* Optionally print out info for each char parsed */
 #if defined(DBG_CHAR_INFO) && DBG_CHAR_INFO
@@ -293,9 +318,18 @@ static int BMF_parse_kerning(FD_TYPE fd, size_t block_size, bm_font *font) {
 
   DBG_PRINT("BMF %d kerning pairs present\n", num_pairs);
 
+  /* SWIRL: the count is capped, the allocation checked and only the pairs actually read are kept */
+  if (num_pairs > BMF_MAX_KERNS)
+    num_pairs = BMF_MAX_KERNS;
+  font->kerns = NULL;
+  font->num_kerns = 0;
+  if (num_pairs <= 0)
+    return 0;
   font->kerns = malloc(sizeof(bm_kern_pair) * num_pairs);
+  if (!font->kerns)
+    return 1;
+  num_pairs = (int)(fread(font->kerns, 1, sizeof(bm_kern_pair) * num_pairs, fd) / sizeof(bm_kern_pair));
   font->num_kerns = num_pairs;
-  fread(font->kerns, sizeof(bm_kern_pair), num_pairs, fd);
 
   /* Sort Kerning pairs */
   qsort(font->kerns, num_pairs, sizeof(bm_kern_pair), _kern_pair_sort);
@@ -346,8 +380,9 @@ static int BMF_load(const char *file, bm_font *font) {
   }
   */
   bm_header file_header;
-  fread(&file_header, sizeof(bm_header), 1, fd);
-  if (file_header.version != 3) {
+  memset(&file_header, 0, sizeof(file_header));
+  fread(&file_header, 1, sizeof(bm_header), fd);
+  if (memcmp(file_header.bmf, "BMF", 3) != 0 || file_header.version != 3) {
     fclose(fd);
     printf("BMF:Error font magic wrong %3s!\n", file_header.bmf);
     return 1;
@@ -390,6 +425,14 @@ static int BMF_load(const char *file, bm_font *font) {
 
   fclose(fd);
 
+  /* SWIRL: a zero font size or texture size from the file would divide by zero when drawing */
+  if (font->fontSize == 0)
+    font->fontSize = 16;
+  if (font->width == 0)
+    font->width = 1;
+  if (font->height == 0)
+    font->height = 1;
+
   font_loaded = 1;
 
   return 0;
@@ -398,11 +441,14 @@ static int BMF_load(const char *file, bm_font *font) {
 int BMF_adjust_kerning(unsigned char first, unsigned char second, bm_font *font) {
   const bm_kern_pair *kern_pairs = font->chars[first].kerns;
   if (kern_pairs) {
-    do {
+    /* SWIRL: bounded by the table (the loop used to read one pair past its end) */
+    const bm_kern_pair *end = font->kerns + font->num_kerns;
+    while (kern_pairs < end && kern_pairs->first == first) {
       if (kern_pairs->second == second) {
         return kern_pairs->amount;
       }
-    } while ((unsigned char)(kern_pairs++)->first == first);
+      kern_pairs++;
+    }
   }
   return 0;
 }
@@ -445,8 +491,7 @@ int font_bmf_init(const char *fnt, const char *texture, int is_wide) {
   }
   int ret = 0;
   char temp_fnt[128];
-  memcpy(temp_fnt, DISC_PREFIX, strlen(DISC_PREFIX) + 1);
-  strcat(temp_fnt, fnt);
+  snprintf(temp_fnt, sizeof(temp_fnt), "%s%s", DISC_PREFIX, fnt);
 
   /* If we arent loaded then load eveyrthing, otherwise just load texture */
   if (!font_loaded) {
@@ -608,12 +653,12 @@ static void _font_bmf_draw_string(int x1, int y1, uint32_t color, const char *st
 static float _font_bmf_calculate_length_full(const char *str, int length) {
   /* Not sure if its worth calculating kerning for this */
   float width = 0;
-  char prev = 0;
+  unsigned char prev = 0;
   bm_font *font = &font_basilea;
   int cursor = 0;
 
   while (*str && cursor++ < length) {
-    int chr = *str;
+    unsigned char chr = (unsigned char)*str; /* SWIRL: bytes over 0x7F indexed chars[] negatively */
     /* Add possible kerning adjustment */
     width += BMF_adjust_kerning(prev, chr, &font_basilea); /* slow */
     width += font->chars[chr].xadvance;
@@ -676,7 +721,7 @@ void font_bmf_draw_sub_wrap(int x1, int y1, uint32_t color, const char *str, int
   const char *text_end = strrchr(str, '\0');
   const char *current_text_start = str;
   const char *current_text_temp = str;
-  const char *last_known_space = str;
+  const char *last_known_space = NULL; /* SWIRL: no break point seen yet (was str, which cut off the first letter) */
   int current_text_len = 0;
 
   do {
@@ -703,6 +748,17 @@ void font_bmf_draw_sub_wrap(int x1, int y1, uint32_t color, const char *str, int
       current_text_len++;
     } while (current_text_width < width);
 
+    /* SWIRL: a word longer than the box has no space to break at. The old code then restarted the row at the
+       previous space forever and filled the vertex buffer (a URL in a description froze the Classic list).
+       Such a word is cut at the last character that fits, at least one per row, so every row makes progress. */
+    const char *line_end = last_known_space;
+    const char *next_start = last_known_space + 1;
+    if (!last_known_space || last_known_space < current_text_start) {
+      int fits = current_text_len > 1 ? current_text_len - 1 : 1;
+      line_end = current_text_start + fits;
+      next_start = line_end;
+    }
+
     current_text_temp = current_text_start;
     charbuffered = 0;
     prev = 0;
@@ -717,14 +773,14 @@ void font_bmf_draw_sub_wrap(int x1, int y1, uint32_t color, const char *str, int
         x1 += round(current_scale * (float)font_basilea.chars[' '].width);
       }
       prev = chr;
-    } while (current_text_temp < last_known_space);
+    } while (current_text_temp < line_end);
 
     pvr_prim(charbuf, charbuffered * sizeof(charbuf[0]));
 
     /* prepare for next row */
     y1 += (current_scale * font_basilea.lineHeight * 1.2f /* Makes Text more natural */);
     x1 = x_start;
-    current_text_start = last_known_space + 1;
+    current_text_start = next_start;
     current_text_len = 0;
     prev = 0;
   } while (current_text_start < text_end);

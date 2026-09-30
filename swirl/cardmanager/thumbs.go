@@ -2,7 +2,9 @@ package main
 
 // Cover thumbnails for the Games grid. Art comes from the owner's own edit, else the menu disc's
 // ICON.DAT (128x128) or BOX.DAT. The menu disc is opened once per card and kept open, and finished PNGs
-// are kept in memory, so a grid of hundreds of games loads quickly.
+// are kept in memory, so a grid of hundreds of games loads quickly. The open disc is closed whenever a
+// card is locked for writing (Windows cannot rename a folder that holds an open file) and opened again
+// for the next cover once the write is over.
 
 import (
 	"bytes"
@@ -56,9 +58,6 @@ func GameThumb(root, folder, product string, big bool) ([]byte, error) {
 			tc.menu.Close()
 		}
 		tc = &thumbCard{stamp: stamp, pngs: map[string][]byte{}}
-		if stamp != "" {
-			tc.menu, _ = openMenuDisc(root)
-		}
 		thumbCards[root] = tc
 	}
 	// the owner's own box art, as edited in Card Manager
@@ -79,7 +78,7 @@ func GameThumb(root, folder, product string, big bool) ([]byte, error) {
 		tc.pngs[key] = b
 		return b, nil
 	}
-	if product == "" || tc.menu == nil {
+	if product == "" || stamp == "" {
 		return nil, os.ErrNotExist
 	}
 	key := fmt.Sprintf("dat|%s|%d", product, size)
@@ -88,6 +87,14 @@ func GameThumb(root, folder, product string, big bool) ([]byte, error) {
 			return nil, os.ErrNotExist
 		}
 		return b, nil
+	}
+	if tc.menu == nil {
+		if cardOp(root) != "" {
+			return nil, os.ErrNotExist // the card is being written; no file in 01 is opened now
+		}
+		if tc.menu, _ = openMenuDisc(root); tc.menu == nil {
+			return nil, os.ErrNotExist
+		}
 	}
 	first, second := "ICON.DAT", "BOX.DAT"
 	if big {
@@ -114,6 +121,18 @@ func GameThumb(root, folder, product string, big bool) ([]byte, error) {
 	return b, nil
 }
 
+// closeMenuReaders closes every cached menu disc reader. The PNGs stay cached.
+func closeMenuReaders() {
+	thumbMu.Lock()
+	defer thumbMu.Unlock()
+	for _, tc := range thumbCards {
+		if tc.menu != nil {
+			tc.menu.Close()
+			tc.menu = nil
+		}
+	}
+}
+
 // ---------- small settings for the app's own screens ----------
 
 type UIPrefs struct {
@@ -128,6 +147,9 @@ type UIPrefs struct {
 	// preview they answered "Not now" to
 	PreviewOffers *bool  `json:"previewOffers,omitempty"`
 	SkipPreview   string `json:"skipPreview,omitempty"`
+	// Output is how the Dreamcast is connected: "vga" (games with no VGA mode are patched automatically when
+	// a patch is known) or "tv" (games are left alone). Unset until the owner answers.
+	Output string `json:"output,omitempty"`
 }
 
 func (p UIPrefs) OfferPreviews() bool { return p.PreviewOffers == nil || *p.PreviewOffers }

@@ -11,10 +11,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -23,7 +25,7 @@ import (
 //go:embed web
 var webFS embed.FS
 
-const version = "2.13.3"
+const version = "2.14.0"
 
 var (
 	mu       sync.Mutex
@@ -51,6 +53,17 @@ func guard(h http.HandlerFunc) http.HandlerFunc {
 		lastPing = time.Now()
 		h(w, r)
 	}
+}
+
+// lockOrFail takes the card's lock for a request that writes to it. On a busy card it answers the request
+// with the reason and returns nil.
+func lockOrFail(w http.ResponseWriter, root, op string) func() {
+	unlock, err := lockCard(root, op)
+	if err != nil {
+		fail(w, err)
+		return nil
+	}
+	return unlock
 }
 
 type logBuf struct{ lines []string }
@@ -99,6 +112,11 @@ func serve() {
 			fail(w, err)
 			return
 		}
+		unlock := lockOrFail(w, req.Root, "Update SWIRL")
+		if unlock == nil {
+			return
+		}
+		defer unlock()
 		mu.Lock()
 		defer mu.Unlock()
 		l := &logBuf{lines: []string{}}
@@ -115,15 +133,28 @@ func serve() {
 		writeJSON(w, map[string]any{"ok": true, "log": l.lines})
 	}))
 	mux.HandleFunc("/api/restore", guard(func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Root, Backup string }
+		var req struct {
+			Root, Backup string
+			Force        bool
+		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			fail(w, err)
 			return
 		}
+		unlock := lockOrFail(w, req.Root, "Restore")
+		if unlock == nil {
+			return
+		}
+		defer unlock()
 		mu.Lock()
 		defer mu.Unlock()
 		l := &logBuf{lines: []string{}}
-		if err := RestoreBackup(req.Root, req.Backup, l.log); err != nil {
+		if err := RestoreBackupForce(req.Root, req.Backup, req.Force, l.log); err != nil {
+			var mm *restoreMismatch
+			if errors.As(err, &mm) {
+				writeJSON(w, map[string]any{"ok": false, "error": err.Error(), "log": l.lines, "mismatches": mm.Lines})
+				return
+			}
 			writeJSON(w, map[string]any{"ok": false, "error": err.Error(), "log": l.lines})
 			return
 		}
@@ -136,6 +167,11 @@ func serve() {
 				fail(w, err)
 				return
 			}
+			unlock := lockOrFail(w, req.Root, "Save game")
+			if unlock == nil {
+				return
+			}
+			defer unlock()
 			mu.Lock()
 			err := SaveGame(req)
 			mu.Unlock()
@@ -191,12 +227,67 @@ func serve() {
 		}
 		writeJSON(w, LoadUIPrefs())
 	}))
+	mux.HandleFunc("/api/vga/patch", guard(func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Root, Folder string }
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || !folderRe.MatchString(req.Folder) {
+			fail(w, errors.New("bad request"))
+			return
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		rep, err := applyCatalogVGAPatch(req.Root, filepath.Join(req.Root, req.Folder), false)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, rep)
+	}))
+	mux.HandleFunc("/api/vga/unpatch", guard(func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Root, Folder string }
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || !folderRe.MatchString(req.Folder) {
+			fail(w, errors.New("bad request"))
+			return
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		undo := vgaUndoFile(req.Root, filepath.Join(req.Root, req.Folder))
+		if undo == "" {
+			fail(w, errors.New("no patch is applied to this game"))
+			return
+		}
+		rep, err := undoDCP(req.Root, filepath.Join(req.Root, req.Folder), undo)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, rep)
+	}))
+	mux.HandleFunc("/api/vga/fix", guard(func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Root string }
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			fail(w, err)
+			return
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		res, err := vgaFixCard(req.Root)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, res)
+	}))
 	mux.HandleFunc("/api/fillart", guard(func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Root string }
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			fail(w, err)
 			return
 		}
+		unlock := lockOrFail(w, req.Root, "Fill art")
+		if unlock == nil {
+			return
+		}
+		defer unlock()
 		mu.Lock()
 		defer mu.Unlock()
 		l := &logBuf{lines: []string{}}
@@ -213,6 +304,11 @@ func serve() {
 			fail(w, err)
 			return
 		}
+		unlock := lockOrFail(w, req.Root, "Remove duplicates")
+		if unlock == nil {
+			return
+		}
+		defer unlock()
 		mu.Lock()
 		defer mu.Unlock()
 		l := &logBuf{lines: []string{}}
@@ -228,6 +324,11 @@ func serve() {
 			fail(w, err)
 			return
 		}
+		unlock := lockOrFail(w, req.Root, "Delete removed games")
+		if unlock == nil {
+			return
+		}
+		defer unlock()
 		mu.Lock()
 		defer mu.Unlock()
 		if err := DeleteRemoved(req.Root, req.Name); err != nil {
@@ -318,7 +419,11 @@ func serve() {
 			Rebuild bool   `json:"rebuild"`
 		}
 		json.NewDecoder(r.Body).Decode(&req)
-		err := runJob("Downloading box art and info", "", func() error {
+		lockRoot := "" // the download alone does not touch the card
+		if req.Rebuild {
+			lockRoot = req.Root
+		}
+		err := runJob(lockRoot, "Downloading box art and info", "", func() error {
 			if err := DownloadDB(jobLog, func(f float64) { setPct(0.8 * f) }); err != nil {
 				return err
 			}
@@ -348,7 +453,13 @@ func serve() {
 				fail(w, err)
 				return
 			}
-			if err := SaveGDEMU(req.Root, req.Settings); err != nil {
+			unlock := lockOrFail(w, req.Root, "GDEMU settings")
+			if unlock == nil {
+				return
+			}
+			err := SaveGDEMU(req.Root, req.Settings)
+			unlock()
+			if err != nil {
 				fail(w, err)
 				return
 			}
@@ -398,6 +509,11 @@ func serve() {
 		for f, n := range req.Names {
 			req.Names[f] = asciiOnly(n)
 		}
+		unlock := lockOrFail(w, req.Root, "Names")
+		if unlock == nil {
+			return
+		}
+		defer unlock()
 		l := &logBuf{lines: []string{}}
 		if err := SaveNames(req.Root, req.Names, l.log); err != nil {
 			fail(w, err)
@@ -488,6 +604,11 @@ func serve() {
 			fail(w, err)
 			return
 		}
+		unlock := lockOrFail(w, req.Root, "VMU screen")
+		if unlock == nil {
+			return
+		}
+		defer unlock()
 		if err := ChooseVMU(req.Root, req.Folder, req.Index); err != nil {
 			fail(w, err)
 			return
@@ -520,7 +641,13 @@ func serve() {
 				fail(w, err)
 				return
 			}
-			if err := SaveCollections(req.Root, req.Collections); err != nil {
+			unlock := lockOrFail(w, req.Root, "Collections")
+			if unlock == nil {
+				return
+			}
+			err := SaveCollections(req.Root, req.Collections)
+			unlock()
+			if err != nil {
 				fail(w, err)
 				return
 			}
@@ -545,6 +672,10 @@ func serve() {
 				return
 			}
 			root = req.Root
+			unlock := lockOrFail(w, root, "Menu music")
+			if unlock == nil {
+				return
+			}
 			l := &logBuf{lines: []string{}}
 			var err error
 			if req.Remove {
@@ -552,6 +683,7 @@ func serve() {
 			} else {
 				_, err = SetMusic(root, req.File, l.log)
 			}
+			unlock()
 			if err != nil {
 				fail(w, err)
 				return
@@ -571,6 +703,10 @@ func serve() {
 				return
 			}
 			root = req.Root
+			unlock := lockOrFail(w, root, "CodeBreaker")
+			if unlock == nil {
+				return
+			}
 			l := &logBuf{lines: []string{}}
 			var err error
 			if req.Remove {
@@ -578,6 +714,7 @@ func serve() {
 			} else {
 				err = SetCodeBreaker(root, req.File, l.log)
 			}
+			unlock()
 			if err != nil {
 				fail(w, err)
 				return
@@ -594,6 +731,11 @@ func serve() {
 			fail(w, err)
 			return
 		}
+		unlock := lockOrFail(w, req.Root, "Screenshots")
+		if unlock == nil {
+			return
+		}
+		defer unlock()
 		res, err := FetchGameShots(req.Root, req.Product, req.Names)
 		if err != nil {
 			fail(w, err)
@@ -618,6 +760,12 @@ func serve() {
 				fail(w, errors.New("bad screenshot slot"))
 				return
 			}
+			unlock := lockOrFail(w, req.Root, "Screenshots")
+			if unlock == nil {
+				return
+			}
+			defer unlock()
+
 			if req.Image == "" {
 				os.Remove(shotPath(req.Root, req.Product, req.Slot))
 			} else {
@@ -660,9 +808,15 @@ func serve() {
 		writeJSON(w, rep)
 	}))
 	mux.HandleFunc("/api/health/junk", post(func(m map[string]any) (any, error) {
+		unlock, err := lockCard(str(m, "root"), "Remove junk")
+		if err != nil {
+			return nil, err
+		}
+		defer unlock()
 		n, err := RemoveJunk(str(m, "root"))
 		return map[string]any{"moved": n}, err
 	}))
+	mux.HandleFunc("/api/health/gaps", post(func(m map[string]any) (any, error) { return nil, StartCloseGaps(str(m, "root")) }))
 	mux.HandleFunc("/api/games/arrange", post(func(m map[string]any) (any, error) { return nil, StartArrangeDiscs(str(m, "root")) }))
 	mux.HandleFunc("/api/preview", post(func(m map[string]any) (any, error) { return nil, StartPreview(str(m, "root"), str(m, "dats")) }))
 	mux.HandleFunc("/api/vmulogo", guard(func(w http.ResponseWriter, r *http.Request) {
@@ -678,11 +832,17 @@ func serve() {
 				return
 			}
 			root = req.Root
+			unlock := lockOrFail(w, root, "VMU logo")
+			if unlock == nil {
+				return
+			}
 			var bits []byte
 			if !req.Reset {
 				bits = req.Bits
 			}
-			if err := SaveLogo(root, bits); err != nil {
+			err := SaveLogo(root, bits)
+			unlock()
+			if err != nil {
 				fail(w, err)
 				return
 			}
@@ -706,6 +866,28 @@ func serve() {
 		}
 		bits := makeLogo(img, req.Opts)
 		writeJSON(w, map[string]any{"bits": bits, "png": "data:image/png;base64," + base64.StdEncoding.EncodeToString(vmuPNG(bits))})
+	}))
+	// the Report page: the scanned QR text in, the decoded report and the GitHub issue text out. Nothing
+	// leaves this PC; the user copies the text into an issue.
+	mux.HandleFunc("/api/report", post(func(m map[string]any) (any, error) {
+		rep, err := ParseReport(str(m, "text"))
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"report": rep, "issue": IssueBody(rep, version, str(m, "card"))}, nil
+	}))
+	mux.HandleFunc("/api/report/symbols", guard(func(w http.ResponseWriter, r *http.Request) {
+		data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<20))
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		p, err := saveSymbols(r.URL.Query().Get("name"), data)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, map[string]any{"path": p})
 	}))
 	mux.HandleFunc("/api/ping", guard(func(w http.ResponseWriter, r *http.Request) { writeJSON(w, "ok") }))
 	mux.HandleFunc("/api/quit", guard(func(w http.ResponseWriter, r *http.Request) {
@@ -749,10 +931,11 @@ func serve() {
 	}))
 	mux.HandleFunc("/api/app/uninstall", post(func(m map[string]any) (any, error) { return nil, startUninstall() }))
 
-	// one copy at a time: a second start just opens another window onto the first, unless it is a newer
-	// version, which takes over (so running a downloaded update replaces the old one)
+	// one copy at a time: a second start of the same program just opens another window onto the first. A
+	// newer version, or a different build of the same version (a test build), takes over so the card gets it
 	if ri := otherInstance(); ri != nil {
-		if !versionNewer(version, ri.Version) || !askToQuit(ri) {
+		takeOver := versionNewer(version, ri.Version) || (ri.Version == version && !ri.sameBuild())
+		if !takeOver || !askToQuit(ri) {
 			openWindow(fmt.Sprintf("http://127.0.0.1:%d/", ri.Port))
 			return
 		}
@@ -794,6 +977,13 @@ func main() {
 	quiet := flag.Bool("quiet", false, "with -uninstall: no questions, remove everything")
 	waitPID := flag.Int("wait-pid", 0, "internal: wait for this process to exit before starting")
 	applyUpd := flag.Bool("apply-update", false, "internal: install this downloaded update and start it")
+	patch := flag.String("patch", "", "apply a .dcp patch (VGA patches and the like) in place: -root <card> -folder <NN> -patch <file.dcp> [-dry-run]")
+	folder := flag.String("folder", "", "game folder on the card, for -patch and -unpatch")
+	unpatch := flag.String("unpatch", "", "take a patch off again from its undo file: -root <card> -folder <NN> -unpatch <file.undo>")
+	dryRun := flag.Bool("dry-run", false, "with -patch or -vga-patch: only report what would change")
+	vgaPatch := flag.Bool("vga-patch", false, "apply the catalog's VGA patch to a game that has one: -root <card> -folder <NN> -vga-patch [-dry-run]")
+	vgaFix := flag.Bool("vga-fix-all", false, "apply the catalog's VGA patch to every game on the card that has one: -root <card> -vga-fix-all [-dry-run]")
+	vgaStatus := flag.Bool("vga-status", false, "list every game's VGA support and whether a patch is available or applied: -root <card> -vga-status")
 	flag.Parse()
 	if *waitPID > 0 {
 		waitForPID(*waitPID)
@@ -861,6 +1051,48 @@ func main() {
 			fmt.Println("error:", err)
 			os.Exit(1)
 		}
+	case *root != "" && *folder != "" && *patch != "":
+		rep, err := applyDCP(*root, filepath.Join(*root, *folder), *patch, *dryRun)
+		if err != nil {
+			fmt.Println("error:", err)
+			os.Exit(1)
+		}
+		out, _ := json.MarshalIndent(rep, "", "  ")
+		fmt.Println(string(out))
+	case *root != "" && *folder != "" && *vgaPatch:
+		rep, err := applyCatalogVGAPatch(*root, filepath.Join(*root, *folder), *dryRun)
+		if err != nil {
+			fmt.Println("error:", err)
+			os.Exit(1)
+		}
+		out, _ := json.MarshalIndent(rep, "", "  ")
+		fmt.Println(string(out))
+	case *root != "" && *vgaFix:
+		rows, err := vgaFixAll(*root, *dryRun)
+		if err != nil {
+			fmt.Println("error:", err)
+			os.Exit(1)
+		}
+		for _, r := range rows {
+			fmt.Println(r)
+		}
+	case *root != "" && *vgaStatus:
+		rows, err := vgaStatusReport(*root)
+		if err != nil {
+			fmt.Println("error:", err)
+			os.Exit(1)
+		}
+		for _, r := range rows {
+			fmt.Println(r)
+		}
+	case *root != "" && *folder != "" && *unpatch != "":
+		rep, err := undoDCP(*root, filepath.Join(*root, *folder), *unpatch)
+		if err != nil {
+			fmt.Println("error:", err)
+			os.Exit(1)
+		}
+		out, _ := json.MarshalIndent(rep, "", "  ")
+		fmt.Println(string(out))
 	default:
 		serve()
 	}

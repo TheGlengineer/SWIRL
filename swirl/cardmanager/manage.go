@@ -11,21 +11,30 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // ---------- background jobs (shared with New card) ----------
 
-func runJob(stage, doneMsg string, fn func() error) error {
+// runJob starts fn as the background job. With a card root the job holds that card's lock until it ends.
+func runJob(root, stage, doneMsg string, fn func() error) error {
+	unlock := func() {}
+	if root != "" {
+		var err error
+		if unlock, err = lockCard(root, stage); err != nil {
+			return err
+		}
+	}
 	jobMu.Lock()
 	if job.Running {
 		jobMu.Unlock()
+		unlock()
 		return errors.New("another task is still running; wait for it to finish")
 	}
 	job = jobState{Running: true, Stage: stage}
 	jobMu.Unlock()
 	go func() {
 		err := fn()
+		unlock()
 		jobUpdate(func(j *jobState) {
 			j.Running, j.Done = false, true
 			if err != nil {
@@ -211,8 +220,8 @@ func planAddTo(root string, sources []string, checkSpace bool) (*copyPlan, error
 		}
 		return nil, errors.New("pick at least one game")
 	}
-	if next-1 > 999 {
-		return nil, errors.New("GDEMU supports up to 999 folders")
+	if next-1 > 9999 {
+		return nil, errors.New("GDEMU supports up to 9999 folders")
 	}
 	if free, ok := freeSpace(root); checkSpace && ok && uint64(p.Total)+64<<20 > free {
 		return nil, fmt.Errorf("the games need %.1f GB but the card has %.1f GB free", float64(p.Total)/(1<<30), float64(free)/(1<<30))
@@ -309,7 +318,7 @@ func StartAddGames(root string, sources []string, dats string) error {
 	if err != nil {
 		return err
 	}
-	return runJob("Copying games", "Done. Put the card back in your GDEMU.", func() error {
+	return runJob(root, "Copying games", "Done. Put the card back in your GDEMU.", func() error {
 		jobLog("Adding %d games (%.1f GB)", p.Games, float64(p.Total)/(1<<30))
 		for _, s := range p.Skipped {
 			jobLog("%s", s)
@@ -346,26 +355,30 @@ func StartRemoveGames(root string, folders []string) error {
 	if len(folders) == 0 {
 		return errors.New("pick at least one game")
 	}
-	return runJob("Removing games", "Done. The removed games are in SWIRL_BACKUP until you delete them.", func() error {
-		dest := filepath.Join(root, backupDir, "removed_"+time.Now().Format("20060102_150405"))
-		if err := os.MkdirAll(dest, 0o755); err != nil {
+	return runJob(root, "Removing games", "Done. The removed games are in SWIRL_BACKUP until you delete them.", func() error {
+		dest := uniqueBackupPath(root, "removed_")
+		gone := map[string]bool{}
+		for _, f := range folders {
+			gone[f] = true
+		}
+		var order []string
+		for _, n := range numberedFolders(root) {
+			if f := folderName(root, n); !gone[f] {
+				order = append(order, f)
+			}
+		}
+		// the moves and the renumbering are one journaled step; the menu is rebuilt only when it completed
+		moved, err := renumberTxn(root, folders, dest, order)
+		if err != nil {
 			return err
 		}
-		edits := loadEdits(root)
 		for _, f := range folders {
-			if err := os.Rename(filepath.Join(root, f), filepath.Join(dest, f)); err != nil {
-				return fmt.Errorf("moving folder %s: %w", f, err)
-			}
-			delete(edits.Games, f)
-			os.Remove(artPath(root, f, "box"))
-			os.Remove(artPath(root, f, "vmu"))
 			jobLog("Removed folder %s", f)
 		}
-		edits.save()
-		setPct(0.3)
-		if _, err := renumber(root, jobLog); err != nil {
-			return err
+		if moved > 0 {
+			jobLog("Renumbered %d folders so there are no gaps", moved)
 		}
+		setPct(0.3)
 		jobUpdate(func(j *jobState) { j.Stage, j.Pct = "Rebuilding the menu", 0.5 })
 		return installSwirl(root, "", true, jobLog)
 	})
@@ -394,7 +407,7 @@ func reorderFolders(root string, order []string, log Logger) (int, error) {
 }
 
 func StartReorder(root string, order []string) error {
-	return runJob("Reordering games", "Done. Put the card back in your GDEMU.", func() error {
+	return runJob(root, "Reordering games", "Done. Put the card back in your GDEMU.", func() error {
 		n, err := reorderFolders(root, order, jobLog)
 		if err != nil {
 			return err

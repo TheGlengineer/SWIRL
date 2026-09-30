@@ -1,0 +1,20 @@
+# SWIRL warning codes, the same table as ui/swirl/sw_codes.h (see docs/DIAGNOSTICS.md). Tab separated: code, key, plain words.
+W01	save-failed	A save to the VMU failed
+W02	swirl-dat-damaged	SWIRL.DAT on the VMU was damaged
+W03	picture-skipped	A picture on the SD card could not be used
+W04	ini-line	OPENMENU.INI has lines SWIRL could not use
+W05	gdemu-no-answer	The GDEMU did not answer
+W06	launch-returned	A game did not start and SWIRL came back
+W07	late-card	A memory card answered after start up
+W08	memory-line	SWIRL's memory reached the loader's line
+W09	cfg-damaged	OPENMENU.CFG on the VMU was damaged
+W10	meta-dat	META.DAT could not be used
+W11	theme	A theme file on the SD card could not be used
+W12	multidisc	A game has more discs than SWIRL shows
+W13	vmu-full	No room on the VMU for SWIRL's save
+W14	dat-file	A DAT file on the SD card could not be used
+W15	video-memory	Not enough video memory for the pictures
+W16	controller-scan	A controller port did not answer at start up
+W17	startup-step	A start up step failed
+W18	style-files	The saved style needs theme files this disc lacks
+W19	disc-read	The menu disc could not be read

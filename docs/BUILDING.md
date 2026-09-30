@@ -44,7 +44,8 @@ then rebuild.
 | `ui/swirl/sw_gfx.c`, `sw_prim.c` | PowerVR drawing: textures, fonts, anti aliased shapes, glows |
 | `ui/swirl/sw_lib.c` | Game library, collections, play stats and settings (saved to the VMU as `SWIRL.DAT`) |
 | `ui/swirl/sw_audio.c`, `sw_spu.c` | Menu music and sounds, and pop free sound chip resets |
-| `ui/swirl/sw_vmu.c` | VMU logo and text |
+| `ui/swirl/sw_vmu.c` | VMU logo and text, and the animated VMU screen |
+| `ui/swirl/sw_trace.c`, `sw_codes.h` | The trace, the warning codes, the hang watchdog and the QR report screen |
 | `ui/swirl/sw_version.h` | The version shown in System > About SWIRL |
 | `backend/` | Reading `OPENMENU.INI` and the DAT files, launching games |
 | `texture/` | Texture cache for box art |
@@ -60,6 +61,20 @@ placeholder art (`swirl/tools/make_test_library.py`). Open `disc.gdi` in [Flycas
 Set Flycast's region to USA and cable to VGA. Launching games needs a real GDEMU.
 
 Card Manager's **Health and preview > Open preview** does the same with your real card.
+
+### The host parser check
+
+`tests/host/run.sh` builds the `OPENMENU.INI` and DAT readers (`backend/gd_list.c`, `texture/dat_reader.c`) with
+the address and undefined behaviour sanitizers on the host and runs them over every crafted bad file that
+`tests/host/mkcases.py` makes (bad lines, stray slots, under reported counts, short DAT tables). It needs gcc and
+python3 and a base library in `swirl/test`, and takes seconds; run it after touching either reader.
+
+### The emulator harness
+
+The launch, GDEMU, VMU and report paths were verified in a scripted Flycast harness with a simulated GDEMU and
+VM2, driven by the `SW_TEST_*` defines listed in [DIAGNOSTICS.md](DIAGNOSTICS.md#test-defines) (`OPTIONS="-DSW_TEST_HANG"
+swirl/build.sh`, then a menu disc from the build). It lives outside the repository; a build with a test define
+is never the one in `swirl/cardmanager/assets`.
 
 ## SWIRL Card Manager
 
@@ -81,6 +96,7 @@ Useful environment variables while developing:
 | `SWIRL_1ST_READ=path` | Install this menu binary instead of the embedded one |
 | `SWIRL_UPDATE_REPO=owner/name` | Check a different GitHub repository for updates |
 | `SWIRL_UPDATE_API=url` | Use a test server instead of api.github.com |
+| `SWIRL_PATCH_DIR=path` | Read the owner's VGA patch catalog from this folder instead of the data folder's `patches` |
 
 ### Updating the embedded menu
 
@@ -88,9 +104,10 @@ Useful environment variables while developing:
 cp swirl/build/gdemu/1ST_READ.BIN swirl/cardmanager/assets/1ST_READ.BIN
 ```
 
-The menu and Card Manager share one version number. `ui/swirl/sw_version.h` holds `2.11`, and `const version`
-in `swirl/cardmanager/main.go` holds `2.11.x`. The tests fail if the embedded menu reports a different
-major.minor.
+The menu and Card Manager share one version number. `ui/swirl/sw_version.h` holds `2.14`, and `const version`
+in `swirl/cardmanager/main.go` holds `2.14.x`. The tests fail if the embedded menu reports a different
+major.minor. Build the embedded menu with `swirl/build.sh` from a clean tree, so its reports carry the git hash
+and not `-dirty` or `dev`.
 
 ### The Mac app
 
@@ -99,7 +116,7 @@ On a Mac with Xcode and Go:
 ```sh
 swirl/vmucap/build_macos.sh          # the patched Flycast (universal), once; about 20 minutes
 cd swirl/cardmanager
-macos/make_app.sh 2.13.0             # SWIRL Card Manager.app, plus the .zip and .dmg, in dist/
+macos/make_app.sh 2.14.0             # SWIRL Card Manager.app, plus the .zip and .dmg, in dist/
 ```
 
 The app is the Go program built for Apple Silicon and Intel and joined with `lipo`, in a bundle made from
@@ -117,7 +134,7 @@ attaches it to the run.
 
 ```sh
 sudo apt install binutils-mingw-w64-x86-64 gcc-mingw-w64-x86-64   # windres uses the C preprocessor
-sh winres/make.sh 2.11.0
+sh winres/make.sh 2.14.0
 ```
 
 ### Dependencies
@@ -128,7 +145,9 @@ sh winres/make.sh 2.11.0
 ### Tests
 
 `go test ./...` runs everything that needs no outside files: card scans, installs, archives (zip, 7z,
-solid rar), names, disc sets, backups, music conversion, updates against a fake GitHub server and more.
+solid rar), names, disc sets, backups and their manifests, VGA patches, the report decoder, music conversion,
+updates against a fake GitHub server and more. The fixture helpers (`makeMenuIn01`, `ipSector`
+in `txn_test.go`, `swirl_test.go` and `menubackup_test.go`, with `buildMenuDisc` from `card.go`) build a small card in a temporary folder for a test.
 A few tests only run when you point them at real data (see the comment at the top of each):
 
 | Variable | Test |

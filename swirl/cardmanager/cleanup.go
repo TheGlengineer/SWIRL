@@ -10,7 +10,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type DupGroup struct {
@@ -87,8 +86,10 @@ func numberedFolders(root string) []int {
 	return nums
 }
 
+// folderName is the folder on the card that holds game n, whichever way its number is written (02, 2,
+// 002, 0002); a folder that does not exist yet is named the GDEMU way (02, 100, 1000).
 func folderName(root string, n int) string {
-	for _, cand := range []string{fmt.Sprintf("%02d", n), strconv.Itoa(n), fmt.Sprintf("%03d", n)} {
+	for _, cand := range []string{fmt.Sprintf("%02d", n), strconv.Itoa(n), fmt.Sprintf("%03d", n), fmt.Sprintf("%04d", n)} {
 		if st, err := os.Stat(filepath.Join(root, cand)); err == nil && st.IsDir() {
 			return cand
 		}
@@ -97,7 +98,7 @@ func folderName(root string, n int) string {
 }
 
 // renumber closes gaps: the game folders become 02, 03, 04 ... in their current order. SWIRL edits and
-// art follow their game.
+// art follow their game. The renames are journaled (renumberTxn), so a failure part way is undone.
 func renumber(root string, log Logger) (int, error) {
 	var order []string
 	for _, n := range numberedFolders(root) {
@@ -112,56 +113,84 @@ func renumber(root string, log Logger) (int, error) {
 
 // moveFolders renames the game folders so order[i] becomes 02+i. SWIRL edits and art follow their game.
 func moveFolders(root string, order []string, log Logger) (int, error) {
+	return renumberTxn(root, nil, "", order)
+}
+
+// renumberTxn moves the folders in remove to dest (a folder under SWIRL_BACKUP) and renames the rest so
+// order[i] becomes 02+i. Every rename is journaled in SWIRL/renumber.json: on any failure the done ones
+// are undone and the card is as it was. SWIRL edits and art follow their game; the art of removed games
+// is deleted once everything else is done. It returns how many folders were renumbered.
+func renumberTxn(root string, remove []string, dest string, order []string) (int, error) {
 	edits := loadEdits(root)
-	moved := 0
+	rel := func(p string) string { r, _ := filepath.Rel(root, p); return filepath.ToSlash(r) }
+	j := &renumberJournal{Version: 1}
+	if len(remove) > 0 {
+		j.Made = rel(dest)
+	}
+	var dropArt []string
+	for _, f := range remove {
+		j.Steps = append(j.Steps, renameStep{From: f, To: j.Made + "/" + f})
+		for _, kind := range []string{"box", "vmu"} {
+			if p := artPath(root, f, kind); fileExists(p) {
+				j.Steps = append(j.Steps, renameStep{From: rel(p), To: rel(p) + ".rm"})
+				dropArt = append(dropArt, p+".rm")
+			}
+		}
+	}
 	type mv struct{ from, to string }
 	var plan []mv
 	for i, from := range order {
-		to := fmt.Sprintf("%02d", i+2)
-		if from != to {
+		if to := fmt.Sprintf("%02d", i+2); from != to {
 			plan = append(plan, mv{from, to})
 		}
 	}
-	if len(plan) == 0 {
-		return 0, nil
-	}
-	// two steps so a rename never lands on a folder that has not moved yet
+	// two steps so a rename never lands on a folder that has not moved yet; art the same way
 	for _, p := range plan {
-		if err := os.Rename(filepath.Join(root, p.from), filepath.Join(root, "_swirl_mv_"+p.from)); err != nil {
-			return moved, fmt.Errorf("renaming folder %s: %w", p.from, err)
-		}
+		j.Steps = append(j.Steps, renameStep{From: p.from, To: "_swirl_mv_" + p.from})
 	}
-	newGames := map[string]*GameEdit{}
-	for k, v := range edits.Games {
-		newGames[k] = v
-	}
+	var artDone []renameStep
 	for _, p := range plan {
-		delete(newGames, p.from)
-	}
-	for _, p := range plan {
-		if err := os.Rename(filepath.Join(root, "_swirl_mv_"+p.from), filepath.Join(root, p.to)); err != nil {
-			return moved, fmt.Errorf("renaming folder %s to %s: %w", p.from, p.to, err)
-		}
-		if e := edits.Games[p.from]; e != nil {
-			newGames[p.to] = e
-		}
+		j.Steps = append(j.Steps, renameStep{From: "_swirl_mv_" + p.from, To: p.to})
 		for _, kind := range []string{"box", "vmu"} {
-			if fileExists(artPath(root, p.from, kind)) {
-				os.Rename(artPath(root, p.from, kind), artPath(root, p.to, kind)+".mv")
+			if src := artPath(root, p.from, kind); fileExists(src) {
+				j.Steps = append(j.Steps, renameStep{From: rel(src), To: rel(artPath(root, p.to, kind)) + ".mv"})
+				artDone = append(artDone, renameStep{From: rel(artPath(root, p.to, kind)) + ".mv", To: rel(artPath(root, p.to, kind))})
 			}
 		}
-		moved++
 	}
-	// finish art renames (two steps for the same reason as the folders)
-	matches, _ := filepath.Glob(filepath.Join(root, editsDir, "art", "*.mv"))
-	for _, m := range matches {
-		os.Rename(m, strings.TrimSuffix(m, ".mv"))
+	j.Steps = append(j.Steps, artDone...)
+	if len(j.Steps) == 0 {
+		return 0, nil
 	}
-	edits.Games = newGames
-	if len(edits.Games) > 0 {
-		edits.save()
+	err := runRenames(root, j, func() error {
+		newGames := map[string]*GameEdit{}
+		for k, v := range edits.Games {
+			newGames[k] = v
+		}
+		for _, f := range remove {
+			delete(newGames, f)
+		}
+		for _, p := range plan {
+			delete(newGames, p.from)
+		}
+		for _, p := range plan {
+			if e := edits.Games[p.from]; e != nil {
+				newGames[p.to] = e
+			}
+		}
+		if len(newGames) == 0 && len(edits.Games) == 0 {
+			return nil
+		}
+		edits.Games = newGames
+		return edits.save()
+	})
+	if err != nil {
+		return 0, err
 	}
-	return moved, nil
+	for _, p := range dropArt {
+		cardfs.Remove(p)
+	}
+	return len(plan), nil
 }
 
 // RemoveDuplicates moves the extra copies to SWIRL_BACKUP/removed_<time> (instant, same drive), closes the
@@ -175,25 +204,33 @@ func RemoveDuplicates(root string, log Logger) error {
 	if len(dups) == 0 {
 		return errors.New("no duplicate games found")
 	}
-	dest := filepath.Join(root, backupDir, "removed_"+time.Now().Format("20060102_150405"))
-	if err := os.MkdirAll(dest, 0o755); err != nil {
-		return err
-	}
-	edits := loadEdits(root)
+	dest := uniqueBackupPath(root, "removed_")
+	var extras []string
+	gone := map[string]bool{}
 	for _, d := range dups {
 		for _, f := range d.Extras {
-			if err := os.Rename(filepath.Join(root, f), filepath.Join(dest, f)); err != nil {
-				return fmt.Errorf("moving folder %s: %w", f, err)
-			}
-			delete(edits.Games, f)
-			os.Remove(artPath(root, f, "box"))
-			os.Remove(artPath(root, f, "vmu"))
+			extras = append(extras, f)
+			gone[f] = true
+		}
+	}
+	var order []string
+	for _, n := range numberedFolders(root) {
+		if f := folderName(root, n); !gone[f] {
+			order = append(order, f)
+		}
+	}
+	// the moves and the renumbering are one journaled step; the menu is rebuilt only when it completed
+	moved, err := renumberTxn(root, extras, dest, order)
+	if err != nil {
+		return err
+	}
+	for _, d := range dups {
+		for _, f := range d.Extras {
 			log("Removed extra copy of %s (folder %s)", d.Name, f)
 		}
 	}
-	edits.save()
-	if _, err := renumber(root, log); err != nil {
-		return err
+	if moved > 0 {
+		log("Renumbered %d folders so there are no gaps", moved)
 	}
 	return InstallSwirl(root, "", log)
 }

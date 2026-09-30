@@ -153,7 +153,7 @@ func StartBackup(req BackupRequest) error {
 		return fmt.Errorf("cannot use %s (%v)", dest, err)
 	}
 	jobCancel.Store(false)
-	return runJob("Backing up the card", "", func() error { return runBackup(req, root, dest) })
+	return runJob(root, "Backing up the card", "", func() error { return runBackup(req, root, dest) })
 }
 
 func runBackup(req BackupRequest, root, dest string) error {

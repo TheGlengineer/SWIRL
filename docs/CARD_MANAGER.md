@@ -12,8 +12,24 @@ Game folders are never changed by an update.
 ![SD card](images/cm-card.png)
 
 Pick the card from the list of drives, or type a drive letter and click **Scan**. The page shows which menu
-is in folder `01`, how many games the card has and how many have box art and descriptions. From here you
-can also install the app on your PC, start a new card, or close the app.
+is in folder `01`, how many games the card has (a multi disc game is one game, so it says both numbers, for
+example **46 games on 52 discs**) and how many have box art and descriptions. From here you can also install the
+app on your PC, start a new card, or close the app.
+
+Whatever is in folder `01` is recognised: a GDI or CDI menu (openMenu, GDMENU, the Virtual Folder Bundle), a game,
+or an unknown image. A game in `01` blocks the install with a message instead of being moved. Game folders are
+numbered up to 9999, as on cards from GDMENUCardManager and the Virtual Folder Bundle.
+
+### Games with no VGA mode
+
+The first time the card holds a game that has no VGA mode of its own and a community patch is known for it, the
+page asks **How is your Dreamcast connected?**
+
+- **VGA cable, patch it**: the game is patched at once, and any game you add later that needs one is patched when
+  it is found.
+- **TV, leave it**: nothing is patched. You can still patch one game from its Edit page.
+
+The answer is kept under [About](#about-and-updates), where you can change it.
 
 ## Games
 
@@ -28,6 +44,9 @@ can also install the app on your PC, start a new card, or close the app.
 - **Tidy names**: proper titles from the Redump list, matched by each disc's serial. For discs the list does not know, it offers the name without version or dump tags ("Toy Commander v1.022" becomes "Toy Commander"). You see every change before it is made, and names you typed yourself are never changed.
 - **Put discs together**: keeps the discs of multi disc games next to each other and in order. Discs of one game are grouped in the list.
 - **Find a game** (Ctrl+F) filters the list.
+- The **VGA** column says **Needs patch** for a game with no VGA mode that has a known patch, **Patched** once the
+  patch is on the card, and **No (patch removed)** for one you took off by hand (it is not patched again by
+  itself). **Patch N games for VGA** above the list patches every game that needs it.
 
 ### Adding games
 
@@ -51,9 +70,16 @@ Click a game (or **Edit**) to change:
 - **VMU screen**: make one from the box art, upload one, or capture it by playing the game in the emulator
 - **Screenshots**: upload two, or **Get online** from libretro thumbnails
 - **Serial, region and VGA tag shown in the menu, release date, players, VMU blocks, online support, genres, accessories and description**
+- **Apply VGA patch** or **Remove VGA patch**, with the patch author, for a game with no VGA mode. The patch
+  changes a few bytes of the game in place on the card; the original bytes are kept under
+  `SWIRL_BACKUP\patches` and **Remove** puts them back. Only GDI images can be patched in place; a CDI says so.
 
 Region and VGA here only change what SWIRL shows. How a game starts is set on the Dreamcast, in the game's
 launch options (see [Using SWIRL](USING_SWIRL.md#launch-options)).
+
+The patches ship inside Card Manager: the first is Hydro Thunder v1.020 (USA) by TapamN. To add your own, put a
+`catalog.json` in the same shape as the built in one, next to the `.dcp` files it names, in the `patches` folder
+under Card Manager's data folder (**About > Copy details** shows the path).
 
 ## Art and info
 
@@ -94,8 +120,10 @@ file are kept.
 
 ![Health and preview](images/cm-tools.png)
 
-- **Card health check**: checks the format (GDEMU needs FAT32), free space, that folder `01` holds a menu, that folder numbers have no gaps (GDEMU stops at the first gap), that every disc image is complete, and finds leftover system files.
+- **Card health check**: checks the format (GDEMU needs FAT32), free space, that folder `01` holds a menu, that folder numbers have no gaps (GDEMU stops at the first gap), that every disc image is complete, that the art and info files are readable and of a known version, that `DISCDB.JSON` matches the folders, and finds leftover system files. **Close the gaps** renumbers the folders and rebuilds the menu; it is journaled, so a failure part way undoes itself.
 - **Preview in Flycast**: boots the exact menu your card would get, in an emulator on your PC.
+
+![Card health check](images/cm-health.png)
 
 ## Backups
 
@@ -111,6 +139,13 @@ folder on your PC.
 
 **Kept on the card** lists previous menus (restore any of them into folder `01`) and removed games (delete them for good to free the space).
 
+- The menu that was on the card before SWIRL (openMenu, GDMENU or the Virtual Folder Bundle) is kept as
+  `01_original_...`, listed first with an **Original** badge, and never pruned. Its button says **Go back to
+  openMenu** (or whichever menu it was). The newest few menus SWIRL built are kept; older ones are pruned.
+- Every menu backup has a manifest next to it (which menu, when, why, which game was in which slot). A backup
+  with a missing or short file cannot be restored and says so. One whose games no longer match the card asks
+  first, lists the differences, and **Restore anyway** goes ahead; install SWIRL again afterwards to fix the list.
+
 ## New card from scratch
 
 ![New card](images/cm-newcard.png)
@@ -124,12 +159,18 @@ with just SWIRL. Windows asks for administrator permission, and macOS for your p
 ![About](images/cm-about.png)
 
 **About** (F1) lists the supported files, keyboard shortcuts, what each page does, the credits, and details of
-this copy that you can copy into a bug report.
+this copy that you can copy into a bug report. Under **Region, VGA and boot options** it holds the video output
+choice from the SD card page: **VGA cable** (games with a known VGA patch are patched when they are found) or
+**TV** (nothing is patched). **Diagnostics** there explains the report the Dreamcast can draw as QR codes.
 
 Card Manager checks GitHub for a newer version once a day (you can turn this off in About). When there is
 one, a bar appears at the top with **What's new** and **Update now**. Updating downloads the new exe,
 verifies its SHA-256 checksum, installs it and reopens the app. Then click **Update SWIRL** to put the new
 menu on your card.
+
+Opening the app while a copy is already running shows that copy's window, except when the new copy is a newer
+version or a different build of the same version (a test build): then it takes over and the running copy closes,
+so the card gets the menu you meant to test.
 
 ### Previews
 
@@ -144,6 +185,33 @@ installed by **Update now** or the automatic check. When one is up, a green bar 
 While you use a preview, a bar reminds you and links to **Report a problem**. To go back, open **About** and
 click **Back to the released version**, then **Update SWIRL**. Your games, art and settings are not changed
 by either step. To stop hearing about previews, untick **Tell me about preview versions** in About.
+
+## Report a problem
+
+![Report a problem](images/cm-report.png)
+
+When SWIRL crashes, hangs or shows warnings, it draws a report as QR codes on the TV (**System > Diagnostics**,
+then **A**; after a crash the codes are on the screen already; hold **X** at power on for the start up log).
+Scan them with your phone and paste the text here, in any order, or drop photos of the screen on the page. A
+screenshot from an emulator works too. **Decode** shows the report in plain words: what happened, the console and
+what was plugged in, each warning and what it means, where a crash stopped, and the steps SWIRL took.
+
+**Copy for GitHub** puts a ready to paste issue on the clipboard: the report in plain words, the raw text, this
+Card Manager's version and, when a card is open, what is on it. Say what you were doing at the top and paste it
+into a new issue. Nothing is sent anywhere by itself.
+
+For a crash, the addresses are named after functions when the build's symbols file is at hand: drop
+`themeMenu.elf` or `SWIRL-<version>-symbols.elf` on the page, or put it in the `symbols` folder under Card
+Manager's data folder. The format of the report is in [DIAGNOSTICS.md](DIAGNOSTICS.md).
+
+## Coming from openMenu, GDMENU or the Virtual Folder Bundle
+
+Taking over a card keeps what the old menu knew. Names, regions, VGA flags and dates in its `OPENMENU.INI` that
+differ from the disc become SWIRL edits; keys SWIRL does not use are kept in `SWIRL/legacy_ini.json` and written
+back. `BLEEM.BIN` comes along from a GDMENU disc. From the Virtual Folder Bundle, its virtual folders become
+SWIRL collections once (`SWIRL/vfb-folders-imported.txt` marks that; delete it to do it again), `type.txt` and
+`disc.txt` are carried, and `DISCDB.JSON` is kept in step with the folders when games are added, removed or
+renumbered. A database that cannot be read is set aside in `SWIRL_BACKUP` with a note.
 
 ## Keyboard shortcuts
 

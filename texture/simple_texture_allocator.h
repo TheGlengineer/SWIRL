@@ -11,6 +11,7 @@
 #pragma once
 #define TEX_ALIGNMENT (32)
 
+#include <stddef.h>
 #include <stdint.h>
 
 /* 1mb buffer */
@@ -37,6 +38,9 @@ uint32_t texman_create(void);
 void texman_clear(void);
 int texman_get_space_available(void);
 int texman_is_space_available(void);
+/* SWIRL: room left after a place inside the scratch (0 outside it); whether a size fits in what is left */
+size_t texman_space_after(const void *ptr);
+int texman_fits(uint32_t width, uint32_t height, int bpp);
 unsigned char *texman_get_tex_data(uint32_t num);
 struct Simple_Texture *texman_reserve_memory(uint32_t width, uint32_t height, int bpp);
 void texman_upload(uint32_t width, uint32_t height, int bpp, const void *buffer);

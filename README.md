@@ -1,10 +1,10 @@
-> [!CAUTION]
-> # ⚠️ Known Issues intermittently Impacting Various Users<br>
-> SWIRL is actively in development and tested under a controlled environment. Issues may occur, please submit issues to the repo with as much detail for me to replicate it, as possible. 
-<br>
-> Additional known issues captured. Currently working through. Thank you all for your patience! <br>
+> [!NOTE]
+> **2.14.0** was tested on my own Dreamcast: a Retro PSU, GDEMU firmware 5.20.5, a stock Sega VMU, a VGA cable to a
+> monitor, and a 64 GB card that came from the openMenu Virtual Folder Bundle with 52 discs. Everything else was
+> proven in the emulator harness and the automated tests, not on a console. Read the
+> [known limits](CHANGELOG.md#known-limits-and-open-questions) before you report something; if it is not there, use
+> **Report a problem** in Card Manager (see [Troubleshooting](docs/TROUBLESHOOTING.md#reporting-a-problem)).
 
-> The next release of swirl will include a built in diagnostics utility, in the event of a black screen, crash, or errors, swirl will display the logs embedded in QR codes. When this feature is released I would greatly appreciate it if users take pictuers of the codes and submit them as a reported issues against the repo to aid in further improvement. 
 
 <div align="center">
 
@@ -59,9 +59,12 @@ from .zip, .7z and .rar), fixes their names, fetches art, backs the card up and 
 - Collections built from your library: favorites, recently played, most played, party games, every genre, plus your own
 - Game pages with description, screenshots, VMU preview, play count and a disc picker for multi disc games
 - Every game boots region free and in VGA, with per game launch options (region, video, boot screens)
+- Games start about seven seconds sooner than in 2.13, with the boot animation and SEGA screen
 - Menu music with a built in theme, navigation sounds, rumble and VMU pictures
 - Five animated screen savers, including a simple dim overlay
-- Favorites, history and settings saved to your VMU
+- Favorites, history and settings saved to your VMU, as two copies, so a card pulled mid save loses nothing
+- A VM2 or VMU Pro switches to each game's own memory card when the game starts
+- Diagnostics: the warnings since power on in plain words, and the whole report as QR codes for a bug report
 - Classic openMenu list, grid and GDMENU styles still one setting away
 
 **In SWIRL Card Manager (Windows, and macOS in beta)**
@@ -71,8 +74,11 @@ from .zip, .7z and .rar), fixes their names, fetches art, backs the card up and 
 - Duplicate detection, proper game names from the Redump list and automatic grouping of multi disc games
 - List or cover grid view, drag to reorder, and an Edit window for names, art, VMU screens, screenshots and details
 - Art and info from the openMenu databases, screenshots from libretro thumbnails, and VMU screens captured by booting each game in an emulator
+- VGA patches for the few games that have no VGA mode (Hydro Thunder is one), applied in place with an undo
 - Your own menu music and VMU logo, collections, GDEMU settings and a card health check
 - New card from scratch (formats the card for GDEMU and fills it), full card backups to your PC, and restore
+- The menu that was on the card before SWIRL is kept, so going back to openMenu or GDMENU is always one click
+- Report a problem: paste the QR codes from the Dreamcast, or drop photos, and get a ready to paste GitHub issue
 - Checks GitHub for new versions and updates itself
 
 ## Screenshots
@@ -86,6 +92,8 @@ from .zip, .7z and .rar), fixes their names, fetches art, backs the card up and 
 | ![Game page](docs/images/swirl-detail.png) | ![Launch options](docs/images/swirl-launch-options.png) |
 | **Collections** | **System settings** |
 | ![Collections](docs/images/swirl-collections.png) | ![System settings](docs/images/swirl-system.png) |
+| **Diagnostics** | |
+| ![Diagnostics](docs/images/swirl-diagnostics.png) | |
 
 ![Screen savers](docs/images/swirl-screensavers.png)
 
@@ -100,6 +108,8 @@ from .zip, .7z and .rar), fixes their names, fetches art, backs the card up and 
 | ![Add games](docs/images/cm-browser.png) | ![New card](docs/images/cm-newcard.png) |
 | **Look and sound** | **Backups** |
 | ![Look and sound](docs/images/cm-look.png) | ![Backups](docs/images/cm-backups.png) |
+| **Report a problem** | **Card health check** |
+| ![Report a problem](docs/images/cm-report.png) | ![Card health check](docs/images/cm-health.png) |
 
 More screens are in the [Card Manager guide](docs/CARD_MANAGER.md).
 
@@ -129,10 +139,10 @@ The full walk through, including installing the app on your PC, is in [Getting s
 | X | Game page (Home), change sort (Library), launch options (game page) |
 | Y | Favorite |
 | B | Back |
-| Start | System settings |
+| Start | Opens System |
 | Down on Home | Surprise me: picks a random game |
 | Keyboard | Type in the Library to jump to a game |
-| A + B + X + Y + Start in a game | Back to SWIRL |
+| A + B + X + Y + Start in a game | Back to SWIRL, from games that route the reset through the BIOS (most Sega titles). Games that reset to their own title screen never reach SWIRL |
 
 See [Using SWIRL](docs/USING_SWIRL.md) for every screen and setting.
 
@@ -145,8 +155,8 @@ SD card
 ├── 01/                 the menu disc (SWIRL lives here)
 ├── 02/, 03/, ...       one folder per game disc, unchanged
 ├── GDEMU.INI           GDEMU settings
-├── SWIRL/              your edits: names, art, collections (Card Manager)
-└── SWIRL_BACKUP/       previous menus and removed games
+├── SWIRL/              your edits: names, art, collections, carried openMenu keys, the VFB import marker (Card Manager)
+└── SWIRL_BACKUP/       previous menus with their manifests, removed games, VGA patch undo files
 ```
 
 The menu disc holds `OPENMENU.INI` and the same `BOX.DAT`, `ICON.DAT` and `META.DAT` art files as openMenu,
@@ -162,6 +172,7 @@ plus a few optional files that SWIRL adds (screenshots, VMU screens, music, coll
 | [SWIRL Card Manager](docs/CARD_MANAGER.md) | Every page of the Windows and Mac app |
 | [SD card layout](docs/SD_CARD_LAYOUT.md) | Which files live where, and which are optional |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Common problems and fixes |
+| [Diagnostics](docs/DIAGNOSTICS.md) | The report SWIRL draws as QR codes: reasons, warning codes, format |
 | [Building from source](docs/BUILDING.md) | Toolchain, building the menu and the app, tests |
 | [Releasing](docs/RELEASING.md) | Versions, GitHub releases and the in app updater |
 | [Contributing](CONTRIBUTING.md) | How to help, forks and pull requests |
@@ -179,7 +190,7 @@ cd swirl/cardmanager                  # Go 1.21 or newer
 cp ../build/gdemu/1ST_READ.BIN assets/1ST_READ.BIN
 go test ./...
 GOOS=windows GOARCH=amd64 go build -ldflags "-H windowsgui -s -w" -o SWIRL-Card-Manager.exe .
-macos/make_app.sh 2.13.0            # on a Mac: builds SWIRL Card Manager.app and the .dmg
+macos/make_app.sh 2.14.0            # on a Mac: builds SWIRL Card Manager.app and the .dmg
 ```
 
 The Card Manager builds on its own too: a current menu build is already in `swirl/cardmanager/assets`, and

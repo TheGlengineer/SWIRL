@@ -51,6 +51,8 @@ int sw_lib_save_result(int *rv);     /* 1 once when a save finished, with its re
 int sw_lib_busy(void);               /* a save is running */
 void sw_lib_settings_dirty(void);    /* openMenu's settings (style, beep) changed and need saving too */
 const char *sw_lib_save_status(char *buf, int len); /* one line for System > Save */
+int sw_lib_blocks_short(void);       /* after a save failed for space (-8): blocks missing on the card */
+void sw_lib_retrying(int on);        /* the menu will (1) or will not (0) try a failed save again by itself */
 int sw_lib_dirty(void);
 void sw_lib_mark_dirty(void);
 int sw_lib_stats_loaded(void);
@@ -73,14 +75,20 @@ typedef struct sw_prefs {
   /* screen saver: "attract" above turns it on or off */
   uint8_t saver_style; /* index into the screen saver list */
   uint8_t saver_min;   /* minutes without input before it starts, 1..30 */
-  uint8_t reserved[2];
+  uint8_t gameid_off; /* 1: no Game ID for a VM2 / VMU Pro at launch (0, on, in older saves) */
+  uint8_t swirl_style_set; /* 1 once SWIRL has switched OPENMENU.CFG's style to SWIRL (done once per card) */
 } sw_prefs;
 sw_prefs *sw_lib_prefs(void);
+void sw_lib_note_style_set(void); /* SWIRL took the style over: remember it (saved, without touching the other settings) */
 int sw_lib_early_quality(void); /* before the screen is set up: 1 for high */
+int sw_lib_late_card(void);     /* a card that attached after start up: 1 when its SWIRL.DAT was taken in */
 
 /* per game launch settings, kept in sw_stat.flags */
 enum { SW_REGION_AUTO = 0, SW_REGION_JAPAN, SW_REGION_USA, SW_REGION_EUROPE };
 enum { SW_BOOT_NONE = 0, SW_BOOT_ANIMATION, SW_BOOT_LICENSE, SW_BOOT_BOTH };
+/* The default start: boot animation and SEGA screen, the way the console, GDMENU and openMenu start a game.
+   Skipping them is a per game choice, since a game may rely on what the BIOS sets up during the SEGA screen. */
+#define SW_BOOT_DEFAULT SW_BOOT_BOTH
 typedef struct sw_launch {
   int region; /* SW_REGION_* */
   int vga;    /* 1 force VGA (default), 0 leave it to the game */

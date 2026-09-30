@@ -55,7 +55,7 @@ func (s *editStore) save() error {
 		return err
 	}
 	b, _ := json.MarshalIndent(s, "", "  ")
-	return os.WriteFile(filepath.Join(s.root, editsDir, "games.json"), b, 0o644)
+	return writeCardFile(filepath.Join(s.root, editsDir, "games.json"), b)
 }
 
 func artPath(root, folder, kind string) string {
@@ -81,16 +81,15 @@ func decodeDataURL(s string) (image.Image, error) {
 // ---------- reading the current menu disc ----------
 
 type menuReader struct {
-	d     *gdiDisc
+	d     sectorReader
 	files map[string]isoFile
 }
 
 func openMenuDisc(root string) (*menuReader, error) {
-	gdi := findGDI(filepath.Join(root, "01"))
-	if gdi == "" {
+	if menuImageIn01(filepath.Join(root, "01")) == "" {
 		return nil, os.ErrNotExist
 	}
-	d, err := openGDI(gdi)
+	d, err := openGameDisc(filepath.Join(root, "01"))
 	if err != nil {
 		return nil, err
 	}

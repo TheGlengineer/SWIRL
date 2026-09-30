@@ -3,6 +3,160 @@
 SWIRL (the menu) and SWIRL Card Manager share one version number. Card Manager patch releases (2.11.1)
 may ship without menu changes; the menu then keeps its major.minor version (2.11).
 
+## [2.14.0]
+
+The hardening release. Everything from previews 1 to 4 (VM2 and VMU Pro game cards, the animated VMU screen, the full boot sequence, bounded GDEMU waits) plus what was planned for 2.14.1, in one stable version. The audit behind it, the fix plan and the test harness are in the repo's history; what matters is below.
+
+**Tested on:** a Dreamcast with a Retro PSU, GDEMU firmware 5.20.5, a stock Sega VMU, a VGA cable to a monitor, and a 64 GB card that came from the openMenu Virtual Folder Bundle with 52 discs. Everything else in the lists below was proven in the emulator harness and in the automated suites, not on a console. See **Known limits** at the end of this entry for what that means.
+
+### Game launches (previews 3 and 4)
+
+- Games start with the boot animation and the SEGA screen, as they do from openMenu and GDMENU. **Start with** in a game's launch options still skips them per game, and options you already set are kept
+- SWIRL never waits for ever on a GDEMU that does not answer. Every wait for the drive has a limit; if the image change is not answered or the game's disc does not become ready, SWIRL switches back to the menu disc and says why instead of leaving a blank screen
+- The drive is locked while SWIRL talks to the GDEMU, so the system's own drive status poll cannot interrupt a command half way
+- Games start about seven seconds sooner. The save before a launch used to draw a second frame inside the frame being drawn, which left the menu drawing into a closed list for seconds (that was the black screen between **Starting** and the game since 2.13)
+
+### VM2, VMU Pro and the animated VMU (previews 1 and 2)
+
+- When a game starts, SWIRL tells a VM2, VMU Pro, USB4MAPLE or Pico2Maple which game it is (the Game ID), so it switches to that game's own memory card, as the openMenu Virtual Folder Bundle does. **System > VM2 / VMU Pro game cards** turns it off. A standard VMU is never sent anything new; a device that is busy or silent cannot hold up a game (about a second in total)
+- The VMU screen animates: a power on intro, a glint on the System tab, your own logo spiralling in, a countdown and progress while saving, a tick or a cross with the reason
+- A memory overflow in the picture loader (32 bytes past a buffer at every start up, latent since the header logo) is fixed; it could stop the Dreamcast at a launch
+
+### Games with no VGA mode
+
+- A few games (Hydro Thunder is one) have no VGA output of their own: over a VGA cable they reach the SEGA screen and then the display shows nothing. Card Manager now carries community VGA patches for such games and applies them in place on the card, a few bytes, with an undo. The Games tab shows **Needs patch**, **Patched**, or **No (patch removed)**, and **Edit** has **Apply VGA patch** and **Remove VGA patch** with the patch author
+- The first time a card holds a game that needs a patch, the SD card page asks how your Dreamcast is connected. **VGA cable**: those games are patched at once, and any game you add later that needs one is patched when it is found. **TV**: nothing is patched. Change the answer under **About**. A patch you removed by hand stays off
+- First patch in the catalog: Hydro Thunder v1.020 (USA) by TapamN. You can add your own: a `catalog.json` and `.dcp` files in Card Manager's `patches` folder
+
+### Card Manager: going back is always possible
+
+- The menu that was on the card before SWIRL (openMenu, GDMENU, the Virtual Folder Bundle) is kept as `01_original_...` and never pruned. Backups lists it first with **Go back to openMenu**
+- Whatever is in folder 01 is recognised: a GDI or CDI menu, a game, an unknown image. A game in 01 blocks the install with a message instead of being moved
+- Every menu backup has a manifest (which menu, when, why, which games were in which slot). A backup with a missing or short file is not restored; one whose games no longer match the card asks first
+- An art or info file (BOX, ICON, META, VMU, SHOT.DAT) that Card Manager cannot read is kept and reported, never replaced with an empty one; the scan checks DAT versions
+- Coming from the Virtual Folder Bundle: `DISCDB.JSON` is kept in step with the folders when games are added, removed or renumbered (Glen's own card had folder 17 as Hydro Thunder while the database said Dino Crisis); virtual folders become collections once; `type.txt` and `disc.txt` are carried; a database that cannot be read is set aside with a note
+- The same corrected Sega serials as the menu, from one table (`serials.tsv`)
+- Folder numbers up to 9999, and **Close the gaps** in the health check for the numbering gaps GDEMU stops at (done through the journal, so a failure undoes itself)
+- Taking over from openMenu or GDMENU keeps what their list knew: names, regions, VGA and dates that differ from the disc become SWIRL edits, unknown keys are carried and written back, `BLEEM.BIN` comes along from a GDMENU disc
+
+### Card Manager: safer writes
+
+- One lock per card: two operations can no longer run into each other
+- The cover grid closes the menu disc before any write, so a Windows rename can no longer fail half way (the cause of a card left without a menu)
+- Replacing the menu is two folder renames with a staged copy; a restore copies the backup instead of moving it
+- Renumbering is journaled and undone on failure; added games are copied as `NN.part` and renamed when complete; every card write is flushed to the card
+
+### Menu: memory safety in the inherited code
+
+- A bad line, a five digit or stray slot, or an under reported count in OPENMENU.INI is skipped and reported instead of crashing, hanging the boot or dropping every game after it
+- A picture that does not fit its slot or has a bad header shows the missing picture instead of corrupting video memory; theme files are checked by size and header, not only by name
+- The Classic styles no longer freeze on a long unbroken description, and custom themes on the card are listed and load
+- A DAT file with a bad header or table is refused or trimmed instead of read past its end; a damaged OPENMENU.CFG is reported, never copied from an unset pointer
+- A multi disc set with more than six entries no longer shifts the slot table in the Classic list
+
+### Menu: saves, memory cards and launches
+
+- Two copies of SWIRL.DAT on the VMU: a save writes the new copy, checks it, then retires the old one, so a card pulled mid write never loses your library. Older SWIRL builds read the file unchanged
+- A full VMU says **No space on VMU. Free N blocks** instead of "check the VMU", and System no longer says "retrying" when nothing retries
+- A memory card that answers after start up (a VM2 switching cards, a slow VMU) is read within eight seconds instead of ignored until the next power on
+- OPENMENU.CFG stays openMenu's version 1 on the VMU, so stock openMenu and the Virtual Folder Bundle keep reading your settings when you switch back; the "SWIRL took over once" flag lives in SWIRL.DAT
+- A game marked `type=other` (an audio CD, a demo disc) goes to the console's own menu
+- A launch that would write over the loader's memory stops with a message instead of corrupting it; CodeBreaker, Bleem and cheat files are checked for size before loading
+- A disc change under a read no longer freezes the menu; the sort choice and an older SWIRL.DAT are saved on their own
+- Games start about seven seconds sooner. The save before a launch used to draw a second frame inside the frame being drawn, which left the menu drawing into a closed list for seconds (that was the black screen between **Starting** and the game). On a console without a serial cable the warnings this produced went out at 57600 baud, so with the new hang watchdog a launch ended in a hang report instead of a game. Found by the first report photographed off a real console
+
+### Report a problem
+
+- SWIRL now keeps a log of what it does from power on and counts anything that goes wrong: a save that failed, a picture it could not use, a launch that came back, a line in OPENMENU.INI it could not read. **System, Diagnostics** on the Dreamcast lists them in plain words, and **A** there shows the whole log as QR codes. After a crash or a hang the codes are on the screen already; hold **X** while the console turns on for the start up log
+- Card Manager has a new **Report a problem** page. Scan the codes with your phone and paste the text, in any order, or drop photos of the screen on the page. It shows the report in plain words: what happened, the console and what was plugged in, each warning and what it means, where a crash stopped, and the steps SWIRL took. **Copy for GitHub** puts a ready to paste issue on the clipboard with the raw report attached. Nothing is sent anywhere by itself
+- The **Report a problem** button on the preview bar opens this page, and About explains the console side under **Diagnostics**
+
+### Card Manager, smaller things
+
+- Games are counted the way SWIRL counts them: a multi disc game is one game, so a card with 52 discs and six extra discs says **46 games on 52 discs**
+- A different build of the same version replaces the copy already running instead of opening a window onto it
+- An entry with an empty ID is never carried into a rebuilt art or info file; the menu names the entry it dropped and why
+
+### Known limits and open questions
+
+Read this before you report a problem; it may already be here.
+
+- **VM2 and VMU Pro:** the Game ID and the late card handling were built from the devices' documentation and tested with a simulated VM2 in the emulator. Two testers ran preview 1 and 2 on real devices. This stable build has not been run on a VM2 or VMU Pro by me. If yours does not switch cards, or SWIRL does not come up with it plugged in, hold **Y** at power on to start SWIRL with defaults, then use **Report a problem** (below)
+- **In game reset (A+B+X+Y+Start):** it brings you back to SWIRL only from games that route the combo through the BIOS (Crazy Taxi, Sonic Adventure and most Sega titles). Games that reset to their own title screen (18 Wheeler, AeroWings, Hydro Thunder and most arcade ports) never call the BIOS, so nothing SWIRL can do catches them. It needs `reset_goto = 1` in GDEMU.INI, which Card Manager sets
+- **Games with no VGA mode:** over a VGA cable they reach the SEGA screen and then the display shows nothing. The catalog of patches has one entry (Hydro Thunder v1.020 USA). Other titles from the ConsoleMods VGA patch list will be added as their patches are collected; until then apply them with Universal Dreamcast Patcher, or set **Video: Game default** on the game and play over a TV
+- **Multi disc games in the counts:** SWIRL shows a set as one title. Card Manager now says both numbers
+- **CDI images cannot be patched in place** (VGA patches); only GDI. Card Manager says so
+- **CodeBreaker and Bleem:** the files are checked for size before loading, not by content. A wrong `PELICAN.BIN` of the right size is not detected
+- **Clone GDEMU boards and older firmware:** the bounded waits and the return to the menu were tested against a GDEMU 5.20.5. A board that answers the image change late may see "GDEMU did not answer" where it used to work; the wait is three seconds. Report it with the QR codes and the board and firmware
+- **15 kHz displays in High picture quality:** never tested. Use **System > Picture quality: Standard** on a TV if the picture is unstable
+- **Mac:** Card Manager on macOS is still a beta and the Mac build of this version was not run on a card by me
+- **Report a problem:** photo decoding needs a sharp photo with the whole code in the frame. If yours does not read, scan the codes with your phone's camera app and paste the text
+- Not fixed in this version and tracked for the next: the Card Manager log is not attached to a report automatically; a restored old menu's list is not rebuilt from the current folders (Restore refuses on a mismatch and offers to restore anyway); `._` files left by macOS are not cleaned up on Windows
+
+## [2.14.0-preview.3]
+
+**This is a preview for testing.** Card Manager offers it to anyone who chose **Try the preview**.
+
+### Game launches
+
+- Games now start with the boot animation and the SEGA screen, as they do from openMenu and GDMENU. SWIRL used to skip both by default, which is not how any game was tested by its makers. **Start with** in a game's launch options still lets you skip them per game, and options you already set are kept
+- SWIRL no longer waits for ever on a GDEMU that does not answer. Every wait for the drive has a limit; if the image change is not answered or the game's disc does not become ready, SWIRL switches back to the menu disc and tells you why instead of leaving a blank screen
+- The drive is locked while SWIRL talks to the GDEMU, so the system's own drive status poll can no longer interrupt a command half way
+
+### What to test
+
+- Start a few games. Do they all reach the game, with the animation and SEGA screen first?
+- A game that shows the SEGA screen and then gives your display **no signal** is running in a video mode your display can't show, not a launch problem. Hydro Thunder is the known case: its original release has no VGA mode, and the All Stars re release outputs an unstable VGA picture that many monitors and scalers refuse. Try **Video: Game default** in its launch options, or a TV connection
+- In a game's launch options, set **Start with: Straight to the game** and start it: it should skip the animation and SEGA screen as before
+
+## [2.14.0-preview.2]
+
+**This is a preview for testing.** Card Manager offers it to anyone who chose **Try the preview**.
+
+### Animated VMU screen
+
+- **Power on:** the SWIRL logo on the VMU breaks apart, spins into a three armed galaxy that collapses into the centre, and the swirl paints itself back like a brush stroke. The word types in and the screen flashes twice. It plays while SWIRL loads, and only after the settings have been read, so start up is unchanged
+- **System tab:** the logo plays its intro, then a glint of light runs along the swirl every few seconds with sparkles around it
+- **Your own logo (LOGO.VMU from Card Manager):** it spirals in from the centre, flashes, and a shine sweeps across it every few seconds
+- **Saving:** the VMU follows the banner. A 3, 2, 1 countdown with a draining ring; a "saving" picture while the card is written; bits flowing into a little VMU during "Saving... please wait"; then a tick that draws itself with "SAVED". A failed save shows a shaking cross with the reason (NO SPACE, VMU BUSY, CHECK VMU)
+- Nothing is sent to the VMU while a save is writing, and the VMU is left alone once a game starts
+- The VMU is drawn on its own thread, so the menu never waits for it
+
+### Fixes
+
+- Fixed a memory overflow when loading full size pictures (the header logo and the Classic style backgrounds): 32 bytes were written past the end of a buffer at every start up. It could make a game launch stop with an error report
+- If SWIRL ever stops with an error, the report is now shown as QR codes that take turns every few seconds. Photograph each one for a bug report
+
+### What to test
+
+- Power on a few times with a VMU in: does the intro play, and does SWIRL start as before?
+- Change a setting and watch the VMU through the countdown, saving and saved
+- VM2 or VMU Pro owners: does the screen animate on your device too?
+
+## [2.14.0-preview.1]
+
+**This is a preview for testing.** It is offered in SWIRL Card Manager 2.13.3 or newer as **Try the preview**.
+
+### VM2 and VMU Pro game cards
+
+- When a game starts, SWIRL tells a VM2, VMU Pro, USB4MAPLE or Pico2Maple which game it is (the Game ID), so it switches to that game's own memory card, as the openMenu Virtual Folder Bundle does
+- It is only sent when a game starts, after SWIRL has saved, and only to those devices. A standard VMU is never sent anything new. It works from SWIRL and from the Classic styles, and for CodeBreaker and Bleem launches too
+- New setting: **System > VM2 / VMU Pro game cards** (on by default). Turn it off to keep one card for everything
+- A device that is busy or doesn't answer can't hold up a game: SWIRL waits at most about a second in total, then starts the game anyway
+
+### What to test
+
+- **VM2 or VMU Pro owners:** start a few games. Does your device switch to each game's own card, and do the games save and load there?
+- Turn the setting off, start a game: does the device stay on its current card?
+- Go back to SWIRL from a game with the in game reset (A+B+X+Y+Start). Are your SWIRL settings and favourites still there, or does SWIRL start with default settings? Please tell us either way
+- **Standard VMU owners:** everything should work exactly as in 2.13.2
+
+## [2.13.4]
+
+### Fixes
+
+- Fixed a memory overflow when SWIRL loads full size pictures (the Sega Dreamcast header logo, and the backgrounds of the Classic styles): 32 bytes were written past the end of a buffer at every start up. It could corrupt SWIRL's memory and make the Dreamcast stop later, for example when starting a game
+
 ## [2.13.3]
 
 Card Manager only. The menu on your card stays 2.13.2.

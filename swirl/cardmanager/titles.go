@@ -195,6 +195,9 @@ func suggestedName(g *Game) string {
 	if e, ok := lookupTitle(g.Product, d); ok {
 		return e.Title
 	}
+	if t := serialTitle(g.Product); t != "" {
+		return t
+	}
 	if g.Custom || !meaningful(g.Name) {
 		return ""
 	}

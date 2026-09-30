@@ -8,6 +8,8 @@
  * License: BSD 3-clause "New" or "Revised" License, http://www.opensource.org/licenses/BSD-3-Clause
  */
 
+#include <stddef.h>
+
 #include "common.h"
 
 #ifdef _arch_dreamcast
@@ -40,8 +42,9 @@ void *draw_load_missing_icon(void *user);
 /* Throws pass whatever is relevant to your platform as a pointer and it will filled + returned if successfull, otherwise NULL */
 void *draw_load_texture(const char *filename, void *user);
 void *draw_load_texture_buffer(const char *filename, void *user, void *buffer);
-/* Loads from new DAT file using struct + ID of file requested */
-void *draw_load_texture_from_DAT_to_buffer(const struct dat_file *bin, const char *ID, void *user, void *buffer);
+/* Loads from new DAT file using struct + ID of file requested. SWIRL: buffer_size is the room in the slot */
+void *draw_load_texture_from_DAT_to_buffer(const struct dat_file *bin, const char *ID, void *user, void *buffer,
+                                           size_t buffer_size);
 
 /* draws an image at coords of a given size */
 void draw_draw_image(int x, int y, float width, float height, uint32_t color, void *user);

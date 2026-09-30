@@ -104,6 +104,7 @@ input[type=checkbox]{accent-color:var(--orange);width:1rem;height:1rem;margin:0}
 .stat span{color:var(--dim);font-size:.78rem;display:block}
 .stat b{display:block;font-family:Sora,sans-serif;font-size:1.15rem;margin-top:.15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .stat b.sm{font-size:.95rem;margin-top:.3rem}
+.stat small.sm{color:var(--dim);font-size:.78rem}
 .brand .beta{text-decoration:none;margin-left:.5rem;padding:.08rem .45rem;border-radius:999px;border:1px solid var(--orange);color:var(--orange);font-family:Barlow,sans-serif;font-size:.7rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
 .badge{display:inline-block;border-radius:999px;padding:.12rem .55rem;font-size:.78rem;font-weight:600;background:#243049;color:var(--text);font-family:Barlow,sans-serif}
 .badge.swirl{background:#3a2410;color:#ffc58e}
@@ -269,6 +270,9 @@ dialog::backdrop{background:rgba(3,5,10,.72)}
 .fields .fnote{grid-column:1/-1;display:flex;gap:.55rem;align-items:flex-start;margin:-.2rem 0 0;padding:.6rem .75rem;border-radius:.6rem;background:var(--field);border:1px solid var(--line2);color:var(--dim);font-size:.84rem;line-height:1.45}
 .fields .fnote svg{width:1.05rem;height:1.05rem;flex:none;margin-top:.1rem;stroke:var(--orange);fill:none;stroke-width:1.8;stroke-linecap:round}
 .fields .fnote b{color:var(--text)}
+.fields .fnote.vgapatch{flex-wrap:wrap;align-items:center}
+.fields .fnote.vgapatch span{flex:1 1 20rem}
+td.c-flag.warnflag{color:var(--orange);font-weight:600}
 .fields label.inline{flex-direction:row;align-items:center;gap:.5rem;color:var(--text);font-weight:400;font-size:.9rem}
 .fields .wide{grid-column:1/-1}
 .fields input[type=text],.fields input[type=number],.fields select,.fields textarea{font-size:.9rem;font-weight:400}
@@ -430,6 +434,29 @@ dialog.browser{width:min(78rem,calc(100vw - 2rem));height:min(52rem,calc(100dvh 
   .brand .cm{display:none}
 }
 
+/* Report a problem */
+.rpdrop{border:2px dashed var(--line);border-radius:var(--r);padding:1.2rem 1.25rem;text-align:center;color:var(--dim);background:var(--panel);transition:border-color .15s,background .15s}
+.rpdrop.over{border-color:var(--orange);background:var(--orange-t);color:var(--text)}
+.rpdrop b{color:var(--text)}
+.rpdrop input{display:none}
+#rpText{width:100%;min-height:9rem;font-family:Consolas,ui-monospace,monospace;font-size:.82rem;resize:vertical;box-sizing:border-box}
+.rpsum{font-size:1.02rem;line-height:1.55}
+.rpsum b{color:var(--orange)}
+.rpdl{display:grid;grid-template-columns:minmax(7rem,auto) 1fr;gap:.3rem .9rem;margin:0;font-size:.88rem}
+.rpdl dt{font-weight:600;color:var(--text)}
+.rpdl dd{margin:0;color:var(--dim);min-width:0;overflow-wrap:anywhere}
+.rpwarn{display:grid;grid-template-columns:auto 1fr auto;gap:.35rem .8rem;font-size:.9rem;align-items:baseline}
+.rpwarn .code{font-family:Consolas,ui-monospace,monospace;color:var(--orange);font-weight:600}
+.rpwarn .n{color:var(--faint);white-space:nowrap}
+.rpwarn small{grid-column:2/-1;color:var(--faint);font-family:Consolas,ui-monospace,monospace;font-size:.78rem;margin-top:-.2rem}
+.rptrace{max-height:22rem;overflow:auto;font-family:Consolas,ui-monospace,monospace;font-size:.8rem;color:var(--dim);background:var(--field);border:1px solid var(--line);border-radius:.5rem;padding:.5rem .7rem;white-space:pre-wrap;overflow-wrap:anywhere}
+.rptrace .ms{color:var(--faint);display:inline-block;min-width:4.2rem;text-align:right;margin-right:.7rem}
+.rptrace .w{color:var(--yellow)}
+.rptrace .gap{color:var(--red);font-style:italic}
+.rpnote{color:var(--yellow);font-size:.86rem}
+.rpaddr{font-family:Consolas,ui-monospace,monospace;font-size:.84rem}
+.rpaddr b{color:var(--text)}
+
 /* About */
 dialog.about{width:min(64rem,calc(100vw - 2rem))}
 .abhead{display:flex;flex-wrap:wrap;align-items:center;gap:1rem 1.4rem;padding:1.3rem 1.5rem;border-bottom:1px solid var(--line);flex:none;background:radial-gradient(60rem 12rem at 0 0,rgba(242,140,40,.10),transparent 70%)}
@@ -488,6 +515,7 @@ kbd{font-family:Barlow,sans-serif;font-size:.78rem;font-weight:600;color:var(--t
   <symbol id="i-gdemu" viewBox="0 0 24 24"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></symbol>
   <symbol id="i-tools" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
   <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></symbol>
+  <symbol id="i-report" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M6.5 6.5h.01M17.5 6.5h.01M6.5 17.5h.01M14 14h3v3M21 14v.01M14 21h.01M17 21h4v-3"/></symbol>
   <symbol id="i-backup" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></symbol>
 </svg>
 <div class="app">
@@ -517,6 +545,7 @@ kbd{font-family:Barlow,sans-serif;font-size:.78rem;font-weight:600;color:var(--t
     <button data-view="gdemu" disabled title="GDEMU settings"><svg><use href="#i-gdemu"/></svg><span class="t">GDEMU settings</span></button>
     <button data-view="tools" disabled title="Health and preview"><svg><use href="#i-tools"/></svg><span class="t">Health and preview</span></button>
     <button data-view="backups" disabled title="Backups"><svg><use href="#i-backup"/></svg><span class="t">Backups</span><span class="n" id="nBackups"></span></button>
+    <button data-view="report" title="Report a problem"><svg><use href="#i-report"/></svg><span class="t">Report a problem</span></button>
     <button id="aboutBtn" class="aboutnav" title="About SWIRL Card Manager (F1)"><svg><use href="#i-info"/></svg><span class="t">About</span></button>
     <div class="navfoot">by Glen Huszar<br><a href="https://github.com/TheGlengineer" target="_blank" rel="noopener">github.com/TheGlengineer</a></div>
   </nav>
@@ -618,6 +647,31 @@ kbd{font-family:Barlow,sans-serif;font-size:.78rem;font-weight:600;color:var(--t
         </div>
         <div class="panel"><h3>Kept on the card</h3><p class="hint">Every install moves the previous menu here, and removed games wait here until you delete them.</p><div id="backups" class="empty">No card selected</div></div>
       </section>
+
+      <section class="view" data-view="report">
+        <div class="vhead"><div class="grow"><h2>Report a problem</h2><p>When SWIRL crashes, hangs or shows warnings, it draws a report as QR codes on the TV. Scan them with your phone and paste the text here, or drop photos of the screen. Card Manager decodes the report on this PC and writes the text for a GitHub issue. Nothing is sent anywhere by itself.</p></div></div>
+        <div class="grid">
+          <div class="panel stack">
+            <h3>1. The report from the Dreamcast</h3>
+            <p class="hint tight">On the Dreamcast: <b>System</b>, <b>Diagnostics</b>, press <b>A</b> for the report at any time. After a crash or a hang the report is already on the screen. Hold <b>X</b> while turning the console on for the start up log. Several codes take turns; scan each one, in any order.</p>
+            <label class="rpdrop" id="rpDrop"><b>Drop photos of the QR codes here</b>, or click to choose them. A screenshot from an emulator works too. The build's <b>themeMenu.elf</b> can be dropped here as well, to name the addresses of a crash.<input type="file" id="rpFiles" multiple accept="image/*,.elf"></label>
+            <textarea id="rpText" placeholder="Or paste the text your phone's QR scanner read, every part, in any order. Each part starts with a line like SWIRL 2.14 1/3." spellcheck="false"></textarea>
+            <div class="row"><span class="msg grow" id="rpMsg"></span><button class="btn small ghost" id="rpClear">Clear</button><button class="btn primary" id="rpDecode">Decode</button></div>
+          </div>
+          <div class="panel stack" id="rpOut" hidden>
+            <h3>2. What it says</h3>
+            <p class="rpsum" id="rpSummary"></p>
+            <div id="rpNotes"></div>
+            <dl class="rpdl" id="rpDetails"></dl>
+            <div id="rpWarnBox" hidden><h3 style="margin-top:.4rem">Warnings</h3><div class="rpwarn" id="rpWarn"></div></div>
+            <div id="rpCrashBox" hidden><h3 style="margin-top:.4rem">Where it stopped</h3><div class="rpaddr" id="rpCrash"></div><p class="hint tight" id="rpSymNote"></p></div>
+            <h3 style="margin-top:.4rem">What SWIRL did, step by step</h3>
+            <div class="rptrace" id="rpTrace"></div>
+            <div class="row"><span class="msg grow" id="rpCopyMsg"></span><a class="btn small" id="rpIssues" href="https://github.com/TheGlengineer/SWIRL/issues/new/choose" target="_blank" rel="noopener">Open GitHub issues</a><button class="btn primary" id="rpCopy">Copy for GitHub</button></div>
+            <p class="hint tight">Copy for GitHub puts a ready to paste issue on the clipboard: the report in plain words, the raw text, this Card Manager's version and, when a card is open, what is on it. Say what you were doing at the top, then paste it into a new issue on GitHub.</p>
+          </div>
+        </div>
+      </section>
     </div>
 
     <div class="activity" id="activity">
@@ -706,7 +760,7 @@ kbd{font-family:Barlow,sans-serif;font-size:.78rem;font-weight:600;color:var(--t
 <dialog id="healthDlg">
   <div class="edhead"><h3>Card health check</h3><span class="mono" id="healthWhen"></span></div>
   <div class="dbody" id="healthBody"></div>
-  <div class="edfoot"><span class="msg" id="healthMsg"></span><button class="btn" id="healthJunk" hidden>Move leftover system files to SWIRL_BACKUP</button><button class="btn primary" id="healthClose">Close</button></div>
+  <div class="edfoot"><span class="msg" id="healthMsg"></span><button class="btn" id="healthGaps" hidden>Close the gaps</button><button class="btn" id="healthJunk" hidden>Move leftover system files to SWIRL_BACKUP</button><button class="btn primary" id="healthClose">Close</button></div>
 </dialog>
 <dialog id="logoDlg">
   <div class="edhead"><h3>Make a VMU logo</h3><span class="mono">48 x 32 pixels, black and white</span></div>
@@ -767,6 +821,11 @@ kbd{font-family:Barlow,sans-serif;font-size:.78rem;font-weight:600;color:var(--t
         <dt><kbd>Esc</kbd></dt><dd>Close a window</dd>
       </dl></section>
 
+      <section class="abcard"><h4><svg><use href="#i-report"/></svg>Diagnostics</h4>
+        <p>SWIRL keeps a log of what it does from power on and counts anything that goes wrong (a save that failed, a picture it could not use, a launch that came back). <span class="where">System, Diagnostics</span> on the Dreamcast lists the warnings in plain words; <kbd>A</kbd> there shows the whole log as QR codes. After a crash or a hang the codes are already on the screen, and holding <kbd>X</kbd> while the console turns on shows the start up log.</p>
+        <p>Scan the codes with your phone, or photograph the screen, and bring them to <span class="where">Report a problem</span> in the list on the left: it decodes the report on this PC and writes the text for a GitHub issue. <button type="button" class="btn small" id="abReport">Open Report a problem</button></p>
+      </section>
+
       <section class="abcard"><h4><svg><use href="#i-games"/></svg>Managing games</h4><dl>
         <dt>Add</dt><dd><span class="where">Games, Add games</span>: tick games, folders, disc files or archives. Games already on the card are skipped</dd>
         <dt>Remove</dt><dd>Tick games, then <span class="where">Remove selected</span>. They go to SWIRL_BACKUP on the card, not straight to the bin</dd>
@@ -800,6 +859,12 @@ kbd{font-family:Barlow,sans-serif;font-size:.78rem;font-weight:600;color:var(--t
 
       <section class="abcard abwide"><h4><svg><use href="#i-gdemu"/></svg>Region, VGA and boot options</h4>
         <p>Every game boots region free and in VGA, with nothing changed on the card. To set one game differently, open it on the Dreamcast and press <b>X</b> for <b>Options</b>: Region (game default, Japan, USA, Europe), Video (Force VGA or game default) and Boot (straight in, boot animation, SEGA screen). The choice is saved for that game.</p>
+        <p><b>Games with no VGA mode.</b> A few games (Hydro Thunder is one) have no VGA output of their own: over a VGA cable they reach the SEGA screen and then the display shows nothing. Card Manager carries community patches that add VGA to those games and can apply them in place, with an undo. Tell it how your Dreamcast is connected:</p>
+        <div class="row" style="gap:1rem;flex-wrap:wrap">
+          <label class="inline"><input type="radio" name="abOut" value="vga"> VGA cable: patch these games for me automatically</label>
+          <label class="inline"><input type="radio" name="abOut" value="tv"> TV (composite, S-Video, RGB SCART): leave games as they are</label>
+        </div>
+        <p class="hint tight" id="abOutNote"></p>
       </section>
 
       <section class="abcard abwide"><h4><svg><use href="#i-coll"/></svg>Credits</h4><div class="abcredits">
@@ -810,7 +875,7 @@ kbd{font-family:Barlow,sans-serif;font-size:.78rem;font-weight:600;color:var(--t
         <div><b>Redump</b> and <b>libretro database</b>: game titles</div>
         <div><b>libretro thumbnails</b>: screenshots</div>
         <div><b>sevenzip</b>, Matt Dainty; <b>rardecode</b>, Nicholas Waples</div>
-        <div><b>go-mp3</b>, Hajime Hoshi</div>
+        <div><b>go-mp3</b>, Hajime Hoshi; <b>jsQR</b>, Cosmo Wolfe</div>
         <div><b>compress</b>, Klaus Post; <b>xz</b>, Ulrich Kunitz; <b>lz4</b>, Pierre Curto; <b>brotli</b>, Andy Balholm and the Brotli authors</div>
         <div><b>Go</b>, the Go authors</div>
         <div><b>Sora</b>, <b>Barlow</b> and <b>Silkscreen</b> fonts (SIL Open Font License)</div>
@@ -875,7 +940,8 @@ kbd{font-family:Barlow,sans-serif;font-size:.78rem;font-weight:600;color:var(--t
       <label>VMU blocks<input type="number" id="fVmu" min="0" max="200"></label>
       <label>Online<select id="fNet"><option value="0">None</option><option value="1">Modem</option><option value="2">Broadband adapter</option><option value="3">Modem or broadband</option></select></label>
       <label class="wide inline"><input type="checkbox" id="fVga"> Show the VGA tag in the menu</label>
-      <p class="wide fnote"><svg><use href="#i-info"/></svg><span>Region and VGA here only change what SWIRL shows. Every game already boots region free and in VGA. To change how one game starts (region, VGA or boot screens), open it on the Dreamcast and press <b>X</b> for <b>Options</b>.</span></p>
+      <div class="wide fnote vgapatch" id="fVgaPatch" hidden><svg><use href="#i-info"/></svg><span id="fVgaPatchText"></span><button type="button" class="btn small" id="fVgaApply">Apply VGA patch</button><button type="button" class="btn small" id="fVgaRemove">Remove VGA patch</button></div>
+      <p class="wide fnote"><svg><use href="#i-info"/></svg><span>Region and VGA here only change what SWIRL shows. Every game boots region free and in VGA unless you change it on the Dreamcast (press <b>X</b> on a game for <b>Options</b>). A game with no VGA mode of its own needs a patch to show a picture over a VGA cable; when one is known, it is offered above.</span></p>
       <label class="wide">Genres<div class="checks" id="fGenres"></div></label>
       <label class="wide">Accessories<div class="checks" id="fAcc"></div></label>
       <label class="wide">Description <span class="count" id="fDescCount"></span><textarea id="fDesc" maxlength="375"></textarea></label>
@@ -912,7 +978,7 @@ function show(v) {
 document.querySelectorAll("#nav button[data-view]").forEach(b => b.onclick = () => show(b.dataset.view));
 $("cardChip").onclick = () => show("card");
 $("logMore").onclick = () => { const o = $("activity").classList.toggle("open"); $("logMore").textContent = o ? "Less" : "More"; $("log").scrollTop = 1e9; };
-function setNav(enabled) { document.querySelectorAll("#nav button[data-view]").forEach(b => { if (b.dataset.view !== "card") b.disabled = !enabled; }); }
+function setNav(enabled) { document.querySelectorAll("#nav button[data-view]").forEach(b => { if (b.dataset.view !== "card" && b.dataset.view !== "report") b.disabled = !enabled; }); }
 function setCount(id, n) { $(id).textContent = n ? String(n) : ""; }
 
 function log(lines, cls) {
@@ -945,6 +1011,9 @@ function menuBadge(c) {
   if (c.menuType === "openMenu") return `<span class="badge">openMenu</span>`;
   if (c.menuType === "GDMENU") return `<span class="badge">GDMENU</span>`;
   if (c.menuType === "None") return `<span class="badge warn">No menu yet</span>`;
+  if (c.menuType === "Game") return `<span class="badge warn">Game, not a menu: ${esc(c.menuTitle || c.menuImage)} (${esc(c.menuFormat)})</span>`;
+  if (c.menuType === "Menu") return `<span class="badge warn">${esc(c.menuTitle)} (a menu SWIRL does not know, ${esc(c.menuFormat)})</span>`;
+  if (c.menuType === "Unknown") return `<span class="badge warn">Unreadable disc image: ${esc(c.menuImage)}</span>`;
   return `<span class="badge warn">${esc(c.menuType)}</span>`;
 }
 
@@ -969,34 +1038,41 @@ async function scan() {
   }
   const c = card;
   const art = c.games.filter(g => g.hasArt).length, meta = c.games.filter(g => g.hasMeta).length;
+  // SWIRL counts titles: the discs of a multi disc game are one entry there, so say both numbers when they differ
+  const extraDiscs = (c.sets || []).reduce((a, s) => a + Math.max(0, (s.folders || []).length - 1), 0);
+  const titles = c.games.length - extraDiscs;
+  const countText = extraDiscs ? `${titles} games on ${c.games.length} discs` : `${c.games.length} games`;
   const warnCount = (c.warnings || []).length + ((c.duplicates || []).length ? 1 : 0) + (!c.hasBox && !c.hasIcon && c.games.length ? 1 : 0);
   $("cardInfo").innerHTML = `
     <div class="summary">
       <div class="stat"><span>Menu in 01</span><b class="sm">${menuBadge(c)}</b></div>
-      <div class="stat"><span>Games</span><b>${c.games.length}</b></div>
+      <div class="stat"><span>Games</span><b>${titles}</b>${extraDiscs ? `<small class="sm"> on ${c.games.length} discs</small>` : ""}</div>
       <div class="stat"><span>With box art</span><b>${art}</b></div>
       <div class="stat"><span>With descriptions</span><b>${meta}</b></div>
     </div>
     ${(c.warnings || []).map(w => `<div class="warn">${esc(w)}</div>`).join("")}
+    ${c.gaps ? `<div class="row" style="margin-top:.5rem"><button class="btn small" id="closeGaps">Close the gaps (renumber the folders)</button></div>` : ""}
     ${(c.duplicates || []).length ? `<div class="warn"><b>Duplicate games:</b> ${c.duplicates.map(d => `${esc(d.name)} (folder ${esc(d.keep)}, extra ${d.extras.map(esc).join(", ")})`).join("; ")}.
       These are identical copies, not extra discs.
       <div class="row" style="margin-top:.5rem"><button class="btn small" id="dedupe">Remove extra copies (${(c.duplicates.reduce((a, d) => a + d.bytes, 0) / 1073741824).toFixed(1)} GB)</button></div></div>` : ""}
     ${!c.hasBox && !c.hasIcon && c.games.length ? `<div class="warn">No box art files on the card yet. Add them in Art and info, or SWIRL will show colored placeholders.</div>` : ""}`;
   renderGames();
   if ($("dedupe")) $("dedupe").onclick = dedupe;
+  if ($("closeGaps")) $("closeGaps").onclick = () => { if (confirm("Renumber the game folders so there are no gaps, then rebuild the menu?")) startJob("Closing the gaps", "/api/health/gaps", { root: card.root }); };
+  vgaAfterScan();
   setNav(true);
   setCount("nGames", c.games.length);
   $("cardFlag").hidden = !warnCount;
   $("cardLed").className = "led " + (warnCount || c.menuType !== "SWIRL" ? "warn" : "ok");
   $("cardChipName").textContent = c.root;
-  $("cardChipInfo").textContent = `${c.menuType === "SWIRL" ? "SWIRL" : c.menuType === "None" ? "No menu" : c.menuType} · ${c.games.length} games`;
-  $("gamesSub").textContent = `${c.games.length} games · ${art} with box art · ${meta} with descriptions. Folders 02 and up, in the order GDEMU and SWIRL list them.`;
+  $("cardChipInfo").textContent = `${c.menuType === "SWIRL" ? "SWIRL" : c.menuType === "None" ? "No menu" : c.menuType === "Game" ? "Game in 01" : c.menuType === "Unknown" ? "Unreadable image in 01" : c.menuType} · ${countText}`;
+  $("gamesSub").textContent = `${countText} · ${art} with box art · ${meta} with descriptions. Folders 02 and up, in the order GDEMU and SWIRL list them.`;
   $("fillArt").disabled = !c.games.length;
   if (view === "card" && !warnCount) show("games");
-  const blocked = c.menuType === "Game" || (!c.games.length && c.menuType === "None");
+  const blocked = c.menuType === "Game" || c.menuType === "Unknown" || (!c.games.length && c.menuType === "None");
   $("install").disabled = blocked;
   $("install").textContent = c.menuType === "SWIRL" ? "Update SWIRL" : "Install SWIRL";
-  log(blocked ? "This card can't be updated yet (see the notes under SD card)." : c.games.length ? `Ready. ${c.games.length} games found on ${c.root}` : `Ready. ${c.root} has SWIRL but no games yet. Add them in Games.`);
+  log(blocked ? "This card can't be updated yet (see the notes under SD card)." : c.games.length ? `Ready. ${countText} found on ${c.root}` : `Ready. ${c.root} has SWIRL but no games yet. Add them in Games.`);
   renderBackups();
   loadDB();
   loadGDEMU();
@@ -1005,9 +1081,45 @@ async function scan() {
   loadLogo();
 }
 
-let order = null, dragFrom = null, gFilter = "", scanNo = 0;
+let order = null, dragFrom = null, gFilter = "", scanNo = 0, vgaBusy = false;
+// Games with no VGA mode: when the owner said the console is on VGA, known patches are applied as soon as a
+// scan finds a game that needs one (after adding games too, since every add ends in a scan). With no answer
+// yet, the card page asks once.
+function vgaAfterScan() {
+  const c = card; if (!c) return;
+  const need = c.games.filter(g => g.vgaState === "patch");
+  const box = $("vgaAsk"); if (box) box.remove();
+  if (!need.length || vgaBusy) return;
+  if (uip.output === "vga") { fixVga(false); return; }
+  if (uip.output === "tv") return;
+  const names = need.map(g => esc(g.name)).join(", ");
+  $("cardInfo").insertAdjacentHTML("beforeend", `<div class="warn" id="vgaAsk"><b>${need.length === 1 ? "One game has" : need.length + " games have"} no VGA mode:</b> ${names}. Over a VGA cable ${need.length === 1 ? "it reaches" : "they reach"} the SEGA screen and then the display shows nothing. A community patch is known for ${need.length === 1 ? "it" : "each"}. How is your Dreamcast connected?
+    <div class="row" style="margin-top:.5rem;gap:.5rem;flex-wrap:wrap"><button class="btn small accent" id="vgaYes">VGA cable, patch ${need.length === 1 ? "it" : "them"}</button><button class="btn small" id="vgaNo">TV, leave ${need.length === 1 ? "it" : "them"}</button></div></div>`);
+  $("vgaYes").onclick = () => { uip.output = "vga"; saveUIP(); syncOut(); fixVga(false); };
+  $("vgaNo").onclick = () => { uip.output = "tv"; saveUIP(); syncOut(); $("vgaAsk").remove(); log("Games with no VGA mode are left as they are. Change this under About if you move to a VGA cable."); };
+  if (view !== "card") show("card");
+}
+async function fixVga(manual) {
+  if (!card || vgaBusy) return;
+  vgaBusy = true;
+  const box = $("vgaAsk"); if (box) box.remove();
+  log("Patching games with no VGA mode ...");
+  let lines = [], cls = "";
+  try {
+    const r = await api("/api/vga/fix", { root: card.root });
+    lines = r.log || [];
+    if (r.patched.length) { lines.push(`Patched for VGA: ${r.patched.join(", ")}. The original bytes are kept under SWIRL_BACKUP\\patches; Remove VGA patch on the game's Edit page puts them back.`); cls = "ok"; }
+    if (r.failed.length) { lines.push(`Could not patch: ${r.failed.join("; ")}`); cls = "err"; }
+    if (!r.patched.length && !r.failed.length && manual) lines.push("Every game that has a known VGA patch is already patched.");
+  } catch (e) { lines = ["VGA patch: " + e.message]; cls = "err"; }
+  vgaBusy = false;
+  await scan();
+  if (lines.length) log(lines, cls);
+}
+function syncOut() { document.querySelectorAll("input[name=abOut]").forEach(r => r.checked = r.value === uip.output); $("abOutNote").textContent = uip.output === "vga" ? "Games with a known VGA patch are patched when they are found on the card." : uip.output === "tv" ? "Nothing is patched. You can still patch one game from its Edit page." : "Not set yet. Card Manager asks when it finds a game that needs a patch."; }
+document.querySelectorAll("input[name=abOut]").forEach(r => r.onchange = () => { uip.output = r.value; saveUIP(); syncOut(); if (card) vgaAfterScan(); });
 let uip = { gamesView: "list", gridSize: 150 };
-api("/api/uiprefs").then(p => { uip = p; if (card && view === "games") renderGames(); setTimeout(() => checkUpdates(false), 1500); }).catch(() => {});
+api("/api/uiprefs").then(p => { uip = p; syncOut(); if (card && view === "games") renderGames(); setTimeout(() => checkUpdates(false), 1500); }).catch(() => {});
 function saveUIP() { api("/api/uiprefs", uip).catch(() => {}); }
 function renderGames() {
   const c = card;
@@ -1018,6 +1130,7 @@ function renderGames() {
       <button class="btn small" id="undoOrder" hidden>Undo order</button>
       <button class="btn small" id="tidyNames" hidden>Tidy names</button>
       <button class="btn small" id="arrangeDiscs" hidden>Put discs together</button>
+      <button class="btn small accent" id="fixVga" hidden>Patch games for VGA</button>
       <span class="tbspace"></span>
       <input type="range" id="gSize" min="100" max="260" step="10" value="${uip.gridSize}" title="Cover size" aria-label="Cover size" ${uip.gamesView === "grid" ? "" : "hidden"}>
       <div class="seg" role="group" aria-label="View">
@@ -1030,7 +1143,7 @@ function renderGames() {
     wireTools();
     $("addGames2").onclick = () => $("addGames").onclick();
     $("games").querySelector(".seg").hidden = $("gSize").hidden = true;
-    ["rmGames", "saveOrder", "undoOrder", "tidyNames", "arrangeDiscs"].forEach(id => { if ($(id)) $(id).hidden = id !== "rmGames" ? true : $(id).hidden; });
+    ["rmGames", "saveOrder", "undoOrder", "tidyNames", "arrangeDiscs", "fixVga"].forEach(id => { if ($(id)) $(id).hidden = id !== "rmGames" ? true : $(id).hidden; });
     return;
   }
   if (!order) order = c.games.map(g => g.folder);
@@ -1056,6 +1169,10 @@ function renderGames() {
     return `<td class="c-name setfirst">${esc(g.name)} ${disc}${warn}${edited}${sug}</td>`;
   };
   const flag = (label, v, text) => `<td class="c-flag ${v ? "yes" : "no"}" data-label="${label}">${text}</td>`;
+  const vgaCell = g => g.vgaState === "patch" ? `<td class="c-flag warnflag" data-label="VGA" title="This game has no VGA mode. A patch by ${esc(g.vgaBy)} is known.">Needs patch</td>`
+    : g.vgaState === "patched" ? `<td class="c-flag yes" data-label="VGA" title="VGA patch by ${esc(g.vgaBy)} applied">Patched</td>`
+    : g.vgaState === "skipped" ? `<td class="c-flag no" data-label="VGA" title="No VGA mode. You removed its patch; apply it again from Edit.">No (patch removed)</td>`
+    : flag("VGA", g.vga, g.vga ? "Yes" : "No");
   const foot = `<div class="gfoot">${q ? "Clear the search to drag games into a new order." : uip.gamesView === "grid" ? "Drag covers to change the folder order. Click a cover to edit the game." : "Drag rows by the handle to change the folder order."} Edits are saved on the card in a SWIRL folder. Click Update SWIRL to put them on the Dreamcast.</div>`;
   if (uip.gamesView === "grid") {
     const thumb = g => `/api/thumb?t=${TOKEN}&root=${encodeURIComponent(c.root)}&folder=${encodeURIComponent(g.folder)}&product=${encodeURIComponent(g.product || "")}&size=${uip.gridSize > 150 || devicePixelRatio > 1.25 ? 256 : 128}&v=${scanNo}`;
@@ -1065,6 +1182,7 @@ function renderGames() {
       if (q && !shown.has(f)) return "";
       const s = setOf(f), child = s && i > 0 && setOf(order[i - 1]) === s, cont = s && order[i + 1] && setOf(order[i + 1]) === s;
       const missing = [!g.hasArt && "art", !g.hasMeta && "info", !g.hasVmu && "VMU"].filter(Boolean);
+      const vgaNote = g.vgaState === "patch" ? `<span class="setwarn">Needs VGA patch</span> ` : "";
       const warn = s && !child && (s.missing || []).length ? `Disc ${s.missing.join(", ")} missing` : s && !child && s.apart ? "Discs are apart" : "";
       return `<div class="gtile${s ? " inset" : ""}${child ? " child" : ""}${cont ? " cont" : ""}" draggable="${q ? "false" : "true"}" data-f="${esc(f)}" data-g="${esc(f)}" title="${esc(g.name)}${g.error ? " · " + esc(g.error) : ""}">
         <div class="gart" style="--c:${g.hasArt ? "#141d31" : "#1d2640"}">
@@ -1076,11 +1194,11 @@ function renderGames() {
           ${g.edited ? `<span class="gedit">edited</span>` : ""}
         </div>
         <div class="gname">${esc(g.name)}</div>
-        <div class="gmeta">${warn ? `<span class="setwarn">${warn}</span>` : missing.length ? `<span class="gmiss">No ${missing.join(", ")}</span>` : `<span class="yes">Art, info and VMU</span>`}</div>
+        <div class="gmeta">${vgaNote}${warn ? `<span class="setwarn">${warn}</span>` : missing.length ? `<span class="gmiss">No ${missing.join(", ")}</span>` : `<span class="yes">Art, info and VMU</span>`}</div>
       </div>`; }).join("")}</div></div>${foot}`;
   } else {
   $("games").innerHTML = tools + `<div class="tablewrap"><table>
-    <thead><tr><th></th><th><input type="checkbox" id="selAll" title="Select all"></th><th>Slot</th><th>Name</th><th class="c-serial">Serial</th><th class="c-region">Region</th><th class="c-disc">Disc</th><th>Art</th><th>Info</th><th>VMU</th><th>Shots</th><th></th></tr></thead>
+    <thead><tr><th></th><th><input type="checkbox" id="selAll" title="Select all"></th><th>Slot</th><th>Name</th><th class="c-serial">Serial</th><th class="c-region">Region</th><th class="c-disc">Disc</th><th>Art</th><th>Info</th><th>VMU</th><th>Shots</th><th>VGA</th><th></th></tr></thead>
     <tbody>${order.map((f, i) => { const g = byFolder[f]; const slot = String(i + 2).padStart(2, "0");
       if (q && !shown.has(f)) return "";
       const s = setOf(f), child = s && i > 0 && setOf(order[i - 1]) === s;
@@ -1093,7 +1211,7 @@ function renderGames() {
       <td class="mono c-region">${esc(g.region)}</td>
       <td class="mono c-disc">${esc(g.disc)}</td>
       <td class="brk"></td>
-      ${flag("Art", g.hasArt, g.hasArt ? "Yes" : "No")}${flag("Info", g.hasMeta, g.hasMeta ? "Yes" : "No")}${flag("VMU", g.hasVmu, g.hasVmu ? "Yes" : "No")}${flag("Shots", g.shots, g.shots || "No")}
+      ${flag("Art", g.hasArt, g.hasArt ? "Yes" : "No")}${flag("Info", g.hasMeta, g.hasMeta ? "Yes" : "No")}${flag("VMU", g.hasVmu, g.hasVmu ? "Yes" : "No")}${flag("Shots", g.shots, g.shots || "No")}${vgaCell(g)}
       <td class="c-edit"><button class="btn small" data-edit="${esc(f)}" ${changed ? "disabled" : ""}>Edit</button></td></tr>`; }).join("")}</tbody></table></div>${foot}`;
   }
   // view switch and cover size
@@ -1116,6 +1234,11 @@ function renderGames() {
   $("tidyNames").textContent = `Tidy names (${nSug})`;
   $("tidyNames").onclick = openTidy;
   const apart = (c.sets || []).filter(s => s.apart);
+  const needVga = c.games.filter(g => g.vgaState === "patch");
+  $("fixVga").hidden = !needVga.length;
+  $("fixVga").textContent = `Patch ${needVga.length === 1 ? "1 game" : needVga.length + " games"} for VGA`;
+  $("fixVga").title = needVga.map(g => g.name).join(", ");
+  $("fixVga").onclick = () => fixVga(true);
   $("arrangeDiscs").hidden = !apart.length || changed;
   $("arrangeDiscs").title = apart.map(s => s.name).join(", ");
   $("arrangeDiscs").onclick = () => startJob("Putting discs together", "/api/games/arrange", { root: card.root });
@@ -1515,7 +1638,9 @@ async function runHealth() {
       <div class="stat"><span>Free</span><b class="sm">${r.totalBytes ? gb(r.freeBytes) : "?"}</b></div></div>
     <div>${(r.items || []).map(it => `<div class="hrow"><span class="dot ${it.level}"></span><span>${it.folder ? `<span class="mono">${esc(it.folder)}</span> ` : ""}${esc(it.message)}</span></div>`).join("")}</div>`;
   $("healthJunk").hidden = !(r.junkFiles || []).length;
+  $("healthGaps").hidden = !r.gaps;
 }
+$("healthGaps").onclick = () => { $("healthDlg").close(); startJob("Closing the gaps", "/api/health/gaps", { root: card.root }); };
 $("healthGo").onclick = runHealth;
 $("healthClose").onclick = () => $("healthDlg").close();
 $("healthJunk").onclick = async () => {
@@ -1655,13 +1780,19 @@ $("bkGo").onclick = () => {
 
 function renderBackups() {
   initPCBackup();
-  const list = card?.backups || [];
+  const list = Array.isArray(card?.backupList) && card.backupList.length ? card.backupList
+    : (card?.backups || []).map(b => ({ name: b, kind: b.startsWith("removed_") ? "removed" : "menu", label: "", pinned: false }));
   setCount("nBackups", list.length);
   if (!list.length) { $("backups").innerHTML = `<div class="empty">No backups yet</div>`; return; }
   $("backups").className = "";
-  $("backups").innerHTML = list.map(b => b.startsWith("removed_")
-    ? `<div class="backup"><span>${esc(b)}<br><small>Removed duplicate games</small></span><button class="btn small" data-del="${esc(b)}">Delete permanently</button></div>`
-    : `<div class="backup"><span>${esc(b)}</span><button class="btn small" data-b="${esc(b)}">Restore</button></div>`).join("");
+  $("backups").innerHTML = list.map(b => {
+    const note = b.note ? `<br><small style="color:var(--yellow)">Cannot be restored: ${esc(b.note)}</small>` : "";
+    const text = `<span>${b.pinned ? `<span class="badge ok">Original</span> ` : ""}${esc(b.name)}${b.label ? `<br><small>${esc(b.label)}</small>` : ""}${note}</span>`;
+    if (b.kind === "removed" || b.kind === "junk") return `<div class="backup">${text}<button class="btn small" data-del="${esc(b.name)}">Delete permanently</button></div>`;
+    if (b.kind === "other") return `<div class="backup">${text}</div>`;
+    const back = b.pinned ? `Go back to ${esc(b.menu || "the old menu")}` : "Restore";
+    return `<div class="backup" data-pinned="${b.pinned ? 1 : 0}">${text}<button class="btn small" data-b="${esc(b.name)}"${b.note ? " disabled" : ""}>${back}</button></div>`;
+  }).join("");
   $("backups").querySelectorAll("button[data-del]").forEach(btn => btn.onclick = async () => {
     if (!confirm(`Permanently delete ${btn.dataset.del}? The removed game copies in it will be gone for good.`)) return;
     try { await api("/api/deleteremoved", { root: card.root, name: btn.dataset.del }); log("Deleted " + btn.dataset.del, "ok"); }
@@ -1671,7 +1802,12 @@ function renderBackups() {
   $("backups").querySelectorAll("button[data-b]").forEach(btn => btn.onclick = async () => {
     if (!confirm(`Put ${btn.dataset.b} back into folder 01? The current menu will be kept as another backup.`)) return;
     try {
-      const r = await api("/api/restore", { root: card.root, backup: btn.dataset.b });
+      let r = await api("/api/restore", { root: card.root, backup: btn.dataset.b });
+      if (!r.ok && Array.isArray(r.mismatches) && r.mismatches.length) {
+        const list = r.mismatches.slice(0, 12).join("\n") + (r.mismatches.length > 12 ? `\n... and ${r.mismatches.length - 12} more` : "");
+        if (!confirm(`The game folders have changed since this menu was saved, so it would start the wrong games:\n\n${list}\n\nRestore it anyway? You can fix the list afterwards by installing SWIRL again.`)) { log("Restore cancelled: " + r.error, "err"); scan(); return; }
+        r = await api("/api/restore", { root: card.root, backup: btn.dataset.b, force: true });
+      }
       log((r.log || []).concat(r.ok ? ["Done."] : ["Error: " + r.error]), r.ok ? "ok" : "err");
     } catch (e) { log("Error: " + e.message, "err"); }
     scan();
@@ -1707,6 +1843,12 @@ async function openEditor(folder) {
   if (g.suggested) { $("fNameSug").innerHTML = `Suggested: <button type="button" class="linkbtn" id="fNameUse">${esc(g.suggested)}</button>`; $("fNameUse").onclick = () => { $("fName").value = g.suggested; $("fNameSug").hidden = true; }; }
   if ($("fRegion").value !== g.region) { const o = document.createElement("option"); o.value = o.textContent = g.region; $("fRegion").appendChild(o); $("fRegion").value = g.region; }
   $("fDate").value = g.date; $("fVga").checked = g.vga;
+  $("fVgaPatch").hidden = !g.vgaState;
+  if (g.vgaState) {
+    $("fVgaPatchText").innerHTML = g.vgaState === "patched" ? `<b>VGA patch applied</b> (by ${esc(g.vgaBy)}). The game shows a picture over a VGA cable. Remove it to put the original bytes back.` : `<b>This game has no VGA mode.</b> Over a VGA cable it reaches the SEGA screen and then the display shows nothing. A patch by ${esc(g.vgaBy)} adds VGA output; it changes a few bytes on the card and can be removed again.`;
+    if (g.vgaState === "skipped") $("fVgaPatchText").innerHTML += " You removed it; it is not applied again unless you choose to.";
+    $("fVgaApply").hidden = g.vgaState === "patched"; $("fVgaRemove").hidden = g.vgaState !== "patched";
+  }
   $("fPlayers").value = String(Math.min(4, m.players || 0)); $("fVmu").value = m.vmuBlocks || 0; $("fNet").value = String(m.network || 0);
   checks($("fGenres"), GENRES, m.genre || 0, "g"); checks($("fAcc"), ACCS, m.accessories || 0, "a");
   $("fDesc").value = m.description || ""; $("fDescCount").textContent = `${$("fDesc").value.length} / 375`;
@@ -1717,6 +1859,8 @@ async function openEditor(folder) {
   showShots();
   $("editor").showModal();
 }
+$("fVgaApply").onclick = async () => { $("fVgaApply").disabled = true; try { const r = await api("/api/vga/patch", { root: card.root, folder: ed.folder }); log(`${$("edTitle").textContent}: VGA patch applied (${r.sectors} sectors, undo saved).`, "ok"); $("editor").close(); scan(); } catch (e) { log("VGA patch: " + e.message, "err"); } $("fVgaApply").disabled = false; };
+$("fVgaRemove").onclick = async () => { $("fVgaRemove").disabled = true; try { await api("/api/vga/unpatch", { root: card.root, folder: ed.folder }); log(`${$("edTitle").textContent}: VGA patch removed, original bytes restored.`, "ok"); $("editor").close(); scan(); } catch (e) { log("VGA patch: " + e.message, "err"); } $("fVgaRemove").disabled = false; };
 $("fDesc").oninput = () => { $("fDescCount").textContent = `${$("fDesc").value.length} / 375`; };
 $("edBoxFile").onchange = async () => { const u = await readFile($("edBoxFile")); if (!u) return; ed.box = u; ed.boxDisc = false; ed.clearBox = false; showImg($("edBox"), u, ""); $("edMsg").textContent = "New box art will be saved."; };
 $("edBoxDisc").onclick = () => { ed.boxDisc = true; ed.box = null; ed.clearBox = false; showImg($("edBox"), artURL("disc"), "Disc artwork unreadable"); $("edMsg").textContent = "The disc artwork will be used."; };
@@ -2081,8 +2225,9 @@ function renderUpdates(fromAbout) {
     bar.classList.add("preview");
     bar.innerHTML = `<svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3M7.5 14h9"/></svg>
       <span class="t"><b>You're testing SWIRL ${esc(u.currentLabel)}</b><small>Thank you. Please report anything that doesn't work. To go back to the released version, open About.</small></span>
-      <a class="btn small" href="https://github.com/${esc(u.repo || "TheGlengineer/SWIRL")}/issues/new/choose" target="_blank" rel="noopener">Report a problem</a>
+      <button class="btn small" id="prevReportBtn">Report a problem</button>
       <button class="btn small ghost" id="prevHideBtn">Hide</button>`;
+    $("prevReportBtn").onclick = () => show("report");
     $("prevHideBtn").onclick = () => { previewBarHidden = true; bar.hidden = true; };
     return;
   }
@@ -2125,6 +2270,132 @@ $("abBack").onclick = () => {
   startUpdate("stable");
 };
 $("abAuto").onchange = () => { uip.autoUpdate = $("abAuto").checked; saveUIP(); if (uip.autoUpdate) checkUpdates(false); };
+// ---------- report a problem ----------
+// The menu's QR report, decoded by /api/report (report.go). Photos are read in the browser with jsQR, loaded
+// the first time a picture is dropped. Nothing leaves this PC: the user copies the issue text themselves.
+let rpReport = null, rpIssue = "", rpParts = new Map();
+function rpCardSummary() {
+  if (!card) return "";
+  const menu = !card.swirlVersion ? (card.menuType ? card.menuType + ", not SWIRL" : "no menu installed") : (card.swirlRelease ? "SWIRL " + card.swirlRelease : "an early SWIRL");
+  const lines = [`${menu} on the card, ${card.games.length} game${card.games.length === 1 ? "" : "s"}`];
+  if (card.warnings && card.warnings.length) lines.push("Card Manager warnings: " + card.warnings.join("; "));
+  return lines.join("\n");
+}
+async function rpDecode(msg) {
+  const text = $("rpText").value.trim();
+  $("rpMsg").textContent = msg || "";
+  if (!text) { $("rpOut").hidden = true; return; }
+  try {
+    const r = await api("/api/report", { text, card: rpCardSummary() });
+    rpReport = r.report; rpIssue = r.issue;
+    rpRender(rpReport);
+  } catch (e) { $("rpMsg").textContent = (msg ? msg + ". " : "") + e.message; $("rpOut").hidden = true; }
+}
+function rpRender(r) {
+  $("rpOut").hidden = false;
+  $("rpSummary").innerHTML = esc(r.summary).replace(/^(SWIRL[^()]*(\([^)]*\))?)/, "<b>$1</b>");
+  $("rpNotes").innerHTML = r.notes.map(n => `<div class="rpnote">${esc(n)}</div>`).join("");
+  const rows = [];
+  if (r.reasonText) rows.push(["What happened", r.reasonText]);
+  if (r.version) rows.push(["SWIRL", r.version + (r.build ? ", build " + r.build + (r.dirty ? " with uncommitted changes" : "") : "")]);
+  if (r.regionName) rows.push(["Console", `${r.regionName}, BIOS ${r.bios}, ${r.cableName} cable, ${r.videoName}`]);
+  if (r.memoryText) rows.push(["Memory", r.memoryText]);
+  if (r.uptime) rows.push(["Time since power on", r.uptime + " s"]);
+  rows.push(["Games in the library", String(r.games)]);
+  rows.push(["Plugged in", r.devices.length ? r.devices.map(d => `${d.port}: ${d.name}${d.kind !== d.name ? " (" + d.kind + ")" : ""}`).join(", ") : "nothing the console could see"]);
+  if (r.parts) rows.push(["QR codes", `${r.found} of ${r.parts} scanned`]);
+  $("rpDetails").innerHTML = rows.map(x => `<dt>${esc(x[0])}</dt><dd>${esc(x[1])}</dd>`).join("");
+  $("rpWarnBox").hidden = !r.warnings.length;
+  $("rpWarn").innerHTML = r.warnings.map(w => `<span class="code">${esc(w.code)}</span><span>${esc(w.text)}</span><span class="n">${w.count === 1 ? "once" : w.count + " times"}</span>${w.detail ? `<small>${esc(w.detail)}</small>` : ""}`).join("");
+  $("rpCrashBox").hidden = !r.crash;
+  if (r.crash) {
+    const a = x => x.func ? `${esc(x.addr)} in <b>${esc(x.func)}</b>+${x.offset}` : esc(x.addr);
+    $("rpCrash").innerHTML = [`Program counter: ${a(r.crash.pc)}`, `Return address: ${a(r.crash.pr)}`, ...r.crash.stack.map(x => `On the stack: ${a(x)}`)].join("<br>");
+    $("rpSymNote").textContent = r.symbolsNote || (r.symbols ? "Function names from " + r.symbols : "");
+  }
+  $("rpTrace").innerHTML = r.trace.map(t => t.ms < 0 ? `<div class="gap">${esc(t.text)}</div>` : `<div class="${t.code ? "w" : ""}"><span class="ms">${(t.ms / 1000).toFixed(3)}</span>${esc(t.text)}</div>`).join("") || "<div>No trace lines were scanned.</div>";
+  $("rpCopyMsg").textContent = "";
+}
+$("rpDecode").onclick = () => rpDecode();
+$("abReport").onclick = () => { $("aboutDlg").close(); show("report"); };
+$("rpClear").onclick = () => { $("rpText").value = ""; rpParts.clear(); rpReport = null; $("rpOut").hidden = true; $("rpMsg").textContent = ""; };
+let rpTimer = 0;
+$("rpText").oninput = () => { clearTimeout(rpTimer); rpTimer = setTimeout(() => rpDecode(), 600); };
+$("rpText").onpaste = () => { clearTimeout(rpTimer); rpTimer = setTimeout(() => rpDecode(), 100); };
+$("rpCopy").onclick = async () => {
+  if (!rpIssue) return;
+  try { await navigator.clipboard.writeText(rpIssue); $("rpCopyMsg").textContent = "Copied. Paste it into a new issue on GitHub and say what you were doing."; }
+  catch (e) { $("rpCopyMsg").textContent = "Could not copy here. The text is in the box below."; const ta = document.createElement("textarea"); ta.value = rpIssue; ta.style.cssText = "width:100%;min-height:12rem"; $("rpCopyMsg").after(ta); }
+};
+// photos: every QR part found is added to the text box, then the whole is decoded
+let jsQRLoad = null;
+function loadJsQR() {
+  if (window.jsQR) return Promise.resolve();
+  if (!jsQRLoad) jsQRLoad = new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = "jsqr.js"; sc.onload = ok; sc.onerror = () => no(new Error("jsqr.js did not load")); document.head.appendChild(sc); });
+  return jsQRLoad;
+}
+async function rpReadImage(file) {
+  await loadJsQR();
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image(); img.src = url; await img.decode();
+    // a phone photo is large: try a few sizes, biggest first within reason, and both polarities
+    const sizes = [1600, 1000, 2400, 700].filter((v, i, a) => a.indexOf(v) === i);
+    for (const max of sizes) {
+      const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      const x = c.getContext("2d", { willReadFrequently: true }); x.drawImage(img, 0, 0, c.width, c.height);
+      const d = x.getImageData(0, 0, c.width, c.height);
+      const q = jsQR(d.data, d.width, d.height, { inversionAttempts: "attemptBoth" });
+      if (q && q.data) return q.data;
+      if (k === 1) break;
+    }
+    return "";
+  } finally { URL.revokeObjectURL(url); }
+}
+async function rpFiles(files) {
+  const list = [...files];
+  if (!list.length) return;
+  $("rpMsg").textContent = "Reading...";
+  let got = 0, none = [], elf = 0;
+  for (const f of list) {
+    if (/\.elf$/i.test(f.name) || (!f.type.startsWith("image/") && f.size > 65536)) {
+      try {
+        const r = await fetch("/api/report/symbols?name=" + encodeURIComponent(f.name), { method: "POST", headers: { "X-Swirl-Token": TOKEN }, body: f });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.error || r.statusText);
+        elf++;
+      } catch (e) { none.push(f.name + ": " + e.message); }
+      continue;
+    }
+    let text = "";
+    try { text = await rpReadImage(f); } catch (e) { none.push(f.name + ": " + e.message); continue; }
+    if (!text) { none.push(f.name); continue; }
+    got++;
+    const key = text.split("\n")[0].trim() || f.name;
+    rpParts.set(key, text.trim());
+  }
+  if (got) {
+    // the parts read from photos replace what was pasted, sorted by their header line
+    $("rpText").value = [...rpParts.values()].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).join("\n") + "\n";
+  }
+  const m = [];
+  if (got) m.push(`${got} code${got === 1 ? "" : "s"} read`);
+  if (elf) m.push(`${elf} symbols file kept for naming addresses`);
+  if (none.length) m.push("no QR code found in " + none.join(", ") + ". Try a sharper photo, closer, with the whole code in the frame");
+  if (got || elf) await rpDecode(m.join(". "));
+  else $("rpMsg").textContent = m.join(". ");
+}
+$("rpFiles").onchange = e => { rpFiles(e.target.files); e.target.value = ""; };
+{
+  const dz = $("rpDrop");
+  dz.ondragover = e => { e.preventDefault(); dz.classList.add("over"); };
+  dz.ondragleave = () => dz.classList.remove("over");
+  dz.ondrop = e => { e.preventDefault(); dz.classList.remove("over"); rpFiles(e.dataTransfer.files); };
+  const sec = document.querySelector('section[data-view="report"]');
+  sec.ondragover = e => { e.preventDefault(); };
+  sec.ondrop = e => { if (e.target.closest("#rpDrop") || !e.dataTransfer.files.length) return; e.preventDefault(); rpFiles(e.dataTransfer.files); };
+}
 </script>
 </body>
 </html>

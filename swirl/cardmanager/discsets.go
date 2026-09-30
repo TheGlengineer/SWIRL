@@ -152,7 +152,7 @@ func keepDiscsTogether(root string, log Logger) (int, error) {
 }
 
 func StartArrangeDiscs(root string) error {
-	return runJob("Putting discs together", "Done. Put the card back in your GDEMU.", func() error {
+	return runJob(root, "Putting discs together", "Done. Put the card back in your GDEMU.", func() error {
 		n, err := keepDiscsTogether(root, jobLog)
 		if err != nil {
 			return err
