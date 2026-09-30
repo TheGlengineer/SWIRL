@@ -42,6 +42,18 @@ jobs:
           name: swirl-menu
           path: swirl/build/gdemu/1ST_READ.BIN
 
+  # the parsers the console runs (OPENMENU.INI, the DAT reader) under the sanitizers, and the SWIRL.DAT reader
+  # against a file written by every released layout (tests/host/savefiles)
+  menu-host-checks:
+    name: SWIRL menu (host checks)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Test library
+        run: pip3 install -q pillow && python3 swirl/tools/make_test_library.py
+      - name: Host checks
+        run: tests/host/run.sh
+
   cardmanager:
     name: SWIRL Card Manager
     runs-on: ubuntu-22.04
