@@ -204,7 +204,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq desktop-file-utils libfuse2 wget file
-          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage
           ./appimagetool-x86_64.AppImage --appimage-extract >/dev/null
           # the bare binary needs its bundled libraries, so wrap it
