@@ -187,7 +187,7 @@ The short version, on Linux or WSL2 (Ubuntu 22.04):
 swirl/setup_toolchain.sh              # GCC 15.1 + KallistiOS 2.2.1 into ~/dreamcast
 swirl/build.sh                        # builds swirl/build/gdemu/1ST_READ.BIN
 
-cd swirl/cardmanager                  # Go 1.21 or newer
+cd swirl/cardmanager                  # Go 1.24 or newer
 cp ../build/gdemu/1ST_READ.BIN assets/1ST_READ.BIN
 go test ./...
 GOOS=windows GOARCH=amd64 go build -ldflags "-H windowsgui -s -w" -o SWIRL-Card-Manager.exe .

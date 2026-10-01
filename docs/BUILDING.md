@@ -5,7 +5,7 @@ SWIRL has two parts that build separately:
 | Part | Language | Toolchain | Output |
 |---|---|---|---|
 | The SWIRL menu | C | GCC 15.1 for SH4 + KallistiOS 2.2.1 | `1ST_READ.BIN` |
-| SWIRL Card Manager | Go, with an HTML/JS UI | Go 1.21 or newer | `SWIRL-Card-Manager.exe` (Windows), `SWIRL-Card-Manager` (Linux), `.app` (macOS) |
+| SWIRL Card Manager | Go, with an HTML/JS UI | Go 1.24 or newer | `SWIRL-Card-Manager.exe` (Windows), `SWIRL-Card-Manager` (Linux), `.app` (macOS) |
 
 The menu binary is embedded in Card Manager (`swirl/cardmanager/assets/1ST_READ.BIN`). A current build is
 committed, so you can work on Card Manager without the Dreamcast toolchain.
