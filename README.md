@@ -1,5 +1,5 @@
 > [!NOTE]
-> **2.15.0** was tested on my own Dreamcast: a Retro PSU, GDEMU firmware 5.20.5, a stock Sega VMU and a VMU Pro, a
+> **2.16.0** was tested on my own Dreamcast: a Retro PSU, GDEMU firmware 5.20.5, a stock Sega VMU and a VMU Pro, a
 > VGA cable to a monitor, and a 64 GB card that came from the openMenu Virtual Folder Bundle with 52 discs. Everything else was
 > proven in the emulator harness and the automated tests, not on a console. Read the
 > [known limits](CHANGELOG.md#known-limits) before you report something; if it is not there, use
@@ -13,7 +13,7 @@
   <img src="docs/images/logo/swirl-logo-light.png" alt="SWIRL" width="320">
 </picture>
 
-**A modern dashboard menu for the Sega Dreamcast and GDEMU, and a Windows app (with macOS and Linux versions in beta) that sets up your SD card for it.**
+**A modern dashboard menu for the Sega Dreamcast and GDEMU, and a Windows app (with macOS and Linux versions in beta) that sets up your SD card for it. In English, German, French, Spanish, Italian and Portuguese.**
 
 [![Latest release](https://img.shields.io/github/v/release/TheGlengineer/SWIRL?label=release&color=f28c28)](https://github.com/TheGlengineer/SWIRL/releases/latest)
 [![Build](https://img.shields.io/github/actions/workflow/status/TheGlengineer/SWIRL/ci.yml?branch=master&label=build)](https://github.com/TheGlengineer/SWIRL/actions/workflows/ci.yml)
@@ -42,6 +42,7 @@ from .zip, .7z and .rar), fixes their names, fetches art, backs the card up and 
 
 - [Highlights](#highlights)
 - [Screenshots](#screenshots)
+- [Languages](#languages)
 - [Quick start](#quick-start)
 - [Controls](#controls)
 - [How it works with your SD card](#how-it-works-with-your-sd-card)
@@ -65,6 +66,7 @@ from .zip, .7z and .rar), fixes their names, fetches art, backs the card up and 
 - Favorites, history and settings saved to your VMU, as two copies, so a card pulled mid save loses nothing; copy them to another VMU from System > VMU saves
 - A VM2 or VMU Pro switches to each game's own memory card when the game starts, and SWIRL keeps a card of its own on it
 - Diagnostics: the warnings since power on in plain words, and the whole report as QR codes for a bug report
+- Menus in English, German, French, Spanish, Italian or Portuguese, following the console's own language setting or your choice
 - Classic openMenu list, grid and GDMENU styles still one setting away
 
 **In SWIRL Card Manager (Windows, with macOS and Linux in beta)**
@@ -79,6 +81,7 @@ from .zip, .7z and .rar), fixes their names, fetches art, backs the card up and 
 - New card from scratch (formats the card for GDEMU and fills it), full card backups to your PC, and restore
 - The menu that was on the card before SWIRL is kept, so going back to openMenu or GDMENU is always one click
 - Report a problem: paste the QR codes from the Dreamcast, or drop photos, and get a ready to paste GitHub issue
+- The whole window in English, German, French, Spanish, Italian or Portuguese
 - Checks GitHub for new versions and updates itself
 
 ## Screenshots
@@ -112,6 +115,30 @@ from .zip, .7z and .rar), fixes their names, fetches art, backs the card up and 
 | ![Report a problem](docs/images/cm-report.png) | ![Card health check](docs/images/cm-health.png) |
 
 More screens are in the [Card Manager guide](docs/CARD_MANAGER.md).
+
+## Languages
+
+SWIRL and Card Manager speak English, German, French, Spanish, Italian and Portuguese.
+
+![SWIRL in German and Italian](docs/images/swirl-languages.png)
+
+**On the Dreamcast.** Out of the box SWIRL follows the language set in the console's own settings screen
+(Console setting); a Dreamcast set to Japanese, or to a language SWIRL does not have, shows English. To pick one
+yourself: open **System**, go down to **Language**, and press left or right until the language you want shows.
+It applies at once and is saved to your VMU with the rest of your settings. Game names and descriptions stay as
+they are on the card. The translations travel on the card, so a card last written by an older Card Manager
+offers them only after you run **Update SWIRL** once.
+
+**In Card Manager.** Open **About** (the last entry in the list on the left, or **F1**) and pick a language
+from **Language** at the top right. **Same as the system** follows the language of your PC or Mac. The window
+opens again in the new language. The build log, the card warnings and the Dreamcast report stay in English,
+since they go into bug reports.
+
+![Card Manager in French](docs/images/cm-language.png)
+
+The translations have been checked by machine for completeness, not yet by native speakers. If a line reads
+wrong, the strings are plain text files: `swirl/lang/<code>.json` for the menu and
+`swirl/cardmanager/web/lang/<code>.json` for the window. Corrections are welcome as a pull request or an issue.
 
 ## Quick start
 

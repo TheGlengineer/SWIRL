@@ -3,11 +3,13 @@
 SWIRL (the menu) and SWIRL Card Manager share one version number. Card Manager patch releases (2.11.1)
 may ship without menu changes; the menu then keeps its major.minor version (2.11).
 
-## [2.16.0-preview.2]
+## [2.16.0]
 
-Languages. SWIRL's menus and the Card Manager window can be shown in German, French, Spanish, Italian and Portuguese as well as English. Preview 1 (menu only) is folded in. The translations were written by Claude and checked by machine for placeholders and the font range; a native speaker's corrections are welcome in `swirl/lang` and `swirl/cardmanager/web/lang`.
+Languages. SWIRL's menus and the Card Manager window can be shown in German, French, Spanish, Italian and Portuguese as well as English. Preview 2 is folded in below.
 
-**What to test:** (1) System > Language on the Dreamcast, each choice, and that it survives a power cycle; (2) Console setting on a Dreamcast set to a European language in its own settings; (3) accented game names; (4) long values in System in German and Portuguese; (5) About > Language in Card Manager, each choice, every page; (6) Update SWIRL on a card last written by 2.15 (the Language row should offer every language once the card is updated, and say "not on this card" before).
+**Tested on:** Glen's Dreamcast (Retro PSU, GDEMU 5.20.5, VGA, stock Sega VMU and VMU Pro) and his Windows 11 PC, running preview 2 through its test list: System > Language and Console setting on the console, About > Language in Card Manager. The emulator harness: the 17 screen baseline in English, the five languages stepped through on the System row, Spanish kept on the VMU across a boot, accented and malformed UTF-8 names, and save files written by the real 2.13.3, 2.14.0, 2.14.2 and 2.14.3 builds. The Card Manager window screenshotted in all six languages in a headless browser with a sweep for English left behind. Windows is the release; macOS and Linux Card Manager are betas until each has had a run on a real machine.
+
+The translations were written by Claude and checked by machine for placeholders and the font range, not yet by native speakers: corrections are welcome in `swirl/lang` (the menu) and `swirl/cardmanager/web/lang` (the window).
 
 ### Menu
 
@@ -25,6 +27,13 @@ Languages. SWIRL's menus and the Card Manager window can be shown in German, Fre
 
 - Menu: `swirl/lang/<code>.json`, one file per language, with `en.json` as the reference. `swirl/tools/lang_table.py check` verifies a file.
 - Card Manager window: `swirl/cardmanager/web/lang/<code>.json`, English string to translation, with `keys.json` as the list of every string. `swirl/tools/cm_lang.py check` verifies a file.
+
+### Known limits
+
+- A Dreamcast set to Japanese shows English under Console setting; pick a language by hand if you want one.
+- The Classic list, Classic grid and GDMENU styles are openMenu's and stay in English.
+- Card Manager's build log, card warnings, health check lines, error messages and the decoded Dreamcast report stay in English, since they go into bug reports.
+- The translations have not had a native speaker's pass yet.
 
 ## [2.15.0]
 
