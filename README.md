@@ -62,8 +62,8 @@ from .zip, .7z and .rar), fixes their names, fetches art, backs the card up and 
 - Games start about seven seconds sooner than in 2.13, with the boot animation and SEGA screen
 - Menu music with a built in theme, navigation sounds, rumble and VMU pictures
 - Five animated screen savers, including a simple dim overlay
-- Favorites, history and settings saved to your VMU, as two copies, so a card pulled mid save loses nothing
-- A VM2 or VMU Pro switches to each game's own memory card when the game starts
+- Favorites, history and settings saved to your VMU, as two copies, so a card pulled mid save loses nothing; copy them to another VMU from System > VMU saves
+- A VM2 or VMU Pro switches to each game's own memory card when the game starts, and SWIRL keeps a card of its own on it
 - Diagnostics: the warnings since power on in plain words, and the whole report as QR codes for a bug report
 - Classic openMenu list, grid and GDMENU styles still one setting away
 

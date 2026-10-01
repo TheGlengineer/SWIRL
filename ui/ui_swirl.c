@@ -1440,7 +1440,9 @@ static int launch_is_custom(const sw_game *g) {
 static maple_device_t *vmu_devs[VMU_MAX_DEV];
 static int vmu_ndev, vmu_dev_sel;
 static vmu_dir_t *vmu_dir;
-static int vmu_nfiles, vmu_file_sel, vmu_top, vmu_free_blk, vmu_desc_next, vmu_confirm;
+static int vmu_nfiles, vmu_file_sel, vmu_top, vmu_free_blk, vmu_desc_next, vmu_confirm; /* confirm: 1 delete, 2 copy */
+static int vmu_copy_to; /* index into vmu_devs of the card a copy goes to */
+static char vmu_busy_msg[40]; /* drawn over the screen while a copy runs */
 static char (*vmu_desc)[34];
 
 static void vmu_load_device(void) {
@@ -1588,10 +1590,47 @@ static void draw_vmu_manager(void) {
     sw_text(SWF_SMALL, ix + 14, 338, 12, C_FAINT, e->filetype == 0xCC ? "VMU game" : "Save file");
 #undef BCD
   }
-  const char *foot[] = {"L / R  Memory card", "X  Delete", "B  Back"};
-  draw_footer(foot, 3, NULL);
+  const char *foot[] = {"L / R  Memory card", "Y  Copy", "X  Delete", "B  Back"};
+  draw_footer(foot, 4, NULL);
 
-  if (vmu_confirm && vmu_file_sel < vmu_nfiles) {
+  if (vmu_busy_msg[0]) {
+    sw_rect(0, 0, 640, 480, 0x9005070D);
+    sw_rrect(150, 200, 340, 80, 12, 0xF80C1222);
+    sw_text_center(SWF_HEAD, 320, 228, 18, C_WHITE, vmu_busy_msg);
+    return;
+  }
+  if (vmu_confirm == 2 && vmu_file_sel < vmu_nfiles && vmu_copy_to < vmu_ndev) {
+    char fname[13];
+    vmu_name(&vmu_dir[vmu_file_sel], fname);
+    const vmu_dir_t *e = &vmu_dir[vmu_file_sel];
+    maple_device_t *to = vmu_devs[vmu_copy_to];
+    sw_rect(0, 0, 640, 480, 0x9005070D);
+    sw_rrect(150, 150, 340, 180, 12, 0xF80C1222);
+    sw_text(SWF_HEAD, 170, 166, 18, C_WHITE, "Copy this save");
+    const char *desc = (vmu_desc && vmu_desc[vmu_file_sel][1]) ? vmu_desc[vmu_file_sel] + 1 : fname;
+    sw_text_clip(SWF_BODY, 170, 196, 15, C_DIM, desc, 300);
+    char line[64];
+    const int free_to = vmufs_free_blocks(to);
+    snprintf(line, sizeof(line), "< to %c%d >   %d blocks free", 'A' + to->port, to->unit, free_to);
+    sw_text(SWF_UI, 170, 222, 14, C_TEXT, line);
+    const char *note = NULL;
+    if (e->copyprotect == 0xFF) note = "This save is copy protected.";
+    else if (free_to < e->filesize) note = "Not enough room on that card.";
+    else {
+      char path[32];
+      snprintf(path, sizeof(path), "/vmu/%c%d/%s", 'a' + to->port, to->unit, fname);
+      file_t f = fs_open(path, O_RDONLY | O_META);
+      if (f != FILEHND_INVALID) {
+        fs_close(f);
+        note = "Replaces the save of the same name there.";
+      }
+    }
+    sw_text(SWF_SMALL, 170, 246, 12, note && note[0] == 'R' ? C_DIM : C_FAINT, note ? note : "The original stays where it is.");
+    float bx = 170;
+    if (!note || note[0] == 'R') bx += draw_button_hint(bx, 288, C_BTN_A, "A", "Copy", C_TEXT);
+    draw_button_hint(bx, 288, C_BTN_B, "B", "Cancel", C_TEXT);
+  }
+  if (vmu_confirm == 1 && vmu_file_sel < vmu_nfiles) {
     char fname[13];
     vmu_name(&vmu_dir[vmu_file_sel], fname);
     sw_rect(0, 0, 640, 480, 0x9005070D);
@@ -1606,7 +1645,70 @@ static void draw_vmu_manager(void) {
   }
 }
 
+/* copies the chosen save to vmu_devs[vmu_copy_to]: read whole, written under the same name (a VMU game stays
+   a VMU game), read back and compared. The screen says what it is doing; the copy takes a second or two per
+   100 blocks on a real VMU. */
+static void vmu_copy_now(void) {
+  const vmu_dir_t *e = &vmu_dir[vmu_file_sel];
+  maple_device_t *from = vmu_devs[vmu_dev_sel], *to = vmu_devs[vmu_copy_to];
+  char fname[13];
+  vmu_name(e, fname);
+  if (e->copyprotect == 0xFF) { show_toast("That save is copy protected"); return; }
+  if (vmufs_free_blocks(to) < e->filesize) { show_toast("Not enough room on that card"); return; }
+  snprintf(vmu_busy_msg, sizeof(vmu_busy_msg), "Copying to %c%d...", 'A' + to->port, to->unit);
+  idle_frame();
+  sw_lib_finish(); /* one user of the memory cards at a time */
+  void *buf = NULL;
+  int size = 0;
+  const char *result = NULL;
+  if (vmufs_read_dirent(from, (vmu_dir_t *)e, &buf, &size) < 0 || !buf || size <= 0) {
+    result = "Could not read that save";
+  } else {
+    const int flags = VMUFS_OVERWRITE | (e->filetype == 0xCC ? VMUFS_VMUGAME : 0);
+    if (vmufs_write(to, fname, buf, size, flags) < 0) {
+      result = "The copy could not be written";
+    } else {
+      void *back = NULL;
+      int back_size = 0;
+      vmu_dir_t ent;
+      memset(&ent, 0, sizeof(ent));
+      vmu_dir_t *dir = NULL;
+      int n = 0, found = 0;
+      if (vmufs_readdir(to, &dir, &n) == 0 && dir) {
+        for (int i = 0; i < n && !found; i++) {
+          char nm[13];
+          vmu_name(&dir[i], nm);
+          if (dir[i].filetype && !strcmp(nm, fname)) { ent = dir[i]; found = 1; }
+        }
+        free(dir);
+      }
+      if (!found || vmufs_read_dirent(to, &ent, &back, &back_size) < 0 || !back || back_size < size ||
+          memcmp(back, buf, size) != 0)
+        result = "The copy did not read back the same";
+      free(back);
+    }
+  }
+  free(buf);
+  sw_trace("VMU saves: copied %s from %c%d to %c%d: %s", fname, 'A' + from->port, from->unit, 'A' + to->port, to->unit,
+           result ? result : "OK");
+  vmu_busy_msg[0] = 0;
+  show_toast(result ? result : "Copied");
+}
+
 static void input_vmu(unsigned int btn, int pressed) {
+  if (vmu_confirm == 2) {
+    if ((btn == LEFT || btn == RIGHT || btn == TRIG_L || btn == TRIG_R) && pressed && vmu_ndev > 1) {
+      const int d = (btn == LEFT || btn == TRIG_L) ? -1 : 1;
+      do vmu_copy_to = (vmu_copy_to + d + vmu_ndev) % vmu_ndev; while (vmu_copy_to == vmu_dev_sel);
+    }
+    if (btn == A && pressed && vmu_file_sel < vmu_nfiles && vmu_copy_to != vmu_dev_sel) {
+      vmu_confirm = 0;
+      vmu_copy_now();
+      return;
+    }
+    if (btn == B && pressed) vmu_confirm = 0;
+    return;
+  }
   if (vmu_confirm) {
     if (btn == A && pressed && vmu_file_sel < vmu_nfiles) {
       char fname[13];
@@ -1626,6 +1728,11 @@ static void input_vmu(unsigned int btn, int pressed) {
   if ((btn == TRIG_L || btn == LEFT) && pressed && vmu_dev_sel > 0) { vmu_dev_sel--; vmu_load_device(); }
   if ((btn == TRIG_R || btn == RIGHT) && pressed && vmu_dev_sel < vmu_ndev - 1) { vmu_dev_sel++; vmu_load_device(); }
   if (btn == X && pressed && vmu_nfiles > 0) vmu_confirm = 1;
+  if (btn == Y && pressed && vmu_nfiles > 0) {
+    if (vmu_ndev < 2) { show_toast("Plug in a second memory card to copy to"); return; }
+    vmu_copy_to = vmu_dev_sel == 0 ? 1 : 0;
+    vmu_confirm = 2;
+  }
   if (btn == B && pressed) {
     mode = MODE_TABS;
     if (vmu_dir) { free(vmu_dir); vmu_dir = NULL; }

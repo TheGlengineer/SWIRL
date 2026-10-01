@@ -89,7 +89,17 @@ the same way; it is the game, not the menu. If a game has never worked, test the
 already has its save or else the first one with room. The banner at the bottom counts down to the
 save, shows "Saving... please wait" while it runs, then "Saved to VMU". **System > Save
 settings to VMU** shows where it saved, or why it couldn't (no space, or the card not answering). With a VM2 or
-VMU Pro, the card that is active when SWIRL starts is used. **System > Diagnostics** lists a failed save as W01.
+VMU Pro, SWIRL uses a card of its own on the device, named `SWIRL`. **System > Diagnostics** lists a failed save as W01.
+
+**I put in a different VMU and my settings and favorites are gone.** They are on the other card. SWIRL keeps
+them on the memory card, so a card that never had them starts with the defaults. Put both cards in, open
+**System > VMU saves**, pick the card with `SWIRL.DAT` and `OPENMENU.CFG`, press **Y** on each to copy it to the
+other card, then power off and on. See [Where your settings live](USING_SWIRL.md#where-your-settings-live).
+
+**VMU Pro or VM2: settings and favorites gone after an in game reset.** Fixed in 2.15: the device used to stay
+on the game's card after a reset and SWIRL wrote fresh files there. SWIRL now asks the device for its own
+`SWIRL` card at every start. Copies of `SWIRL.DAT` and `OPENMENU.CFG` left on game cards by older versions are
+harmless and can be deleted from the device.
 
 **"No space on VMU. Free N blocks in VMU saves".** SWIRL keeps two copies of its save (`SWIRL.DAT` and
 `SWIRL.BAK`) so a card pulled mid write loses nothing, and needs room for the new copy on top of the old one.

@@ -132,7 +132,7 @@ It saves straight away.
 | Screen saver style | Cover drift, Game showcase, Swirl, Bouncing logo, Dim the screen |
 | Start screen saver | After 1 to 30 minutes (5 by default) |
 | Preview screen saver | Shows the chosen style now |
-| VMU saves | Lists the saves on each memory card and can delete them |
+| VMU saves | Lists the saves on each memory card; **Y** copies a save to another card, **X** deletes it. This is how SWIRL's own settings move to a new VMU, see [Where your settings live](#where-your-settings-live) |
 | Save settings to VMU | Saves now (SWIRL also saves on its own). Shows where your settings are saved, for example "Saved on VMU A1", or why they aren't yet |
 | Controller test | Shows every button and stick |
 | Exit to Dreamcast BIOS | Leaves SWIRL |
@@ -218,7 +218,16 @@ A memory card that answers after start up (a VM2 still switching cards, a slow V
 instead of ignored until the next power on: the favorites and settings come back, and a saved Classic style
 starts. Diagnostics counts it as W07.
 
-## What is saved, and where
+## Where your settings live
+
+SWIRL keeps your favorites, play history, launch options and settings on a memory card, never on the SD card.
+Which card depends on what you have plugged in:
+
+| Memory card | Where the files are | Moving to another card |
+|---|---|---|
+| Stock Sega VMU, or a plain third party memory card (no screen, or no card switching) | On that card, as `SWIRL.DAT` (favorites, history, settings) and `OPENMENU.CFG` (menu style, beep). SWIRL reads them from the first card that has them, and saves to that same card | A card without the files starts SWIRL with default settings, and SWIRL then saves fresh files to it. To keep your settings, copy `SWIRL.DAT` and `OPENMENU.CFG` to the new card first: with both cards plugged in, **System > VMU saves**, pick the card that has them, **Y** on each file, choose the other card, **A**. Then the new card can go in on its own. The Dreamcast's own file manager can copy them too |
+| VM2, VMU Pro, USB4MAPLE, Pico2Maple (a card for every game) | On a card of SWIRL's own on the device, named `SWIRL`. SWIRL asks the device for it every time it starts, so it is the same card whatever game you reset out of. Games get their own cards as before | Nothing to do on the same device. The first time such a device meets SWIRL 2.15, the files are read from the card the device is on and carried to the `SWIRL` card by themselves. With **System > VM2 / VMU Pro game cards** off, the device stays on its default card and behaves like a stock VMU |
+| Two or more cards at once | The first card (A1, A2, B1, ...) that holds the files; a card with none is left alone until there is nowhere else to save | Copy with **System > VMU saves** as above; SWIRL then uses whichever card it finds first |
 
 Favorites, play history, launch options and SWIRL settings are saved as `SWIRL.DAT` on the first VMU with
 space. Each save is written under the other of two names (`SWIRL.DAT`, then `SWIRL.BAK`, then `SWIRL.DAT`
