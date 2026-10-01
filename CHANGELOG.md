@@ -19,6 +19,9 @@ Unreleased. Preview 1 plus the card's own order and sections, the two pull reque
 
 - Menu music takes up to nine tracks: Use my own music, then Add another track; each track has its own Remove. Back to the SWIRL theme removes them all. Tracks go onto the menu disc as `BGM.ADP`, `BGM2.ADP` and so on
 - Card health warns when a card holds more games than the menu lists
+- Card Manager answers only requests addressed to its own window (`127.0.0.1` or `localhost` on its port). A web page that pointed its own name at this computer could otherwise have read the page token and used the card operations (audit item CM-20)
+- An update download is refused when a byte could not be written, the file could not be closed, or fewer bytes arrived than the release lists, so a full disk cannot leave a cut file that still passes the checksum (CM-21)
+- New card warns, above the letter you type, when the chosen disk is bigger than any SD card GDEMU takes (over 512 GB) or its model name has nothing of a card reader in it, so a hard disk or SSD is not erased by a slip (CM-22)
 - Built with Go 1.25 on the release and CI runners (was 1.22, out of support); the module asks for Go 1.24 or newer (audit item CM-23)
 
 ### What to test on the console

@@ -15,6 +15,7 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -343,6 +344,7 @@ func serve() {
 			fail(w, err)
 			return
 		}
+		diskWarning(info)
 		writeJSON(w, info)
 	}))
 	mux.HandleFunc("/api/checksource", guard(func(w http.ResponseWriter, r *http.Request) {
@@ -950,16 +952,41 @@ func serve() {
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
 	writeRunning(port)
-	url := fmt.Sprintf("http://127.0.0.1:%d/", port)
-	fmt.Println("SWIRL Card Manager running at", url)
+	addr := fmt.Sprintf("http://127.0.0.1:%d/", port)
+	fmt.Println("SWIRL Card Manager running at", addr)
 	lastPing = time.Now()
 	if os.Getenv("SWIRL_NO_WINDOW") == "" {
-		openWindow(url)
+		openWindow(addr)
 	}
 	go idleWatch()
 	go cleanUpdates()
 	go defaultMusic() // convert the SWIRL theme once, ahead of the first install
-	http.Serve(ln, mux)
+	http.Serve(ln, hostCheck(port, mux))
+}
+
+// hostCheck answers only requests addressed to this app's own address (CM-20). A web page that resolves
+// its own name to 127.0.0.1 (DNS rebinding) reaches the port with that name in the Host header; without
+// this check it could read the page, take the token from it and use the whole API. The browser's Origin
+// header, when present, must be this address too.
+func hostCheck(port int, next http.Handler) http.Handler {
+	ok := map[string]bool{
+		fmt.Sprintf("127.0.0.1:%d", port): true,
+		fmt.Sprintf("localhost:%d", port): true,
+		fmt.Sprintf("[::1]:%d", port):     true,
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !ok[strings.ToLower(r.Host)] {
+			http.Error(w, "SWIRL Card Manager answers only its own window", http.StatusForbidden)
+			return
+		}
+		if o := r.Header.Get("Origin"); o != "" && o != "null" {
+			if u, err := url.Parse(o); err != nil || !ok[strings.ToLower(u.Host)] {
+				http.Error(w, "SWIRL Card Manager answers only its own window", http.StatusForbidden)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func main() {

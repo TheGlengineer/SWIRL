@@ -289,7 +289,13 @@ func download(ver, url string, size int64, sum string) (string, error) {
 	for {
 		n, rerr := resp.Body.Read(buf)
 		if n > 0 {
-			f.Write(buf[:n])
+			// the checksum covers the bytes received, so a short write (a full disk) must fail here, or a
+			// cut file would pass the check and be launched (CM-21)
+			if _, werr := f.Write(buf[:n]); werr != nil {
+				f.Close()
+				os.Remove(tmp)
+				return "", fmt.Errorf("the download could not be saved (%v); is the disk full?", werr)
+			}
 			h.Write(buf[:n])
 			done += int64(n)
 			if total > 0 {
@@ -305,7 +311,18 @@ func download(ver, url string, size int64, sum string) (string, error) {
 			return "", errors.New("the download stopped part way; try again")
 		}
 	}
-	f.Close()
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return "", fmt.Errorf("the download could not be saved (%v); is the disk full?", err)
+	}
+	if size > 0 && done != size {
+		os.Remove(tmp)
+		return "", fmt.Errorf("the download is %d bytes, the release says %d; try again", done, size)
+	}
+	if st, err := os.Stat(tmp); err != nil || st.Size() != done {
+		os.Remove(tmp)
+		return "", errors.New("the downloaded file is not the size that was received, so it was not used")
+	}
 	if got := hex.EncodeToString(h.Sum(nil)); got != sum {
 		os.Remove(tmp)
 		return "", errors.New("the downloaded file does not match the published checksum, so it was not used")

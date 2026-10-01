@@ -28,6 +28,37 @@ type DiskInfo struct {
 	Confirm   string   `json:"confirm"`        // what the person types to confirm erasing it
 	OK        bool     `json:"ok"`
 	Reason    string   `json:"reason,omitempty"`
+	Warning   string   `json:"warning,omitempty"` // formatting is allowed, but this does not look like a card
+}
+
+// diskWarning fills Warning for a disk that passed the checks but does not look like an SD card in a
+// reader: bigger than any card GDEMU takes, or a model name with nothing of a card reader in it
+// (CM-22). The person still decides; the warning sits above the letter they type.
+func diskWarning(info *DiskInfo) {
+	if info == nil || !info.OK {
+		return
+	}
+	if info.SizeBytes > 512<<30 {
+		info.Warning = fmt.Sprintf("This is a %.0f GB disk. SD cards for GDEMU are 512 GB at most, so this may be a hard disk or SSD; make sure it is the card before you type the letter.", float64(info.SizeBytes)/1e9)
+		return
+	}
+	if !looksLikeCardReader(info.Model) {
+		info.Warning = fmt.Sprintf("The model name, %s, does not read like a card reader or SD card. Make sure it is the card before you type the letter.", info.Model)
+	}
+}
+
+func looksLikeCardReader(model string) bool {
+	m := strings.ToUpper(model)
+	if strings.TrimSpace(m) == "" || m == "UNKNOWN CARD" {
+		return true // nothing to judge by
+	}
+	// what card readers call themselves; brand names are left out because the same brands make SSDs
+	for _, w := range []string{"SD", "CARD", "READER", "MMC", "FLASH", "GENERIC", "STORAGE DEVICE", "USB", "MASS STORAGE", "REALTEK", "ALCOR", "GENESYS", "MULTI", "SLOT"} {
+		if strings.Contains(m, w) {
+			return true
+		}
+	}
+	return false
 }
 
 type NewCardRequest struct {

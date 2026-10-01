@@ -69,6 +69,15 @@ func TestUpdateCheck(t *testing.T) {
 		if _, err := downloadUpdate(u); err == nil || !strings.Contains(err.Error(), "checksum") {
 			t.Fatal("bad checksum accepted:", err)
 		}
+		// a file shorter than the release says is refused before the checksum is looked at (CM-21)
+		u.sha256 = hex.EncodeToString(func() []byte { h := sha256.Sum256(exe); return h[:] }())
+		u.Size = int64(len(exe)) + 10
+		if _, err := downloadUpdate(u); err == nil || !strings.Contains(err.Error(), "bytes") {
+			t.Fatal("short download accepted:", err)
+		}
+		if _, err := os.Stat(p + ".part"); err == nil {
+			t.Fatal("the part file was left behind")
+		}
 	}
 	// same version: not newer
 	srv := fakeGitHub(t, "v"+version, exe, true)

@@ -1970,7 +1970,7 @@ async function ncPick(path) {
     const gb = (d.sizeBytes / 1e9).toFixed(1);
     $("ncDisk").innerHTML = `<div class="diskcard" style="margin-top:.5rem"><b>${esc(d.model)}</b>, ${gb} GB${d.bus ? ", " + esc(d.bus) : ""}<br>
       <span class="hint">${IS_MAC ? "On this card" : IS_LINUX ? "Mount points on this card" : "Drive letters on this card"}: ${esc((d.letters || [d.root]).join(" "))}</span></div>
-      ${d.ok ? "" : `<div class="warn">${esc(d.reason)}</div>`}`;
+      ${d.ok ? "" : `<div class="warn">${esc(d.reason)}</div>`}${d.ok && d.warning ? `<div class="warn" style="margin-top:.5rem">${esc(d.warning)}</div>` : ""}`;
     if (d.ok) nc.disk = d;
   } catch (e) { $("ncDisk").innerHTML = `<div class="warn">${esc(e.message)}</div>`; }
   ncUpdate();
