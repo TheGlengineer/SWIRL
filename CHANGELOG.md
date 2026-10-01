@@ -3,6 +3,29 @@
 SWIRL (the menu) and SWIRL Card Manager share one version number. Card Manager patch releases (2.11.1)
 may ship without menu changes; the menu then keeps its major.minor version (2.11).
 
+## [2.15.0-preview.2]
+
+Unreleased. Preview 1 plus the card's own order and sections, the two pull requests, and a higher game limit.
+
+### Menu
+
+- **Card order.** A fifth sort in the Library (press X): the games in the order they sit on the card, by GDMENU slot number, for people who arranged their card by hand
+- **Dividers become sections.** A GDMENU card divider (a slot named like `*****USA*****` or `--- Arcade ---`, the same marks on both sides) is no longer listed as a game. Each one becomes a section in Collections, named after the divider's label and holding the games that follow it on the card up to the next divider, in card order. A bare line of marks makes a section called Section. Dividers stay in the card's slot numbering, so the games keep their GDEMU slots
+- The library holds up to 4096 games (was 1024); the list file already allowed 9999 slots. Measured on the emulator with 1100 games: 10.5 MB of main RAM free, the same as at 1000
+- The Classic styles' padded info lines are written by one bounded helper (sergiosaint's pull request #10), so a long value is cut instead of written past the line
+
+### Card Manager
+
+- Card health warns when a card holds more games than the menu lists
+- Built with Go 1.25 on the release and CI runners (was 1.22, out of support); the module asks for Go 1.24 or newer (audit item CM-23)
+
+### What to test on the console
+
+Everything in preview 1, plus:
+
+7. Library, press X until the toast says Card order: the games in slot order (the Slot number on each detail panel climbs)
+8. On a card with GDMENU dividers (a folder whose name.txt is `*****USA*****` or similar): the divider is not in All Games, and Collections has a section with its label that holds the games after it
+
 ## [2.15.0-preview.1]
 
 The first 2.15 preview: the header logo by region, the About panel says which build is on the card, and the checks behind the save file that 2.14.3 introduced. Small on purpose, so a hardware run can cover all of it.

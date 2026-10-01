@@ -36,7 +36,7 @@
 #define SW_HAVE_ICON 0
 #endif
 
-#define MAX_GAMES 1024
+#define MAX_GAMES 4096
 #define MAX_STATS SW_SAVE_MAX_STATS
 /* Two names take turns (see "VMU persistence" below). A save goes to the name that is not holding the newest
    copy; the older copy is removed only once the new one has been read back. */
@@ -618,13 +618,34 @@ static int same_set(const gd_item *a, const gd_item *b) {
   return !strcmp(a->product, b->product) || !strcasecmp(a->name, b->name);
 }
 
+/* the sections a GDMENU card's dividers make: each holds the games whose slots follow it, up to the next */
+#define MAX_SECTIONS 24
+static struct {
+  char name[32];
+  unsigned first, last; /* slot numbers the section covers (last is the slot before the next divider) */
+} sections[MAX_SECTIONS];
+static int num_sections;
+
 int sw_lib_init(void) {
   num_games = 0;
+  num_sections = 0;
   int slots = list_slot_count();
   for (int i = 1; i <= slots && num_games < MAX_GAMES; i++) {
     const gd_item *it = list_slot_get(i);
     if (!it || !it->slot_num || !it->name[0])
       continue;
+    char label[32];
+    if (sw_lib_divider_label(it->name, label, sizeof(label)) >= 0) {
+      if (num_sections < MAX_SECTIONS) {
+        if (num_sections) sections[num_sections - 1].last = it->slot_num - 1;
+        snprintf(sections[num_sections].name, sizeof(sections[num_sections].name), "%s",
+                 label[0] ? label : "Section");
+        sections[num_sections].first = it->slot_num + 1;
+        sections[num_sections].last = 0xFFFFFFFFu;
+        num_sections++;
+      }
+      continue; /* a divider is not a game */
+    }
     int disc_num = it->disc[0] - '0';
     int disc_set = it->disc[2] - '0';
     if (disc_set < 1 || disc_set > 9) disc_set = 1;
@@ -787,6 +808,9 @@ static int cmp_games(const void *pa, const void *pb) {
       int c = strcmp(a->item->date, b->item->date);
       if (c) return c;
     } break;
+    case SW_SORT_CARD: /* the order the card was written in (GDMENU slot numbers) */
+      if (a->item->slot_num != b->item->slot_num) return a->item->slot_num < b->item->slot_num ? -1 : 1;
+      break;
     default:
       break;
   }
@@ -817,7 +841,7 @@ int sw_lib_view_recent(int *out, int max) {
 
 enum {
   COL_ALL = 0, COL_FAV, COL_RECENT, COL_MOST, COL_PARTY, COL_ONLINE, COL_LIGHTGUN, COL_VGA, COL_IMPORTS, COL_OTHER,
-  COL_GENRE = 100, COL_CUSTOM = 200
+  COL_GENRE = 100, COL_CUSTOM = 200, COL_SECTION = 300 /* the card's dividers, see sw_lib_divider_label */
 };
 
 static const char *genre_names[16] = {"Action", "Racing", "Simulation", "Sports", "Light Gun Games", "Fighting",
@@ -860,6 +884,10 @@ static int matches(int id, const sw_game *g) {
       }
       if (id >= COL_GENRE && id < COL_GENRE + 16)
         return g->meta && (g->meta->genre & (1 << (id - COL_GENRE)));
+      if (id >= COL_SECTION && id < COL_SECTION + num_sections) {
+        const unsigned slot = g->item->slot_num;
+        return slot >= sections[id - COL_SECTION].first && slot <= sections[id - COL_SECTION].last;
+      }
       return 0;
   }
 }
@@ -894,6 +922,15 @@ int sw_lib_collections(sw_collection *out, int max) {
         snprintf(out[n].name, sizeof(out[n].name), "%s", custom[k].name);
         n++;
       }
+      /* then the card's own sections, in card order, so a divided card reads the way its owner laid it out */
+      for (int k = 0; k < num_sections && n < max; k++) {
+        int c = count_of(COL_SECTION + k);
+        if (!c) continue;
+        out[n].id = COL_SECTION + k;
+        out[n].count = c;
+        snprintf(out[n].name, sizeof(out[n].name), "%s", sections[k].name);
+        n++;
+      }
     }
   }
   for (int b = 0; b < 16 && n < max; b++) {
@@ -925,6 +962,7 @@ int sw_lib_view_collection(int id, int *out, int sort) {
       out[n++] = i;
   if (id == COL_RECENT) sort = SW_SORT_RECENT;
   if (id == COL_MOST) sort = SW_SORT_PLAYS;
+  if (id >= COL_SECTION && id < COL_SECTION + num_sections && sort == SW_SORT_NAME) sort = SW_SORT_CARD;
   return finish(out, n, sort);
 }
 

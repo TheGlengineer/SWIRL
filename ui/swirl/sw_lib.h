@@ -26,7 +26,12 @@ typedef struct sw_stat {
   uint32_t last; /* unix seconds from the Dreamcast clock */
 } sw_stat;
 
-enum sw_sort { SW_SORT_NAME = 0, SW_SORT_RECENT, SW_SORT_PLAYS, SW_SORT_YEAR, SW_SORT_COUNT };
+enum sw_sort { SW_SORT_NAME = 0, SW_SORT_RECENT, SW_SORT_PLAYS, SW_SORT_YEAR, SW_SORT_CARD, SW_SORT_COUNT };
+/* A GDMENU card divider: a slot whose name is a run of the same mark on both sides, "*****USA*****" or
+   "--- Arcade ---". Dividers are not games: they are hidden from every list and become sections (collections
+   named after the label, holding the games that follow them on the card) and headings of the Card order sort.
+   Returns the label's length and copies it into label (empty for a bare line of marks), or -1 if not one. */
+int sw_lib_divider_label(const char *name, char *label, int cap);
 
 typedef struct sw_collection {
   char name[32];

@@ -30,3 +30,8 @@ gcc -std=gnu11 -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -I"
 # the padded string helper of the Classic styles
 gcc -std=gnu11 -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -I"$ROOT" -o "$OUT/pad_check" "$HERE/pad_check.c"
 "$OUT/pad_check"
+
+# the GDMENU divider test behind the card's sections and the Card order sort
+gcc -std=gnu11 -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -I"$ROOT" \
+  -o "$OUT/divider_check" "$HERE/divider_check.c" "$ROOT/ui/swirl/sw_divider.c"
+"$OUT/divider_check"

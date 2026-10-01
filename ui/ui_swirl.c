@@ -70,7 +70,7 @@ static const char *tab_names[TAB_COUNT] = {"Home", "Library", "Collections", "Sy
 
 enum mode { MODE_TABS = 0, MODE_DETAIL, MODE_LAUNCH, MODE_PADTEST, MODE_OPTIONS, MODE_VMU, MODE_RESUME, MODE_DIAG };
 
-#define MAX_LIST 1024
+#define MAX_LIST 4096 /* same as MAX_GAMES in sw_lib.c */
 #define MAX_COLS 40
 
 /* ---------- state ---------- */
@@ -798,7 +798,7 @@ static void draw_home(float slide) {
 }
 
 /* ---------- LIBRARY ---------- */
-static const char *sort_names[SW_SORT_COUNT] = {"Name", "Recently played", "Most played", "Release year"};
+static const char *sort_names[SW_SORT_COUNT] = {"Name", "Recently played", "Most played", "Release year", "Card order"};
 
 static void draw_game_strip(const sw_game *g, float x, float y, float w) {
   sw_rrect(x, y, w, 58, 8, C_PANEL);

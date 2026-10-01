@@ -11,6 +11,9 @@ import (
 	"time"
 )
 
+// menuMaxGames is MAX_GAMES in ui/swirl/sw_lib.c: the most games the menu keeps in its library.
+const menuMaxGames = 4096
+
 type HealthItem struct {
 	Level   string `json:"level"` // ok, warn, error
 	Folder  string `json:"folder,omitempty"`
@@ -190,6 +193,9 @@ func CheckCard(root string) (*HealthReport, error) {
 	}
 	if len(c.Dups) > 0 {
 		add("warn", "", "%d games are on the card more than once (see Remove extra copies)", len(c.Dups))
+	}
+	if len(c.Games) > menuMaxGames {
+		add("warn", "", "The card holds %d games; the menu lists the first %d", len(c.Games), menuMaxGames)
 	}
 	for _, p := range discDBProblems(root, c) {
 		add("warn", "", "%s", p)
