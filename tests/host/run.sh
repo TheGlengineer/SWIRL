@@ -26,3 +26,7 @@ done < <(python3 "$HERE/mkcases.py" "$BASE/OPENMENU.INI" "$BASE/META.DAT" "$OUT/
 gcc -std=gnu11 -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -I"$ROOT" \
   -o "$OUT/save_check" "$HERE/save_check.c" "$ROOT/ui/swirl/sw_save.c"
 "$OUT/save_check" "$HERE"/savefiles/*.bin
+
+# the padded string helper of the Classic styles
+gcc -std=gnu11 -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -I"$ROOT" -o "$OUT/pad_check" "$HERE/pad_check.c"
+"$OUT/pad_check"
