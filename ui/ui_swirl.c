@@ -195,6 +195,16 @@ static int have_logo;
    a band of Card Manager's HDRLOGO.PVR sheet (row 0 the orange USA and Japan logo, row 32 the blue European one),
    chosen by the console's own region (F1) */
 static int logo_x, logo_y;
+static int logo_sheet; /* 1 when the logo comes from HDRLOGO.PVR, which holds both colours */
+
+/* the band of the logo sheet to show: the setting, or the console's region when it says By region */
+static int logo_band(void) {
+  if (!logo_sheet) return logo_y; /* the theme picture has the orange logo only */
+  const int choice = sw_lib_prefs()->logo;
+  if (choice == SW_LOGO_ORANGE) return 0;
+  if (choice == SW_LOGO_BLUE) return 32;
+  return logo_y;
+}
 
 /* ---------- helpers ---------- */
 static uint32_t mix(uint32_t a, uint32_t b, float t) {
@@ -650,8 +660,9 @@ static void draw_header(void) {
   /* logo plate: the Sega Dreamcast logo is taken from the NTSC-U theme background on the SD card */
   if (have_logo) {
     sw_rrect(32, 20, 122, 26, 5, 0xFFFFFFFF);
-    const float u0 = (float)logo_x / img_logo_src.width, v0 = (float)logo_y / img_logo_src.height;
-    const float u1 = (float)(logo_x + 114) / img_logo_src.width, v1 = (float)(logo_y + 20) / img_logo_src.height;
+    const int band = logo_band();
+    const float u0 = (float)logo_x / img_logo_src.width, v0 = (float)band / img_logo_src.height;
+    const float u1 = (float)(logo_x + 114) / img_logo_src.width, v1 = (float)(band + 20) / img_logo_src.height;
     sw_image_uv(&img_logo_src, 36, 23, 114, 20, u0, v0, u1, v1, C_WHITE, C_WHITE, C_WHITE, C_WHITE);
   } else {
     sw_text(SWF_HEAD, 32, 20, 20, C_WHITE, "SWIRL");
@@ -937,7 +948,7 @@ static void draw_collections(float slide) {
 
 /* ---------- SYSTEM ---------- */
 enum {
-  SYS_STYLE = 0, SYS_ACCENT, SYS_BACKDROP, SYS_QUALITY, SYS_MUSIC, SYS_MUSIC_VOL, SYS_SFX, SYS_SFX_VOL, SYS_RESUME, SYS_CLOCK,
+  SYS_STYLE = 0, SYS_ACCENT, SYS_BACKDROP, SYS_LOGO, SYS_QUALITY, SYS_MUSIC, SYS_MUSIC_VOL, SYS_SFX, SYS_SFX_VOL, SYS_RESUME, SYS_CLOCK,
   SYS_RUMBLE, SYS_BEEP, SYS_GAMEID, SYS_ATTRACT, SYS_SAVER_STYLE, SYS_SAVER_TIME, SYS_SAVER_TEST, SYS_VMU, SYS_SAVE, SYS_PADTEST,
   SYS_BIOS, SYS_DIAG, SYS_COUNT
 };
@@ -963,6 +974,13 @@ static const char *sys_value(int i, char *buf, int len) {
         return buf;
       }
       return backdrop_names[p->backdrop % BACKDROP_COUNT];
+    case SYS_LOGO:
+      if (!logo_sheet) return have_logo ? "Orange (Update SWIRL for blue)" : "No logo on card";
+      switch (p->logo) {
+        case SW_LOGO_ORANGE: return "Orange (USA, Japan)";
+        case SW_LOGO_BLUE: return "Blue (Europe)";
+        default: return logo_y ? "By region: blue" : "By region: orange";
+      }
     case SYS_QUALITY: return p->quality ? "Standard" : "High";
     case SYS_MUSIC: return !sw_audio_has_music() ? "No music on card" : (p->music ? "On" : "Off");
     case SYS_MUSIC_VOL: snprintf(buf, len, "%d / 10", p->music_vol); return buf;
@@ -986,7 +1004,7 @@ static const char *sys_value(int i, char *buf, int len) {
   }
 }
 
-static const char *sys_names[SYS_COUNT] = {"Menu style", "Accent colour", "Backdrop", "Picture quality", "Menu music", "Music volume",
+static const char *sys_names[SYS_COUNT] = {"Menu style", "Accent colour", "Backdrop", "Header logo", "Picture quality", "Menu music", "Music volume",
                                            "Navigation sounds", "Sound volume", "Start on", "Clock",
                                            "Rumble on launch", "VMU beep on save", "VM2 / VMU Pro game cards", "Screen saver", "Screen saver style",
                                            "Start screen saver", "Preview screen saver", "VMU saves",
@@ -1919,6 +1937,10 @@ static void input_tabs(unsigned int btn, int pressed) {
             p->accent = (p->accent + d + NUM_ACCENTS) % NUM_ACCENTS;
             break;
           case SYS_BACKDROP: p->backdrop = (p->backdrop + d + BACKDROP_COUNT) % BACKDROP_COUNT; break;
+          case SYS_LOGO:
+            if (!logo_sheet) { show_toast(have_logo ? "Update SWIRL from Card Manager 2.15 to choose" : "No logo on this card"); changed_pref = 0; break; }
+            p->logo = (uint8_t)((p->logo + d + SW_LOGO_COUNT) % SW_LOGO_COUNT);
+            break;
           case SYS_QUALITY:
             p->quality = !p->quality;
             show_toast("Applies the next time SWIRL starts");
@@ -2052,6 +2074,7 @@ FUNCTION(UI_NAME, init) {
   /* the Sega Dreamcast logo for the header, from openMenu's USA theme picture (Card Manager adds it to
      menu discs that lack it). Checked by opening the file, because EMPTY.PVR may be missing too. */
   have_logo = 0;
+  logo_sheet = 0;
   /* Card Manager's 32 KB logo sheet first (2.15 cards): a European console takes the blue band, any other the
      orange one. Without it, the 512 KB theme picture the logo was always cut from. */
   file_t lf = fs_open("/cd/HDRLOGO.PVR", O_RDONLY);
@@ -2064,7 +2087,8 @@ FUNCTION(UI_NAME, init) {
       texman_reserve_memory(img_logo_src.width, img_logo_src.height, 2);
       logo_x = 0;
       logo_y = flashrom_get_region() == FLASHROM_REGION_EUROPE ? 32 : 0;
-      sw_trace("header logo: HDRLOGO.PVR, %s", logo_y ? "blue (Europe)" : "orange");
+      logo_sheet = 1;
+      sw_trace("header logo: HDRLOGO.PVR, %s by region (System > Header logo can change it)", logo_y ? "blue (Europe)" : "orange");
     }
   }
   if (!have_logo && (lf = fs_open("/cd/THEME/NTSC_U/BG_U_L.PVR", O_RDONLY)) != FILEHND_INVALID) {

@@ -40,8 +40,12 @@ static int check(const char *path) {
     for (int w = 0; w < 2; w++)
       if (st[i].key == want[w] && st[i].fav) found++;
   }
-  printf("%s: layout %d, %d stats, %d favourites, seq %lu, music %d sfx %d quality %d saver %d min\n", path, layout, n,
-         favs, (unsigned long)seq, p.music, p.sfx, p.quality, p.saver_min);
+  printf("%s: layout %d, %d stats, %d favourites, seq %lu, music %d sfx %d quality %d saver %d min logo %d\n", path,
+         layout, n, favs, (unsigned long)seq, p.music, p.sfx, p.quality, p.saver_min, p.logo);
+  if (layout < SW_SAVE_LAYOUT_CURRENT && (p.logo != 0 || p.reserved[0] || p.reserved[1] || p.reserved[2])) {
+    printf("  an older layout must read with the version 4 bytes at zero\n");
+    return 1;
+  }
   if (found != 2 || favs != 2) {
     printf("  expected the two favourites of the test library\n");
     return 1;
@@ -56,6 +60,28 @@ static int check(const char *path) {
   if (sw_save_parse(out, olen, &p2, st2, &n2, &layout2, &seq2) != 0 || n2 != n || layout2 != SW_SAVE_LAYOUT_CURRENT ||
       seq2 != seq + 1 || memcmp(&p2, &p, sizeof(p)) != 0 || memcmp(st2, st, n * sizeof(sw_stat)) != 0) {
     printf("  written again, it does not read back the same\n");
+    return 1;
+  }
+  if (olen != sw_save_size(n)) {
+    printf("  sw_save_size disagrees with sw_save_build\n");
+    return 1;
+  }
+  /* what an older SWIRL sees in the file written today: the same stats at the same place, the tail after
+     them, and nothing it reads moved (2.14.3 and 2.13 both stop at the tail) */
+  if (memcmp(out + 8 + 16, st, n * sizeof(sw_stat)) != 0 || memcmp(out + 8 + 16 + n * sizeof(sw_stat), "SEQ1", 4) != 0 ||
+      memcmp(out + 8 + 16 + n * sizeof(sw_stat) + 8, "PRF4", 4) != 0) {
+    printf("  the stats or the tail moved: an older SWIRL would lose the favourites\n");
+    return 1;
+  }
+  /* the file cut at the tail (what an older version would write back) still reads, with the new settings at
+     their defaults */
+  sw_prefs p3;
+  sw_stat st3[SW_SAVE_MAX_STATS];
+  int n3 = 0, layout3 = 0;
+  uint32_t seq3 = 0;
+  if (sw_save_parse(out, 8 + 16 + n * (int)sizeof(sw_stat) + 8, &p3, st3, &n3, &layout3, &seq3) != 0 || n3 != n ||
+      layout3 != SW_SAVE_LAYOUT_V3 || seq3 != seq + 1 || memcmp(st3, st, n * sizeof(sw_stat)) != 0 || p3.logo != 0) {
+    printf("  the file without its PRF4 block does not read as a version 3 file\n");
     return 1;
   }
   return 0;

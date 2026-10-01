@@ -115,6 +115,7 @@ It saves straight away.
 | Menu style | SWIRL, Classic list, Classic grid, GDMENU. Press **A** to switch (it saves at once); a style picked but not switched to is dropped when you leave the row. The Classic styles use openMenu's theme files, which **Update SWIRL** adds; without them the setting says "needs Update SWIRL". Hold **Y** while the Dreamcast starts, until SWIRL appears, to go back to SWIRL |
 | Accent colour | Orange, Blue, Green, Pink, Purple, Red, Gold, Teal |
 | Backdrop | Cover colour, Night, Seasonal |
+| Header logo | By region (blue on a European Dreamcast, orange elsewhere), Orange (USA, Japan), Blue (Europe). Needs a card updated by Card Manager 2.15 or newer; older cards have the orange logo only |
 | Picture quality | High, Standard |
 | Menu music, Music volume | On or off, 0 to 10 |
 | Navigation sounds, Sound volume | On or off, 0 to 10 |

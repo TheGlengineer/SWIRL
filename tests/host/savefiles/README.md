@@ -11,3 +11,4 @@ definition, that is how a bug that was not there got "found" (BACKLOG L27).
 | swirl_dat_2.13.3.bin | v2.13.3 (build from the tag, 2026-09-30) | SWL2 version 2, no tail |
 | swirl_dat_2.14.0.bin | v2.14.0 | SWL2 version 2, SEQ1 tail |
 | swirl_dat_2.14.2.bin | v2.14.2 | SWL2 version 3, SEQ1 tail |
+| swirl_dat_2.14.3.bin | v2.14.3 (the 1ST_READ.BIN embedded at the tag, the file users have) | SWL2 version 3, SEQ1 tail; the last 16 byte prefs layout |

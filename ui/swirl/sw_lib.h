@@ -82,7 +82,11 @@ typedef struct sw_prefs {
   uint8_t saver_min;   /* minutes without input before it starts, 1..30 */
   uint8_t gameid_off; /* 1: no Game ID for a VM2 / VMU Pro at launch (0, on, in older saves) */
   uint8_t swirl_style_set; /* 1 once SWIRL has switched OPENMENU.CFG's style to SWIRL (done once per card) */
+  /* added in SWIRL.DAT version 4 (2.15): the prefs block grew from 16 to 20 bytes, see sw_save.h */
+  uint8_t logo;        /* header logo: 0 by the console's region, 1 orange (USA, Japan), 2 blue (Europe) */
+  uint8_t reserved[3]; /* zero; room for the next settings without another layout */
 } sw_prefs;
+enum { SW_LOGO_REGION = 0, SW_LOGO_ORANGE, SW_LOGO_BLUE, SW_LOGO_COUNT };
 sw_prefs *sw_lib_prefs(void);
 void sw_lib_note_style_set(void); /* SWIRL took the style over: remember it (saved, without touching the other settings) */
 int sw_lib_early_quality(void); /* before the screen is set up: 1 for high */

@@ -276,7 +276,7 @@ static void load_stats(void) {
 
 /* builds the VMU file for the current stats; caller frees *out */
 static int build_save(uint8_t **out, int *out_size, uint32_t seq) {
-  static uint8_t raw[8 + sizeof(sw_prefs) + sizeof(sw_stat) * MAX_STATS + 8];
+  static uint8_t raw[8 + 16 + sizeof(sw_stat) * MAX_STATS + 8 + 8]; /* sw_save_size(MAX_STATS) */
   memset(raw, 0, sizeof(raw));
   const int data_len = sw_save_build(raw, &prefs, stats, num_stats, seq);
 

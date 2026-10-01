@@ -24,13 +24,17 @@ Preview 1 plus the card's own order and sections, the two pull requests, and a h
 - New card warns, above the letter you type, when the chosen disk is bigger than any SD card GDEMU takes (over 512 GB) or its model name has nothing of a card reader in it, so a hard disk or SSD is not erased by a slip (CM-22)
 - Built with Go 1.25 on the release and CI runners (was 1.22, out of support); the module asks for Go 1.24 or newer (audit item CM-23)
 
+- **Header logo can be chosen.** System > Header logo: By region (the preview 1 behaviour), Orange (USA, Japan) or Blue (Europe). On a card not yet updated by Card Manager 2.15 the row says so and the orange logo stays
+- The save file gains a small block after the play history for the new setting (layout version 4). The history stays exactly where every earlier SWIRL reads it, so going back to 2.14.3 or 2.13 keeps favourites and history; only the logo choice is unknown to them. Checked against files written by the real 2.13.3, 2.14.0, 2.14.2 and 2.14.3 builds, and the real 2.14.3 reading a 2.15 file in the emulator
+
 ### What to test on the console
 
 Everything in preview 1, plus:
 
 7. Library, press X until the toast says Card order: the games in slot order (the Slot number on each detail panel climbs)
 8. Look and sound: add two or three music files, Update SWIRL, boot: the tracks follow each other without a gap, and the order is the list's order
-9. On a card with GDMENU dividers (a folder whose name.txt is `*****USA*****` or similar): the divider is not in All Games, and Collections has a section with its label that holds the games after it
+9. System > Header logo: Orange, Blue and By region each change the logo at once; power off and on, the choice is kept
+10. On a card with GDMENU dividers (a folder whose name.txt is `*****USA*****` or similar): the divider is not in All Games, and Collections has a section with its label that holds the games after it
 
 ## [2.15.0-preview.1]
 
