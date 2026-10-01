@@ -87,6 +87,8 @@ uint32_t sw_now(void) {
 enum { LOAD_NONE = 0, LOAD_OK, LOAD_NO_FILE, LOAD_DAMAGED, LOAD_NO_ANSWER };
 static int load_state;     /* how the last attempt to read SWIRL.DAT went */
 static int prefs_touched;  /* settings changed in this session (they win over a file merged in later) */
+static sw_prefs prefs_base; /* the settings as last read from the file (or the defaults): what the session
+                               has changed is whatever differs from this, field by field */
 static int settings_dirty; /* openMenu's settings file (OPENMENU.CFG) also needs writing */
 static char saved_on[4];   /* "A1" once a save worked */
 static int last_rv;        /* result of the last save */
@@ -111,6 +113,9 @@ static maple_device_t *memcard(int i) {
 
 /* blocks a copy takes on the card, 0 when the name is not there */
 static int copy_blocks(maple_device_t *dev, int which) {
+#ifdef SW_TEST_SILENT_VMU_MS
+  if (timer_ms_gettime64() < SW_TEST_SILENT_VMU_MS) return 0; /* test only: the card is there but does not answer yet */
+#endif
   char path[32];
   snprintf(path, sizeof(path), "/vmu/%c%d/%s", 'a' + dev->port, dev->unit, save_names[which]);
   file_t f = fs_open(path, O_RDONLY | O_META);
@@ -121,16 +126,65 @@ static int copy_blocks(maple_device_t *dev, int which) {
   return size > 0 ? (size + 511) / 512 : 1;
 }
 
+/* Which copies a card holds (bit 0 SWIRL.DAT, bit 1 SWIRL.BAK), from one read of its directory. Returns 0
+   when the card did not answer that read: a VMU still waking after an in game reset looks, to fs_open, like
+   a card with no file, and SWIRL once wrote a fresh file over the real one that way. The directory read is
+   the one source of truth, so "no file" is only ever said about a card that listed its files. */
+static int card_files(maple_device_t *dev, int *mask) {
+  *mask = 0;
+#ifdef SW_TEST_SILENT_VMU_MS
+  if (timer_ms_gettime64() < SW_TEST_SILENT_VMU_MS) return 0;
+#endif
+  vmu_dir_t *dir = NULL;
+  int count = 0;
+  if (vmufs_readdir(dev, &dir, &count) < 0)
+    return 0;
+  for (int i = 0; i < count; i++) {
+    if (dir[i].filetype == 0)
+      continue;
+    char name[13];
+    memcpy(name, dir[i].filename, 12);
+    name[12] = 0;
+    for (int k = 11; k >= 0 && (name[k] == ' ' || name[k] == 0); k--) name[k] = 0;
+    for (int w = 0; w < 2; w++)
+      if (!strcmp(name, save_names[w]))
+        *mask |= 1 << w;
+  }
+  free(dir);
+  return 1;
+}
+
 /* The card that holds a copy (has_file: bit 0 SWIRL.DAT, bit 1 SWIRL.BAK), else the first card with
-   need_blocks free. */
-static maple_device_t *find_vmu(int need_blocks, int *has_file) {
+   need_blocks free. The quick look (fs_open on each name) is what every start up pays for. With verify,
+   and only then, a card that showed no copy has its directory listed (about a second per card), which
+   tells a card with no file from a card that did not answer, and finds the file on a card whose first read
+   failed; silent counts the cards that did not answer. Every write asks for that, so a fresh file is never
+   written over one that was there but not seen. */
+static maple_device_t *find_vmu(int need_blocks, int *has_file, int verify, int *silent) {
   maple_device_t *dev, *first_free = NULL;
   *has_file = 0;
+  if (silent) *silent = 0;
   for (int i = 0; (dev = memcard(i)); i++) {
     int mask = 0;
     for (int w = 0; w < 2; w++)
       if (copy_blocks(dev, w))
         mask |= 1 << w;
+    if (mask) {
+      *has_file = mask;
+      return dev;
+    }
+    if (!verify && !first_free && vmufs_free_blocks(dev) >= need_blocks)
+      first_free = dev;
+  }
+  if (!verify)
+    return first_free;
+  for (int i = 0; (dev = memcard(i)); i++) {
+    int mask = 0;
+    if (!card_files(dev, &mask)) {
+      if (silent) (*silent)++;
+      printf("SWIRL: memory card %c%d did not answer a directory read\n", 'A' + dev->port, dev->unit);
+      continue;
+    }
     if (mask) {
       *has_file = mask;
       return dev;
@@ -143,6 +197,9 @@ static maple_device_t *find_vmu(int need_blocks, int *has_file) {
 
 /* reads one copy from dev into a fresh buffer; 0 on success */
 static int read_file(maple_device_t *dev, int which, uint8_t **out, int *out_size) {
+#ifdef SW_TEST_SILENT_VMU_MS
+  if (timer_ms_gettime64() < SW_TEST_SILENT_VMU_MS) return -1;
+#endif
   char path[32];
   snprintf(path, sizeof(path), "/vmu/%c%d/%s", 'a' + dev->port, dev->unit, save_names[which]);
   file_t f = fs_open(path, O_RDONLY | O_META);
@@ -180,11 +237,18 @@ static int parse_save(const uint8_t *buf, int size, sw_prefs *p, sw_stat *st, in
 /* Reads the newest valid copy of SWIRL.DAT and takes it in. At start up (merge 0) it simply replaces the
    defaults. Later (merge 1) it is combined with what changed since: play counts add up, a favourite on either
    side stays a favourite, and settings changed in this session are kept. Sets load_state; returns it. */
-static int take_in_file(int merge) {
-  int has_file = 0;
-  maple_device_t *dev = find_vmu(0, &has_file);
+static int take_in_file(int merge, int verify) {
+  static int base_set;
+  if (!base_set) { /* the defaults, until a file is read */
+    prefs_base = prefs;
+    base_set = 1;
+  }
+  int has_file = 0, silent_cards = 0;
+  maple_device_t *dev = find_vmu(0, &has_file, verify, &silent_cards);
   if (!dev || !has_file) {
-    load_state = LOAD_NO_FILE; /* no memory card at all, or none with a copy */
+    /* no card with a copy: with verify, "no file" only when every card listed its files, else "no answer"
+       (nothing is written over a file that was not seen, and the read is tried again) */
+    load_state = silent_cards ? LOAD_NO_ANSWER : LOAD_NO_FILE;
     return load_state;
   }
   static sw_stat fstats[MAX_STATS];
@@ -236,8 +300,13 @@ static int take_in_file(int merge) {
     num_stats = fn;
     memcpy(stats, fstats, fn * sizeof(sw_stat));
   } else {
-    if (!prefs_touched)
-      prefs = fprefs;
+    /* the file's settings, except the ones this session changed (each compared with what the session
+       started from), so a card that answered late never costs a setting it held */
+    uint8_t *cur = (uint8_t *)&prefs;
+    const uint8_t *base = (const uint8_t *)&prefs_base, *file = (const uint8_t *)&fprefs;
+    for (unsigned i = 0; i < sizeof(sw_prefs); i++)
+      if (cur[i] == base[i]) cur[i] = file[i];
+    (void)prefs_touched;
     for (int i = 0; i < fn; i++) {
       sw_stat *m = NULL;
       for (int j = 0; j < num_stats; j++)
@@ -258,6 +327,7 @@ static int take_in_file(int merge) {
     printf("SWIRL: merged %s from %c%d (%d entries)\n", save_names[best], 'A' + dev->port, dev->unit, fn);
   }
   if (upgraded) dirty = 1;
+  prefs_base = prefs;
   loaded = 1;
   load_state = LOAD_OK;
   return load_state;
@@ -265,7 +335,7 @@ static int take_in_file(int merge) {
 
 static void load_stats(void) {
   static const char *const names[] = {"none", "ok", "no file", "damaged", "no answer"};
-  const int st = take_in_file(0);
+  const int st = take_in_file(0, 0);
   if (st == LOAD_OK)
     sw_trace("SWIRL.DAT: ok (%s, write %lu)", save_names[cur_copy], (unsigned long)cur_seq);
   else if (st == LOAD_DAMAGED)
@@ -298,12 +368,15 @@ static int build_save(uint8_t **out, int *out_size, uint32_t seq) {
 }
 
 /* runs on the worker: write the new copy to the free name, read it back, then remove the old copy.
-   0, -2 no card with room, -4 the write failed, -6 read back differs, -8 no room on the card that holds the
-   copies (blocks_short says how many blocks are missing) */
+   0, -2 no card with room, -4 the write failed, -6 read back differs, -7 a card did not answer and no card
+   showed the copies, -8 no room on the card that holds the copies (blocks_short says how many blocks are
+   missing) */
 static int write_save(uint8_t *out, int out_size, uint32_t seq, char *where) {
   const int need = (out_size + 511) / 512;
-  int has_file = 0;
-  maple_device_t *dev = find_vmu(need, &has_file);
+  int has_file = 0, silent_cards = 0;
+  maple_device_t *dev = find_vmu(need, &has_file, 1, &silent_cards);
+  if (!has_file && silent_cards)
+    return -7; /* a card did not answer: the copies may be on it, so nothing is written anywhere else yet */
   if (!dev)
     return -2;
   const int target = cur_copy < 0 ? 0 : 1 - cur_copy;
@@ -337,6 +410,7 @@ static int write_save(uint8_t *out, int out_size, uint32_t seq, char *where) {
   free(back);
   cur_copy = target;
   cur_seq = seq;
+  loaded = 1; /* the file on the card is now this session's data */
   dev_name(dev, where);
   if (has_file & (1 << other)) {
     /* the new copy is safe on the card: the old one goes. If this fails both stay, and the write count picks
@@ -381,13 +455,17 @@ static int start_save(void) {
   if (async_busy)
     return -1;
   if (!loaded) {
-    /* SWIRL started without its file: take it in before writing over it */
-    int st = take_in_file(1);
+    /* SWIRL started without its file: take it in before writing over it, listing each card's directory
+       so a card that did not answer is told from a card with no file */
+    int st = take_in_file(1, 1);
     if (st == LOAD_NO_ANSWER)
       return -7;
-    if (st == LOAD_DAMAGED)
+    if (st == LOAD_DAMAGED) {
       printf("SWIRL: replacing a damaged SWIRL.DAT\n");
-    loaded = 1; /* from now on this session's data is the whole story */
+      loaded = 1; /* on purpose: this session's data replaces it */
+    }
+    /* with no file found (no card, or a card without one), the card is looked at again before every write
+       until one succeeds: a card that turns up later with the file is merged, never written over */
   }
   save_job *job = calloc(1, sizeof(*job));
   if (!job)
@@ -432,6 +510,8 @@ int sw_lib_save_result(int *rv) {
     dirty = 1;
     if (async_rv == -2 || async_rv == -8)
       sw_warn(SW_WARN_VMU_FULL, "save: %s", async_rv == -2 ? "no VMU with room" : "no room on the VMU that holds SWIRL.DAT");
+    else if (async_rv == -7)
+      sw_trace("save: a memory card did not answer its directory read; nothing written, trying again");
     else
       sw_warn(SW_WARN_SAVE_FAILED, "save: result %d", async_rv);
   } else {
@@ -513,20 +593,28 @@ const char *sw_lib_save_status(char *buf, int len) {
    before a first write. 1 when a file was taken in (the menu rebuilds its views and applies the settings). */
 int sw_lib_late_card(void) {
   static int cards_seen = -1;
+  static uint64_t last_try;
   int n = 0;
   while (memcard(n)) n++;
   if (cards_seen < 0) {
     cards_seen = n;
+    last_try = timer_ms_gettime64();
     return 0;
   }
-  if (n <= cards_seen)
-    return 0;
-  cards_seen = n;
   if (loaded)
     return 0;
-  const int st = take_in_file(1);
+  /* a card that attached since, or a card known not to have answered (a VMU still waking after an in game
+     reset): read again, every two seconds while the menu is settling. A card that merely showed no file at
+     start up is not read again here; the first write lists its directory before touching it (start_save) */
+  const int attached = n > cards_seen;
+  const int retry = load_state == LOAD_NO_ANSWER && timer_ms_gettime64() - last_try >= 2000;
+  if (!attached && !retry)
+    return 0;
+  cards_seen = n;
+  last_try = timer_ms_gettime64();
+  const int st = take_in_file(1, retry);
   if (st != LOAD_OK) {
-    sw_trace("SWIRL.DAT: memory card attached late, %s", st == LOAD_NO_FILE ? "no file on it" : st == LOAD_DAMAGED ? "damaged" : "no answer");
+    sw_trace("SWIRL.DAT: %s, %s", attached ? "memory card attached late" : "read again", st == LOAD_NO_FILE ? "no file on it" : st == LOAD_DAMAGED ? "damaged" : "no answer");
     return 0;
   }
   sw_warn(SW_WARN_LATE_CARD, "SWIRL.DAT read from %s after start up (write %lu)", save_names[cur_copy], (unsigned long)cur_seq);
