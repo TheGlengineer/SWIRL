@@ -207,6 +207,74 @@ static int gameid_send(const gd_item *disc) {
 /* System > Game ID for VM2 / VMU Pro (on unless turned off; kept in SWIRL.DAT) */
 extern int sw_gameid_enabled(void);
 
+/* ---------- the menu's own card on a VM2 / VMU Pro ----------
+ * A device that keeps a card per game stays on the last game's card after an in game reset, so SWIRL would
+ * come back to a card that has never held its file, find nothing, and write a fresh one there (seen on a VMU
+ * Pro, 2026-10-01). As the Virtual Folder Bundle does at start up, SWIRL asks the device for the menu's own
+ * card, ID "openmenu" with no name, so every boot lands on the same card. The device drops off the bus while
+ * it switches; this waits for it to come back (up to 3 s) and then a second more, as the Bundle does. Each
+ * card is asked once per session; a standard VMU is never sent anything. Nothing happens when Game ID is off
+ * in System: the device then never leaves its default card. */
+#define MENU_CARD_ID "openmenu"
+#define MENU_CARD_BACK_MS 3000
+static uint8_t menu_card_asked[MAPLE_PORT_COUNT][MAPLE_UNIT_COUNT];
+
+static int send_menu_id(maple_device_t *dev, uint64_t until) {
+  static uint32_t msg[4];
+  memset(msg, 0, sizeof(msg));
+  msg[0] = MAPLE_FUNC_MEMCARD;
+  strncpy((char *)&msg[1], MENU_CARD_ID, 12);
+  for (int i = 0; i < AGAIN_TRIES && timer_ms_gettime64() < until; i++) {
+    if (exchange(dev, MAPLE_COMMAND_GAMEID, msg, 4) != 0) return -1;
+    int r = ((maple_response_t *)reply)->response;
+    if (r == MAPLE_RESPONSE_OK) return 0;
+    if (r != MAPLE_RESPONSE_AGAIN) return -1;
+    thd_sleep(20);
+  }
+  return -1;
+}
+
+/* asks every VM2 / VMU Pro not yet asked this session for the menu's card; the number that switched */
+int sw_menu_card_setup(void) {
+  if (!sw_gameid_enabled()) return 0;
+#ifdef SW_TEST_FAKE_MENU_CARD
+  { /* test only: pretend the first card is a VM2 that switched (sw_lib.c then hides it, see memcard) */
+    static int done;
+    if (!done && maple_enum_type(0, MAPLE_FUNC_MEMCARD)) {
+      done = 1;
+      sw_trace("menu card: test fake switch");
+      return 1;
+    }
+    return 0;
+  }
+#endif
+  int switched = 0;
+  for (int i = 0; i < 8; i++) {
+    maple_device_t *dev = maple_enum_type(i, MAPLE_FUNC_MEMCARD);
+    if (!dev) break;
+    if (!dev->valid || dev->port >= MAPLE_PORT_COUNT || dev->unit >= MAPLE_UNIT_COUNT) continue;
+    if (menu_card_asked[dev->port][dev->unit]) continue;
+    menu_card_asked[dev->port][dev->unit] = 1;
+    const char *kind = replacement_name(dev);
+    if (!kind) continue; /* a standard VMU: nothing is sent */
+    const int port = dev->port, unit = dev->unit;
+    const uint64_t start = timer_ms_gettime64();
+    const int rv = send_menu_id(dev, start + TOTAL_MS);
+    sw_trace("menu card: %s on %c%d asked for the menu's card: %s", kind, 'A' + port, unit, rv ? "no answer" : "OK");
+    if (rv) continue;
+    thd_sleep(200);
+    const uint64_t until = timer_ms_gettime64() + MENU_CARD_BACK_MS;
+    while (!maple_enum_dev(port, unit) && timer_ms_gettime64() < until) thd_sleep(10);
+    if (maple_enum_dev(port, unit))
+      sw_trace("menu card: %c%d back on the bus after %u ms", 'A' + port, unit, (unsigned)(timer_ms_gettime64() - start));
+    else
+      sw_trace("menu card: %c%d not back after %d ms", 'A' + port, unit, MENU_CARD_BACK_MS);
+    switched++;
+  }
+  if (switched) thd_sleep(1000); /* a card switch can disconnect the device once more */
+  return switched;
+}
+
 /* after the disc is chosen: a VM2 or VMU Pro switches to this game's own card. SWIRL has finished saving by now. */
 static void send_game_id(const gd_item *disc) {
   if (sw_gameid_enabled())

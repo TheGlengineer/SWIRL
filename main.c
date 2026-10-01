@@ -402,7 +402,9 @@ static void trace_devices(void) {
    first seconds after the menu is up, and its files are read as if they had been there at start up. */
 #define SWIRL_LATE_CARD_MS 8000
 static void late_card_check(void) {
-  int changed = sw_lib_late_card(); /* SWIRL.DAT first: its flag decides whether the CFG's style stands */
+  int changed = sw_lib_menu_card(); /* a VM2 / VMU Pro that just appeared (after an in game reset) goes to the menu's card */
+  if (sw_lib_late_card()) /* SWIRL.DAT first: its flag decides whether the CFG's style stands */
+    changed = 1;
   if (settings_late_card())
     changed = 1;
   if (!changed)
@@ -433,6 +435,7 @@ int main(int argc, char *argv[]) {
   sw_trace_init();
   sw_trace("SWIRL " SWIRL_VERSION_STR " starting");
   trace_devices();
+  sw_lib_menu_card(); /* a VM2 / VMU Pro goes to the menu's own card before SWIRL.DAT is read */
   init_gfx_pvr();
 
   if (init())

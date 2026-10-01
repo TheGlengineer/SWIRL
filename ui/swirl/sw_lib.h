@@ -94,6 +94,7 @@ enum { SW_LOGO_REGION = 0, SW_LOGO_ORANGE, SW_LOGO_BLUE, SW_LOGO_COUNT };
 sw_prefs *sw_lib_prefs(void);
 void sw_lib_note_style_set(void); /* SWIRL took the style over: remember it (saved, without touching the other settings) */
 int sw_lib_early_quality(void); /* before the screen is set up: 1 for high */
+int sw_lib_menu_card(void);     /* a VM2 / VMU Pro is switched to the menu's own card; 1 when a file came with it */
 int sw_lib_late_card(void);     /* a card that attached after start up: 1 when its SWIRL.DAT was taken in */
 
 /* per game launch settings, kept in sw_stat.flags */

@@ -86,6 +86,7 @@ uint32_t sw_now(void) {
 
 enum { LOAD_NONE = 0, LOAD_OK, LOAD_NO_FILE, LOAD_DAMAGED, LOAD_NO_ANSWER };
 static int load_state;     /* how the last attempt to read SWIRL.DAT went */
+static int keep_damaged;   /* the copy on the card read as damaged: it is left in place, never removed */
 static int prefs_touched;  /* settings changed in this session (they win over a file merged in later) */
 static sw_prefs prefs_base; /* the settings as last read from the file (or the defaults): what the session
                                has changed is whatever differs from this, field by field */
@@ -104,9 +105,15 @@ static void dev_name(maple_device_t *dev, char *out) {
 }
 
 /* the i-th memory card on the ports */
+#ifdef SW_TEST_FAKE_MENU_CARD
+static int fake_switched; /* test only: after the fake switch the first card is hidden, as if it were another card */
+#endif
 static maple_device_t *memcard(int i) {
 #ifdef SW_TEST_LATE_VMU
   if (timer_ms_gettime64() < 12000) return NULL; /* test only: the cards attach 12 s after power on */
+#endif
+#ifdef SW_TEST_FAKE_MENU_CARD
+  if (fake_switched) i++;
 #endif
   return maple_enum_type(i, MAPLE_FUNC_MEMCARD);
 }
@@ -213,6 +220,10 @@ static int read_file(maple_device_t *dev, int which, uint8_t **out, int *out_siz
     free(buf);
     return -1;
   }
+#ifdef SW_TEST_GARBLE_VMU_MS
+  if (timer_ms_gettime64() < SW_TEST_GARBLE_VMU_MS && size > 0) /* test only: wrong bytes, different each read */
+    buf[(timer_ms_gettime64() / 7) % (size < 64 ? size : 64)] ^= 0xA5;
+#endif
   *out = buf;
   *out_size = size;
   return 0;
@@ -270,12 +281,25 @@ static int take_in_file(int merge, int verify) {
     int cn = 0, cup = 0;
     uint32_t cseq = 0;
     int rc = parse_save(buf, size, &cprefs, cstats, &cn, &cup, &cseq);
-    free(buf);
     if (rc != 0) {
+      /* a copy that does not parse is read once more: a card still waking (after an in game reset) can hand
+         back wrong bytes, and two readings that differ mean it is not answering reliably, not that the
+         file is damaged. Only the same bytes twice count as damage. */
+      uint8_t *again = NULL;
+      int again_size = 0;
+      int same = read_file(dev, w, &again, &again_size) == 0 && again_size == size && !memcmp(again, buf, size);
+      free(again);
+      free(buf);
+      if (!same) {
+        printf("SWIRL: %s on %c%d read differently twice: not answering\n", save_names[w], 'A' + dev->port, dev->unit);
+        silent++;
+        continue;
+      }
       printf("SWIRL: %s on %c%d is damaged\n", save_names[w], 'A' + dev->port, dev->unit);
       damaged++;
       continue;
     }
+    free(buf);
     /* the newest copy wins; SWIRL.DAT on a tie (two copies from before the write count) */
     if (best < 0 || cseq > best_seq) {
       best = w;
@@ -339,7 +363,7 @@ static void load_stats(void) {
   if (st == LOAD_OK)
     sw_trace("SWIRL.DAT: ok (%s, write %lu)", save_names[cur_copy], (unsigned long)cur_seq);
   else if (st == LOAD_DAMAGED)
-    sw_warn(SW_WARN_DAT_DAMAGED, "SWIRL.DAT: damaged, replaced at the next save");
+    sw_warn(SW_WARN_DAT_DAMAGED, "SWIRL.DAT: damaged (read the same way twice); replaced if it reads so again at the save");
   else
     sw_trace("SWIRL.DAT: %s", st >= 0 && st <= 4 ? names[st] : "?");
 }
@@ -379,7 +403,11 @@ static int write_save(uint8_t *out, int out_size, uint32_t seq, char *where) {
     return -7; /* a card did not answer: the copies may be on it, so nothing is written anywhere else yet */
   if (!dev)
     return -2;
-  const int target = cur_copy < 0 ? 0 : 1 - cur_copy;
+  int target = cur_copy < 0 ? 0 : 1 - cur_copy;
+  if (keep_damaged) { /* the damaged copy stays: write to the name that is free, if one is */
+    if (!(has_file & 1)) target = 0;
+    else if (!(has_file & 2)) target = 1;
+  }
   const int other = 1 - target;
   if (has_file) {
     /* the old copy stays until the new one is checked, so the new one needs room of its own. A stale file under
@@ -412,7 +440,7 @@ static int write_save(uint8_t *out, int out_size, uint32_t seq, char *where) {
   cur_seq = seq;
   loaded = 1; /* the file on the card is now this session's data */
   dev_name(dev, where);
-  if (has_file & (1 << other)) {
+  if ((has_file & (1 << other)) && !keep_damaged) {
     /* the new copy is safe on the card: the old one goes. If this fails both stay, and the write count picks
        the newer one next time. */
     int drv = vmufs_delete(dev, save_names[other]);
@@ -461,7 +489,16 @@ static int start_save(void) {
     if (st == LOAD_NO_ANSWER)
       return -7;
     if (st == LOAD_DAMAGED) {
-      printf("SWIRL: replacing a damaged SWIRL.DAT\n");
+      /* only a file found damaged on two reads at least five seconds apart is replaced; a card that is
+         still waking can look damaged once. The damaged copy is kept on the card either way (write_save
+         does not remove it), so a later SWIRL that reads it whole takes the newer of the two. */
+      static uint64_t first_damaged;
+      const uint64_t now = timer_ms_gettime64();
+      if (!first_damaged) first_damaged = now;
+      if (now - first_damaged < 5000)
+        return -7;
+      printf("SWIRL: replacing a damaged SWIRL.DAT (found damaged twice)\n");
+      keep_damaged = 1;
       loaded = 1; /* on purpose: this session's data replaces it */
     }
     /* with no file found (no card, or a card without one), the card is looked at again before every write
@@ -612,7 +649,7 @@ int sw_lib_late_card(void) {
     return 0;
   cards_seen = n;
   last_try = timer_ms_gettime64();
-  const int st = take_in_file(1, retry);
+  const int st = take_in_file(1, 1); /* the directory listed: a fresh card is exactly the doubtful case */
   if (st != LOAD_OK) {
     sw_trace("SWIRL.DAT: %s, %s", attached ? "memory card attached late" : "read again", st == LOAD_NO_FILE ? "no file on it" : st == LOAD_DAMAGED ? "damaged" : "no answer");
     return 0;
@@ -621,8 +658,56 @@ int sw_lib_late_card(void) {
   return 1;
 }
 
+/* The menu's own card on a VM2 / VMU Pro (sw_menu_card_setup in gdemu_control.c). Whatever SWIRL.DAT the
+   device's current card holds is read first and carried over: on the first boot after this change the menu's
+   card is empty and the file from the default card becomes its first save, so nothing is lost. When the
+   menu's card already has a file, that file is the one. 1 when a file was taken in or carried. */
+extern int sw_menu_card_setup(void);
+static int boot_read; /* sw_lib_menu_card already read the card this boot: sw_lib_early_quality does not read again */
+int sw_lib_menu_card(void) {
+  if (!loaded) {
+    take_in_file(0, 0); /* the card the device is on now: the default card on a cold boot */
+    boot_read = 1;
+  }
+  if (!sw_menu_card_setup())
+    return 0;
+#ifdef SW_TEST_FAKE_MENU_CARD
+  fake_switched = 1;
+#endif
+  const sw_prefs carried = prefs;
+  static sw_stat carried_stats[MAX_STATS];
+  const int carried_n = num_stats, had = loaded;
+  memcpy(carried_stats, stats, num_stats * sizeof(sw_stat));
+  loaded = 0;
+  cur_copy = -1;
+  cur_seq = 0;
+  const int st = take_in_file(0, 1);
+  if (st == LOAD_OK) {
+    sw_trace("menu card: SWIRL.DAT on it (write %lu)", (unsigned long)cur_seq);
+    return 1;
+  }
+  if (!had) {
+    sw_trace("menu card: no SWIRL.DAT on it and none to carry (%s)", st == LOAD_NO_FILE ? "no file" : st == LOAD_DAMAGED ? "damaged" : "no answer");
+    return 0;
+  }
+  prefs = carried;
+  prefs_base = carried;
+  num_stats = carried_n;
+  memcpy(stats, carried_stats, carried_n * sizeof(sw_stat));
+  dirty = 1; /* the first save puts it on the menu's card */
+  sw_trace("menu card: %s; carrying the file from the card the device was on (%d entries)", st == LOAD_NO_FILE ? "no SWIRL.DAT on it" : "it did not answer", carried_n);
+  return 1;
+}
+
 int sw_lib_early_quality(void) {
-  load_stats();
+  if (boot_read) {
+    boot_read = 0; /* read moments ago by sw_lib_menu_card; sw_lib_init reads again if that found nothing */
+    if (load_state == LOAD_OK)
+      sw_trace("SWIRL.DAT: ok (%s, write %lu)", save_names[cur_copy], (unsigned long)cur_seq);
+    else
+      sw_trace("SWIRL.DAT: %s", load_state == LOAD_NO_FILE ? "no file" : load_state == LOAD_DAMAGED ? "damaged" : "no answer");
+  } else
+    load_stats();
   return prefs.quality == 0;
 }
 
