@@ -3,70 +3,46 @@
 SWIRL (the menu) and SWIRL Card Manager share one version number. Card Manager patch releases (2.11.1)
 may ship without menu changes; the menu then keeps its major.minor version (2.11).
 
-## [2.15.0-preview.2]
+## [2.15.0]
 
-Preview 1 plus the card's own order and sections, the two pull requests, and a higher game limit.
+The release I promised on Reddit: the European logo, card order with dividers, several music tracks, bigger libraries, and the launch defaults people asked for. On the way it found and fixed the way a VMU Pro or VM2 lost favourites and settings after an in game reset. Previews 1 and 2 are folded in below.
 
-### Menu
-
-- **Card order.** A fifth sort in the Library (press X): the games in the order they sit on the card, by GDMENU slot number, for people who arranged their card by hand
-- **Dividers become sections.** A GDMENU card divider (a slot named like `*****USA*****` or `--- Arcade ---`, the same marks on both sides) is no longer listed as a game. Each one becomes a section in Collections, named after the divider's label and holding the games that follow it on the card up to the next divider, in card order. A bare line of marks makes a section called Section. Dividers stay in the card's slot numbering, so the games keep their GDEMU slots
-- The library holds up to 4096 games (was 1024); the list file already allowed 9999 slots. Measured on the emulator with 1100 games: 10.5 MB of main RAM free, the same as at 1000
-- **Several music tracks.** Card Manager's Look and sound page takes more than one music file; the menu plays the tracks in order and loops, starting a session on a track picked from the clock so short sessions do not always open the same way. One track plays as it did before
-- The Classic styles' padded info lines are written by one bounded helper (sergiosaint's pull request #10), so a long value is cut instead of written past the line
-
-### Card Manager
-
-- Menu music takes up to nine tracks: Use my own music, then Add another track; each track has its own Remove. Back to the SWIRL theme removes them all. Tracks go onto the menu disc as `BGM.ADP`, `BGM2.ADP` and so on
-- Card health warns when a card holds more games than the menu lists
-- Card Manager answers only requests addressed to its own window (`127.0.0.1` or `localhost` on its port). A web page that pointed its own name at this computer could otherwise have read the page token and used the card operations (audit item CM-20)
-- An update download is refused when a byte could not be written, the file could not be closed, or fewer bytes arrived than the release lists, so a full disk cannot leave a cut file that still passes the checksum (CM-21)
-- New card warns, above the letter you type, when the chosen disk is bigger than any SD card GDEMU takes (over 512 GB) or its model name has nothing of a card reader in it, so a hard disk or SSD is not erased by a slip (CM-22)
-- Built with Go 1.25 on the release and CI runners (was 1.22, out of support); the module asks for Go 1.24 or newer (audit item CM-23)
-
-- **VMU saves can copy a save to another memory card** (press Y). The way to take SWIRL's own settings, `SWIRL.DAT` and `OPENMENU.CFG`, to a new VMU: a card that never had them starts SWIRL with the defaults. Copy protected saves are refused; a VMU game stays a VMU game; the copy is read back and compared before it is called done
-- **Header logo can be chosen.** System > Header logo: By region (the preview 1 behaviour), Orange (USA, Japan) or Blue (Europe). On a card not yet updated by Card Manager 2.15 the row says so and the orange logo stays
-- **Start games with and Video for every game.** Two new System rows set what a game starts with (animation and SEGA screen, animation only, SEGA screen only, straight to the game) and whether VGA is forced, for every game that has no launch options of its own. A game's own options still win, and Reset to defaults on a game now means "follow the System choice". Asked for by several people who skip the logos on every game
-- **VM2 and VMU Pro: SWIRL keeps its own card, so an in game reset no longer loses favourites and settings.** These devices switch to a game's own card when the game starts (Game ID) and stayed on it after an in game reset, so SWIRL came back to a card that had never held its files, found nothing, and wrote fresh ones there. Every game you reset out of collected a copy; the real settings sat on the default card. SWIRL now asks the device for a card of its own, named `SWIRL` (openMenu and the Virtual Folder Bundle do the same with one named `openmenu`), at start and when the device appears after a reset, waits for it to switch, and reads its files there. The first boot carries the files from the card the device was on across. Found by Glen on his VMU Pro; the stray copies on game cards are harmless. Game ID off in System keeps everything on the default card as before
-- **Settings no longer lost when the memory card is slow to answer.** After an in game reset a VMU can fail its first directory read, and SWIRL took that for "no file on this card": the first save then wrote a fresh file over the real one, and favourites, history and settings were gone. Now a card that does not list its files counts as not answering (nothing is written anywhere, the save says "VMU busy, retrying", and the card is read again), every write lists the card's directory first, and a file read in late is merged setting by setting with what was changed in the meantime. Found from Glen's console after an in game reset from Crazy Taxi; reproduced in the emulator with a card that stays silent for 20 s, and with a card that attaches after the start up window
-- The save file gains a small block after the play history for the new setting (layout version 4). The history stays exactly where every earlier SWIRL reads it, so going back to 2.14.3 or 2.13 keeps favourites and history; only the logo choice is unknown to them. Checked against files written by the real 2.13.3, 2.14.0, 2.14.2 and 2.14.3 builds, and the real 2.14.3 reading a 2.15 file in the emulator
-
-### What to test on the console
-
-Everything in preview 1, plus:
-
-7. Library, press X until the toast says Card order: the games in slot order (the Slot number on each detail panel climbs)
-8. Look and sound: add two or three music files, Update SWIRL, boot: the tracks follow each other without a gap, and the order is the list's order
-9. System > Header logo: Orange, Blue and By region each change the logo at once; power off and on, the choice is kept
-10. VMU Pro: set favourites, Header logo and Start games with, launch AeroWings, in game reset: SWIRL comes back with them, the VMU Pro shows the `SWIRL` card, and the boot log (hold X at power on) has "menu card: VMU Pro on A1 asked for the menu's card: OK". Then the same from a cold power on. With a stock VMU: boot time unchanged, no "menu card" lines
-11. System > Start games with: Straight to the game, then launch a game with no options of its own: it starts without the animation or the SEGA screen. Open a game's Launch options: Start with reads Straight to the game; set it to Animation and SEGA and launch: both show for that game only
-12. System > VMU saves with two cards in: Y on SWIRL.DAT, copy to the other card; the other card then lists it with the same size. Power off, boot with only the second card: your settings and favourites are there
-13. On a card with GDMENU dividers (a folder whose name.txt is `*****USA*****` or similar): the divider is not in All Games, and Collections has a section with its label that holds the games after it
-
-## [2.15.0-preview.1]
-
-The first 2.15 preview: the header logo by region, the About panel says which build is on the card, and the checks behind the save file that 2.14.3 introduced. Small on purpose, so a hardware run can cover all of it.
+**Tested on:** Glen's Dreamcast (Retro PSU, GDEMU 5.20.5, VGA) with a stock Sega VMU and a VMU Pro: launches, in game reset from Crazy Taxi and AeroWings with the VMU Pro on its `SWIRL` card each time, the header logo choices, Start games with, Card order, music tracks, VMU save copy. The emulator harness: the 17 screen baseline, 1100 games, dividers, three music tracks, a silent card, a card that attaches late, a card that hands back wrong bytes, a damaged file, and save files written by the real 2.13.3, 2.14.0, 2.14.2 and 2.14.3 builds. Windows is the release; macOS and Linux Card Manager are betas until each has had a run on a real machine.
 
 ### Menu
 
-- **The header logo follows the console's region.** A European Dreamcast shows the blue Sega Dreamcast logo, an American or Japanese one the orange logo, both cut from openMenu's own theme picture by Card Manager (the blue one is the same picture with the swirl's hue changed). The menu reads them from a 32 KB file instead of the 512 KB theme picture, so the console starts about a second sooner. A card written by an older Card Manager keeps showing the orange logo as before
-- **About SWIRL** shows the full version and the build id, the same line the Diagnostics screen shows, so a photo of the panel says exactly what is on the card
-- The memory check at each stage now also traces the three memory pools (main RAM below the loader ceiling, video RAM, sound RAM). Measured on the emulator at 25, 46, 250 and 1000 games in both picture quality modes: main RAM stays above 10.5 MB free whatever the card, video RAM is the tight one (about 1.5 MB free on High, 2.2 MB on Standard)
+- **The header logo follows the console's region, or your choice.** A European Dreamcast shows the blue Sega Dreamcast logo, an American or Japanese one the orange logo, both cut from openMenu's own theme picture by Card Manager. System > Header logo: By region, Orange (USA, Japan) or Blue (Europe). The menu reads the logo from a 32 KB file instead of the 512 KB theme picture, so the console starts about a second sooner. A card written by an older Card Manager keeps the orange logo, and the row says so
+- **Card order.** A fifth sort in the Library (press X): the games in the order they sit on the card, by GDMENU slot number
+- **Dividers become sections.** A GDMENU card divider (a slot named like `*****USA*****` or `--- Arcade ---`, the same marks on both sides) is no longer listed as a game. Each becomes a section in Collections, named after the divider's label, holding the games that follow it on the card up to the next divider, in card order. A bare line of marks makes a section called Section. Games keep their GDEMU slots
+- The library holds up to 4096 games (was 1024). Measured on the emulator with 1100 games: 10.5 MB of main RAM free, the same as at 1000
+- **Several music tracks.** The menu plays the tracks Card Manager put on the card in order, without a gap, and starts a session on a track picked from the clock. One track plays as before
+- **Start games with and Video for every game.** Two System rows set what a game starts with (animation and SEGA screen, animation only, SEGA screen only, straight to the game) and whether VGA is forced, for every game without launch options of its own. A game's own options still win, and Reset to defaults on a game means "follow the System choice"
+- **VM2 and VMU Pro: SWIRL keeps a card of its own, so an in game reset no longer loses favourites and settings.** These devices switch to a game's card when the game starts (Game ID) and stayed on it after an in game reset, so SWIRL came back to a card that had never held its files, found nothing, and wrote fresh ones there; every game reset out of collected a copy while the real settings sat on the default card. SWIRL now asks the device for a card named `SWIRL` at start and whenever the device appears after a reset, waits for it to switch, and reads its files there. The first boot carries the files from the card the device was on. The stray copies on game cards are harmless. Game ID off in System keeps everything on the default card
+- **Settings no longer lost when a memory card is slow to answer.** A card that does not list its files counts as not answering: nothing is written anywhere, the save says "VMU busy, retrying", and the card is read again. Every write lists the card's directory first; a copy that reads differently twice is treated as not answering, not damaged; a file found damaged is replaced only when it reads so again five seconds later, beside it rather than over it; a file read in late is merged setting by setting with what changed in the meantime
+- **VMU saves can copy a save to another memory card** (press Y). The way to take SWIRL's own `SWIRL.DAT` and `OPENMENU.CFG` to a new VMU, since a card that never had them starts with the defaults. Copy protected saves are refused, a VMU game stays a VMU game, and the copy is read back before it is called done
+- **About SWIRL** shows the full version and build id
+- The save file gains a small block after the play history for the new settings (layout version 4). The history stays where every earlier SWIRL reads it, so going back to 2.14.3 or 2.13 keeps favourites and history. Checked against files written by the real 2.13.3, 2.14.0, 2.14.2 and 2.14.3 builds, in the repository's checks
+- The memory check at each stage traces the three memory pools; the launch traces its options
+- The Classic styles' padded info lines are written by one bounded helper (sergiosaint's pull request #10)
 
 ### Card Manager
 
 - Update SWIRL writes the logo file (`HDRLOGO.PVR`) into the menu disc
-- The rebuild log says how long each stage took (scanning, gathering, building, copying, the swap). These numbers from real cards decide what the 2.15 scan cache should hold
-- A copy onto the card closes its file on every way out, so a failure in the middle of an add on Windows cannot leave the unfinished folder locked until the app is restarted
+- Menu music takes up to nine tracks on the Look and sound page: Use my own music, then Add another track; each track has its own Remove. Tracks go onto the menu disc as `BGM.ADP`, `BGM2.ADP` and so on
+- The rebuild log says how long each stage took
+- Card health warns when a card holds more games than the menu lists
+- Card Manager answers only requests addressed to its own window (`127.0.0.1` or `localhost` on its port); a web page that pointed its own name at this computer could otherwise have used the card operations (audit item CM-20)
+- An update download is refused when a byte could not be written, the file could not be closed, or fewer bytes arrived than the release lists (CM-21)
+- New card warns when the chosen disk is bigger than any SD card GDEMU takes (over 512 GB) or its model name has nothing of a card reader in it (CM-22)
+- Built with Go 1.25 on the release and CI runners; the module asks for Go 1.24 or newer (CM-23)
+- A copy onto the card closes its file on every way out, so a failure in the middle of an add on Windows cannot leave the folder locked
 
-### What to test on the console
+### Known limits
 
-1. Update SWIRL from this exe, boot: About SWIRL shows `2.15.0-preview.1, build ...` and Diagnostics shows no warnings
-2. The header: orange logo on an American or Japanese console, blue on a European one. Please send a photo of the header
-3. Boot time from power on to the Home tab, against 2.14.3 on the same card (a stopwatch is fine)
-4. Favourites and history from before the update are still there
-5. Launch two games; in game reset from Crazy Taxi comes back to SWIRL
-6. From the Card Manager log after the update: the "in N s" lines, copied into a message
+- In game reset returns to the game's own start menu in games that trap the button combination themselves (18 Wheeler, AeroWings, Hydro Thunder); Crazy Taxi comes back to SWIRL
+- The VGA patch catalog still holds one entry; more arrive once the patch files are in hand
+- The card switching devices were tested with a VMU Pro; a VM2 should behave the same (it takes the same command) but has not been run here
+- macOS and Linux Card Manager are betas
 
 ## [2.14.3]
 

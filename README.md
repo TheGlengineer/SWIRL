@@ -1,8 +1,8 @@
 > [!NOTE]
-> **2.14.0** was tested on my own Dreamcast: a Retro PSU, GDEMU firmware 5.20.5, a stock Sega VMU, a VGA cable to a
-> monitor, and a 64 GB card that came from the openMenu Virtual Folder Bundle with 52 discs. Everything else was
+> **2.15.0** was tested on my own Dreamcast: a Retro PSU, GDEMU firmware 5.20.5, a stock Sega VMU and a VMU Pro, a
+> VGA cable to a monitor, and a 64 GB card that came from the openMenu Virtual Folder Bundle with 52 discs. Everything else was
 > proven in the emulator harness and the automated tests, not on a console. Read the
-> [known limits](CHANGELOG.md#known-limits-and-open-questions) before you report something; if it is not there, use
+> [known limits](CHANGELOG.md#known-limits) before you report something; if it is not there, use
 > **Report a problem** in Card Manager (see [Troubleshooting](docs/TROUBLESHOOTING.md#reporting-a-problem)).
 
 
