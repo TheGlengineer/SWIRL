@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """SWIRL language table tool.
 
-  lang_table.py export          writes swirl/lang/en.json from ui/swirl/sw_lang.h (the reference for translators)
+  lang_table.py export          writes swirl/lang/en.json (the reference for translators) and keys.txt (the
+                                table order the Card Manager compiles by) from ui/swirl/sw_lang.h
   lang_table.py check           checks every swirl/lang/*.json against the table: unknown keys, missing keys,
                                 printf specifiers that differ from the English, characters the fonts lack
   lang_table.py dat OUT         builds a LANG.DAT from every swirl/lang/*.json except en (the Card Manager does
@@ -47,7 +48,9 @@ def export():
     with open(path, "w", encoding="utf-8") as f:
         json.dump(dict(t), f, ensure_ascii=False, indent=2)
         f.write("\n")
-    print("%s: %d strings" % (path, len(t)))
+    with open(os.path.join(LANG_DIR, "keys.txt"), "w", encoding="utf-8") as f:
+        f.write("".join(k + "\n" for k, _ in t))
+    print("%s: %d strings (keys.txt holds the order)" % (path, len(t)))
 
 
 def check():

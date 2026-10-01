@@ -634,6 +634,7 @@ func buildMenuImageInto(root, datDir string, allowEmpty bool, log Logger) (strin
 	}
 	addOpenMenuFiles(data, log)   // header logo, plus what the Classic styles need
 	addHeaderLogoSheet(data, log) // the small two region logo texture (F1, SW-15)
+	addLanguages(data, log)       // LANG.DAT, the menu's translations
 	bin := swirlBinary
 	if p := os.Getenv("SWIRL_1ST_READ"); p != "" { // development: test a new menu build
 		// only builds that keep the author credit may be installed
@@ -858,6 +859,9 @@ func buildTestMenu(dataDir, outDir string) error {
 	}
 	if _, err := os.Stat(filepath.Join(data, "1ST_READ.BIN")); err != nil {
 		os.WriteFile(filepath.Join(data, "1ST_READ.BIN"), swirlBinary, 0o644)
+	}
+	if _, err := os.Stat(filepath.Join(data, langOnDisc)); err != nil {
+		addLanguages(data, func(f string, a ...interface{}) { fmt.Printf(f+"\n", a...) })
 	}
 	if err := copyFile(filepath.Join(data, "OPENMENU.INI"), filepath.Join(low, "OPENMENU.INI")); err != nil {
 		return err
