@@ -210,12 +210,12 @@ extern int sw_gameid_enabled(void);
 /* ---------- the menu's own card on a VM2 / VMU Pro ----------
  * A device that keeps a card per game stays on the last game's card after an in game reset, so SWIRL would
  * come back to a card that has never held its file, find nothing, and write a fresh one there (seen on a VMU
- * Pro, 2026-10-01). As the Virtual Folder Bundle does at start up, SWIRL asks the device for the menu's own
- * card, ID "openmenu" with no name, so every boot lands on the same card. The device drops off the bus while
+ * Pro, 2026-10-01). As the Virtual Folder Bundle does at start up (it sends "openmenu"), SWIRL asks the device
+ * for the menu's own card, ID "SWIRL" with no name, so every boot lands on the same card, shown by that name. The device drops off the bus while
  * it switches; this waits for it to come back (up to 3 s) and then a second more, as the Bundle does. Each
  * card is asked once per session; a standard VMU is never sent anything. Nothing happens when Game ID is off
  * in System: the device then never leaves its default card. */
-#define MENU_CARD_ID "openmenu"
+#define MENU_CARD_ID "SWIRL" /* the card's name on the device; 12 characters at most */
 #define MENU_CARD_BACK_MS 3000
 static uint8_t menu_card_asked[MAPLE_PORT_COUNT][MAPLE_UNIT_COUNT];
 

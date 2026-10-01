@@ -207,12 +207,12 @@ A device that is busy or silent cannot hold up a game: SWIRL waits about a secon
 It is on by default. Turn it off in **System > VM2 / VMU Pro game cards** to keep one card for everything. The
 Classic styles follow the same setting.
 
-SWIRL keeps its own card on these devices, named `openmenu` (the same card the openMenu Virtual Folder Bundle
-uses). When SWIRL starts it asks the device for that card and waits for it to switch (a second or two), so
-favorites and settings are in the same place whatever game you reset out of. The first time a device that
-already holds SWIRL's files on its default card meets this version, SWIRL reads them there first and carries
-them to the `openmenu` card. Until 2.15, a reset out of a game left the device on that game's card and SWIRL
-wrote fresh files there; those copies on game cards are harmless and can be deleted from the device.
+SWIRL keeps its own card on these devices, named `SWIRL` (openMenu and the Virtual Folder Bundle use one named
+`openmenu` in the same way). When SWIRL starts it asks the device for that card and waits for it to switch (a
+second or two), so favorites and settings are in the same place whatever game you reset out of. The first time
+a device that already holds SWIRL's files on another card meets this version, SWIRL reads them there first and
+carries them to the `SWIRL` card. Until 2.15, a reset out of a game left the device on that game's card and
+SWIRL wrote fresh files there; those copies on game cards are harmless and can be deleted from the device.
 
 A memory card that answers after start up (a VM2 still switching cards, a slow VMU) is read within eight seconds
 instead of ignored until the next power on: the favorites and settings come back, and a saved Classic style
