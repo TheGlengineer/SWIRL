@@ -1118,8 +1118,11 @@ static void draw_system(float slide) {
   }
   sw_rrect(x, 310, 228, 126, 8, C_PANEL);
   sw_text(SWF_UI, x + 16, 322, 14, C_WHITE, T(S_ABOUT));
+  /* "Version 2.16" as one literal stays in the binary whatever the language: the Card Manager reads the
+     version of the menu on a card from it (swirlRelease in card.go) */
+  static const char marker[] = "Version " SWIRL_VERSION;
   char ver[48];
-  snprintf(ver, sizeof(ver), T(S_VERSION), SWIRL_VERSION);
+  snprintf(ver, sizeof(ver), T(S_VERSION), marker + 8);
   sw_text_right(SWF_SMALL, x + 212, 324, 12, C_DIM, ver);
   /* the full version and the build id, so a photo of this panel says exactly what is on the card (the
      Diagnostics screen shows the same) */
