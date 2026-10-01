@@ -5,7 +5,7 @@ may ship without menu changes; the menu then keeps its major.minor version (2.11
 
 ## [2.15.0-preview.2]
 
-Unreleased. Preview 1 plus the card's own order and sections, the two pull requests, and a higher game limit.
+Preview 1 plus the card's own order and sections, the two pull requests, and a higher game limit.
 
 ### Menu
 
