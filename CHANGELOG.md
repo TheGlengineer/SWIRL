@@ -3,6 +3,25 @@
 SWIRL (the menu) and SWIRL Card Manager share one version number. Card Manager patch releases (2.11.1)
 may ship without menu changes; the menu then keeps its major.minor version (2.11).
 
+## [2.16.0] (in progress)
+
+Languages. SWIRL's menus can be shown in German, French, Spanish, Italian and Portuguese as well as English.
+
+### Menu
+
+- **System > Language**: Console setting (follows the Dreamcast's own language), English, Deutsch, Français, Español, Italiano, Português. Menus, messages, hints, the built in collection and genre names and the sort names follow it; game names, your own collections and the Classic styles do not. Saved on the VMU with the other settings. ([Languages](docs/USING_SWIRL.md#languages))
+- The fonts now hold every western European letter (Latin-1), and names in OPENMENU.INI are read as UTF-8, so an accented game name draws properly. A character the fonts lack draws as "?".
+- Translations ride on the card in LANG.DAT, which Update SWIRL writes. A file made for another SWIRL version is ignored with warning W20 and the menu shows English.
+- Long translated values in System clip short of their labels, and the tab row shrinks to fit longer tab names.
+
+### Card Manager
+
+- Update SWIRL puts LANG.DAT on the menu disc. A translation whose format differs from the English is left out and named in the build log.
+
+### For translators
+
+- The strings are `swirl/lang/<code>.json`, one file per language, with `en.json` as the reference. `swirl/tools/lang_table.py check` verifies a file.
+
 ## [2.15.0]
 
 The release I promised on Reddit: the European logo, card order with dividers, several music tracks, bigger libraries, and the launch defaults people asked for. On the way it found and fixed the way a VMU Pro or VM2 lost favourites and settings after an in game reset. Previews 1 and 2 are folded in below.

@@ -89,6 +89,7 @@ reused, only added.
 | W17 | startup-step | A start up step failed |
 | W18 | style-files | The saved style needs theme files this disc lacks |
 | W19 | disc-read | The menu disc could not be read |
+| W20 | language-file | LANG.DAT could not be used, showing English. Run Update SWIRL in Card Manager so the card gets a language file made for this menu |
 
 System > Diagnostics lists the warnings since power on in these words, with the count and the first detail
 (six to a page, Up and Down scroll), and the About card on the System tab says how many there are. Card
