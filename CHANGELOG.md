@@ -16,11 +16,13 @@ Languages. SWIRL's menus can be shown in German, French, Spanish, Italian and Po
 
 ### Card Manager
 
+- **Language** in About: Same as the system, English, Deutsch, Français, Español, Italiano, Português. The whole window follows it. The build log, the card warnings, the health check lines, the app's error messages and the decoded Dreamcast report stay in English, since they go into bug reports. ([Language](docs/CARD_MANAGER.md#language))
 - Update SWIRL puts LANG.DAT on the menu disc. A translation whose format differs from the English is left out and named in the build log.
 
 ### For translators
 
-- The strings are `swirl/lang/<code>.json`, one file per language, with `en.json` as the reference. `swirl/tools/lang_table.py check` verifies a file.
+- Menu: `swirl/lang/<code>.json`, one file per language, with `en.json` as the reference. `swirl/tools/lang_table.py check` verifies a file.
+- Card Manager window: `swirl/cardmanager/web/lang/<code>.json`, English string to translation, with `keys.json` as the list of every string. `swirl/tools/cm_lang.py check` verifies a file.
 
 ## [2.15.0]
 

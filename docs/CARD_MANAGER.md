@@ -172,6 +172,17 @@ Opening the app while a copy is already running shows that copy's window, except
 version or a different build of the same version (a test build): then it takes over and the running copy closes,
 so the card gets the menu you meant to test.
 
+### Language
+
+The window can be shown in English, German, French, Spanish, Italian or Portuguese. **Language** at the top
+of About picks one; **Same as the system** (the default) follows the language of your PC or Mac, with English
+for anything else. The choice is saved and the window opens again in the new language.
+
+What stays in English on purpose: the activity log of a build, the card warnings on the SD card page, the
+health check lines, error messages from the app itself and the decoded Dreamcast report. These are what you
+paste into a bug report, so they read the same for everyone. The strings are in the SWIRL repository under
+`swirl/cardmanager/web/lang`, one file per language; corrections are welcome.
+
 ### Previews
 
 Before a big version is released, a **preview** of it may be put up for testing. Previews are never

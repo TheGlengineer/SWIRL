@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -138,5 +139,36 @@ func TestLangDatOnMenuDisc(t *testing.T) {
 	want, _, _ := buildLangDat()
 	if string(b[:f.Size]) != string(want) {
 		t.Fatalf("LANG.DAT on the disc differs (%d bytes, want %d)", f.Size, len(want))
+	}
+}
+
+// The window's language files (web/lang) parse and cover every key the window can show (keys.json, written
+// by swirl/tools/cm_lang.py export). A missing entry would show English for that string.
+func TestWindowLanguages(t *testing.T) {
+	var keys []string
+	b, err := webFS.ReadFile("web/lang/keys.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(b, &keys); err != nil {
+		t.Fatal(err)
+	}
+	if len(keys) < 700 {
+		t.Fatalf("only %d keys", len(keys))
+	}
+	for _, code := range []string{"de", "fr", "es", "it", "pt"} {
+		b, err := webFS.ReadFile("web/lang/" + code + ".json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var m map[string]string
+		if err := json.Unmarshal(b, &m); err != nil {
+			t.Fatalf("%s: %v", code, err)
+		}
+		for _, k := range keys {
+			if m[k] == "" {
+				t.Errorf("%s: %q not translated", code, k)
+			}
+		}
 	}
 }

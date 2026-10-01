@@ -150,6 +150,8 @@ type UIPrefs struct {
 	// Output is how the Dreamcast is connected: "vga" (games with no VGA mode are patched automatically when
 	// a patch is known) or "tv" (games are left alone). Unset until the owner answers.
 	Output string `json:"output,omitempty"`
+	// Lang is the window's language ("de", "fr", "es", "it", "pt", "en"); empty follows the system's
+	Lang string `json:"lang,omitempty"`
 }
 
 func (p UIPrefs) OfferPreviews() bool { return p.PreviewOffers == nil || *p.PreviewOffers }
