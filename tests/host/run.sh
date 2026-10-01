@@ -35,3 +35,7 @@ gcc -std=gnu11 -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -I"
 gcc -std=gnu11 -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -I"$ROOT" \
   -o "$OUT/divider_check" "$HERE/divider_check.c" "$ROOT/ui/swirl/sw_divider.c"
 "$OUT/divider_check"
+
+# the UTF-8 decoder behind the text renderer
+gcc -std=gnu11 -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -I"$ROOT" -o "$OUT/utf8_check" "$HERE/utf8_check.c"
+"$OUT/utf8_check"

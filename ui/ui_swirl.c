@@ -40,6 +40,7 @@
 #include "swirl/sw_audio.h"
 #include "swirl/sw_gfx.h"
 #include "swirl/sw_trace.h"
+#include "swirl/sw_utf8.h"
 #include <dc/flashrom.h>
 #include "swirl/sw_lib.h"
 #include "swirl/sw_vmu.h"
@@ -472,8 +473,8 @@ static void set_focus(int game_idx) {
   amb_t = 0.f;
 
   /* VMU: title in up to two lines of ~7 characters */
-  char l1[16] = {0}, l2[16] = {0};
-  const char *name = g->item->name;
+  char l1[16] = {0}, l2[16] = {0}, name[64];
+  sw_utf8_fold_ascii(name, sizeof(name), g->item->name); /* the pixel font is ASCII: É reads as E */
   int n = 0;
   const char *p = name;
   while (*p && n < 7) {

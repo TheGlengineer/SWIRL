@@ -16,6 +16,7 @@
  */
 #include "sw_vmu.h"
 #include "sw_lib.h"
+#include "sw_utf8.h"
 
 #include <arch/timer.h>
 #include <dc/maple.h>
@@ -348,8 +349,8 @@ static void set_base(void) {
 
 static int text_width(const char *s) {
   int w = 0;
-  for (; *s; s++) {
-    unsigned char c = (unsigned char)*s;
+  for (int i = 0; s[i];) {
+    unsigned char c = (unsigned char)sw_utf8_ascii(sw_utf8_next(s, &i, -1));
     if (c < 32 || c > 126) c = '?';
     w += vmu_font_adv[c - 32];
   }
@@ -363,8 +364,8 @@ static void draw_text_line(uint8_t *b, int y, const char *s) {
   int w = text_width(s);
   int x = (W - w) / 2;
   if (x < 0) x = 0;
-  for (; *s && x < W; s++) {
-    unsigned char c = (unsigned char)*s;
+  for (int i = 0; s[i] && x < W;) {
+    unsigned char c = (unsigned char)sw_utf8_ascii(sw_utf8_next(s, &i, -1));
     if (c >= 'a' && c <= 'z') c = c - 'a' + 'A'; /* the pixel font reads best in capitals */
     if (c < 32 || c > 126) c = '?';
     const uint8_t *rows = vmu_font_rows[c - 32];

@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include "../draw_prototypes.h"
+#include "sw_utf8.h"
 
 /* ---------- fonts (baked by swirl/tools/gen_fonts.py, linked by assets.S) ---------- */
 extern const uint8_t swirl_font_title[], swirl_font_head[], swirl_font_ui[], swirl_font_body[], swirl_font_small[];
@@ -333,10 +334,10 @@ void sw_image_rounded(const image *img, float x, float y, float w, float h, floa
 }
 
 /* ---------- text ---------- */
-static inline const swf_glyph *glyph(const sw_font *f, unsigned char ch) {
-  if (ch < f->hdr->first || ch >= f->hdr->first + f->hdr->count)
-    ch = '?';
-  return &f->glyphs[ch - f->hdr->first];
+static inline const swf_glyph *glyph(const sw_font *f, uint32_t cp) {
+  if (cp < f->hdr->first || cp >= (uint32_t)f->hdr->first + f->hdr->count)
+    cp = '?';
+  return &f->glyphs[cp - f->hdr->first];
 }
 
 float sw_font_line(int font, float size) {
@@ -349,8 +350,8 @@ float sw_text_width_n(int font, float size, const char *s, int n) {
   if (!f->hdr || !s)
     return 0.f;
   float sc = size / f->hdr->size, w = 0.f;
-  for (int i = 0; s[i] && (n < 0 || i < n); i++)
-    w += glyph(f, (unsigned char)s[i])->adv * sc;
+  for (int i = 0; s[i] && (n < 0 || i < n);)
+    w += glyph(f, sw_utf8_next(s, &i, n))->adv * sc;
   return w;
 }
 
@@ -372,9 +373,10 @@ float sw_text_n(int font, float x, float y, float size, uint32_t c, const char *
   const float x0 = x;
   hdr_txr(TXR_ALPHA8, f->hdr->tex_w, f->hdr->tex_h, f->tex);
   const float z = sw_znext();
-  for (int i = 0; s[i] && (n < 0 || i < n); i++) {
-    const swf_glyph *g = glyph(f, (unsigned char)s[i]);
-    if (g->w && g->h && s[i] != ' ') {
+  for (int i = 0; s[i] && (n < 0 || i < n);) {
+    const uint32_t cp = sw_utf8_next(s, &i, n);
+    const swf_glyph *g = glyph(f, cp);
+    if (g->w && g->h && cp != ' ') {
       float gx = x + g->xoff * sc, gy = base + g->yoff * sc;
       quad(gx, gy, gx + g->w * sc, gy + g->h * sc,
            g->x * f->inv_w, g->y * f->inv_h, (g->x + g->w) * f->inv_w, (g->y + g->h) * f->inv_h, c, c, c, c, z);
@@ -397,7 +399,7 @@ float sw_text_clip(int font, float x, float y, float size, uint32_t c, const cha
   float dots = sw_text_width(font, size, "...");
   int n = strlen(s);
   while (n > 0 && sw_text_width_n(font, size, s, n) + dots > max_w)
-    n--;
+    n = sw_utf8_boundary(s, n - 1);
   while (n > 0 && s[n - 1] == ' ')
     n--;
   float used = sw_text_n(font, x, y, size, c, s, n);
@@ -441,12 +443,12 @@ int sw_text_wrap(int font, float x, float y, float size, uint32_t c, const char 
       best = (int)strlen(p);
     int last = (lines == max_lines - 1) && p[best] && p[best] != '\n';
     char buf[256];
-    int n = best < 250 ? best : 250;
+    int n = best < 250 ? best : sw_utf8_boundary(p, 250);
     memcpy(buf, p, n);
     buf[n] = 0;
     if (last) {
       int rest = strlen(p);
-      int m = rest < 250 ? rest : 250;
+      int m = rest < 250 ? rest : sw_utf8_boundary(p, 250);
       memcpy(buf, p, m);
       buf[m] = 0;
       sw_text_clip(font, x, y + lines * line_h, size, c, buf, max_w);

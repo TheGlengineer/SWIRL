@@ -14,7 +14,8 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 FONTS = os.path.join(ROOT, 'swirl', 'assets', 'fonts')
 OUT = os.path.join(ROOT, 'ui', 'swirl', 'assets')
-FIRST, LAST = 32, 126
+FIRST, LAST = 32, 255  # ASCII and Latin-1 Supplement (Italian, French, German, Spanish, Portuguese); 127 to 159 are empty
+VMU_FIRST, VMU_LAST = 32, 126
 
 SPECS = [  # name, file, variation, px size
     ('title', 'Sora.ttf', b'Bold', 30),
@@ -39,14 +40,17 @@ def bake(name, fname, var, size):
     glyphs = []
     for c in range(FIRST, LAST + 1):
         ch = chr(c)
+        if 127 <= c <= 160 or c == 0xAD:  # control characters, no break space and soft hyphen: nothing to draw
+            glyphs.append((c, Image.new('L', (0, 0), 0), 0, 0, int(round(font.getlength(' '))) if c in (160,) else 0))
+            continue
         l, t, r, b = font.getbbox(ch, anchor='ls')
         w, h = max(0, r - l), max(0, b - t)
         mask = Image.new('L', (w + 2, h + 2), 0)
         if w and h:
             ImageDraw.Draw(mask).text((1 - l, 1 - t), ch, font=font, fill=255, anchor='ls')
         glyphs.append((c, mask, l - 1, t - 1, int(round(font.getlength(ch)))))
-    # shelf pack into smallest square
-    for tex in (64, 128, 256, 512):
+    # shelf pack into the smallest power of two texture, rectangles allowed (the graphics chip twiddles them)
+    for tex_w, tex_h in ((64, 64), (128, 64), (128, 128), (256, 128), (256, 256), (512, 256), (512, 512)):
         x = y = shelf = 0
         pos = [None] * len(glyphs)
         ok = True
@@ -54,9 +58,12 @@ def bake(name, fname, var, size):
         for i in order:
             c, m = glyphs[i][0], glyphs[i][1]
             gw, gh = m.size
-            if x + gw > tex:
+            if gw == 0 or gh == 0:
+                pos[i] = (0, 0)
+                continue
+            if x + gw > tex_w:
                 x, y, shelf = 0, y + shelf, 0
-            if y + gh > tex:
+            if y + gh > tex_h:
                 ok = False
                 break
             pos[i] = (x, y)
@@ -64,22 +71,24 @@ def bake(name, fname, var, size):
             shelf = max(shelf, gh)
         if ok:
             break
-    atlas = Image.new('L', (tex, tex), 0)
+    atlas = Image.new('L', (tex_w, tex_h), 0)
     for (c, m, *_), (px, py) in zip(glyphs, pos):
-        atlas.paste(m, (px, py))
-    hdr = struct.pack('<4sHHHhhhHH', b'SWF2', tex, tex, size, ascent, -descent, ascent + descent, FIRST, len(glyphs))
+        if m.size[0] and m.size[1]:
+            atlas.paste(m, (px, py))
+    tex = f'{tex_w}x{tex_h}'
+    hdr = struct.pack('<4sHHHhhhHH', b'SWF2', tex_w, tex_h, size, ascent, -descent, ascent + descent, FIRST, len(glyphs))
     tbl = b''.join(struct.pack('<HHBBbbBB', px, py, m.size[0], m.size[1], xo, yo, adv, 0)
                    for (c, m, xo, yo, adv), (px, py) in zip(glyphs, pos))
     pix = atlas.tobytes()
     with open(os.path.join(OUT, f'font_{name}.swf'), 'wb') as f:
         f.write(hdr + tbl + pix)
     atlas.save(os.path.join(ROOT, 'swirl', 'build', f'font_{name}.png')) if os.path.isdir(os.path.join(ROOT, 'swirl', 'build')) else None
-    print(f'{name}: {size}px atlas {tex}x{tex}')
+    print(f'{name}: {size}px atlas {tex}, {len(glyphs)} glyphs')
 
 def vmu_font():
     font = ImageFont.truetype(os.path.join(FONTS, 'Silkscreen.ttf'), 8)
     rows = []
-    for c in range(FIRST, LAST + 1):
+    for c in range(VMU_FIRST, VMU_LAST + 1):
         ch = chr(c)
         im = Image.new('L', (12, 12), 0)
         ImageDraw.Draw(im).text((0, 0), ch, font=font, fill=255)
