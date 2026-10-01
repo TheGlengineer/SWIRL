@@ -15,7 +15,7 @@ typedef struct __attribute__((packed)) save_blob {
 /* version 4: after the tail, the settings added since the prefs block was fixed at 16 bytes */
 typedef struct __attribute__((packed)) save_more {
   char tag[4]; /* "PRF4" */
-  uint8_t prefs[4]; /* sw_prefs bytes 16 to 19: logo, start, video, reserved */
+  uint8_t prefs[4]; /* sw_prefs bytes 16 to 19: logo, start, video, lang */
 } save_more;
 
 typedef struct __attribute__((packed)) save_blob_v1 {

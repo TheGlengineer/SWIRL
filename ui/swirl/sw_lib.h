@@ -87,7 +87,8 @@ typedef struct sw_prefs {
   uint8_t start;       /* how games start unless set per game: 0 animation and SEGA screen, 1 animation only,
                           2 SEGA screen only, 3 straight to the game (SW_START_*) */
   uint8_t video;       /* video unless set per game: 0 force VGA, 1 the game's default */
-  uint8_t reserved[1]; /* zero; room for the next setting without another layout */
+  uint8_t lang;        /* menu language: 0 the console's setting, else SW_LANG_* (sw_lang.h); 2.16 on, the
+                          reserved byte of 2.15 (zero there, so a 2.15 save reads as Auto) */
 } sw_prefs;
 enum { SW_START_BOTH = 0, SW_START_ANIMATION, SW_START_LICENSE, SW_START_NONE, SW_START_COUNT };
 enum { SW_LOGO_REGION = 0, SW_LOGO_ORANGE, SW_LOGO_BLUE, SW_LOGO_COUNT };

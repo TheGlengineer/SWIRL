@@ -41,6 +41,7 @@
 #include "swirl/sw_gfx.h"
 #include "swirl/sw_trace.h"
 #include "swirl/sw_utf8.h"
+#include "swirl/sw_lang.h"
 #include <dc/flashrom.h>
 #include "swirl/sw_lib.h"
 #include "swirl/sw_vmu.h"
@@ -67,7 +68,7 @@ static uint32_t accent_col = 0xFFF28C28;
 #define C_BTN_Y 0xFF2C8A47
 
 enum tab { TAB_HOME = 0, TAB_LIBRARY, TAB_COLLECTIONS, TAB_SYSTEM, TAB_COUNT };
-static const char *tab_names[TAB_COUNT] = {"Home", "Library", "Collections", "System"};
+static const int tab_names[TAB_COUNT] = {S_TAB_HOME, S_TAB_LIBRARY, S_TAB_COLLECTIONS, S_TAB_SYSTEM};
 
 enum mode { MODE_TABS = 0, MODE_DETAIL, MODE_LAUNCH, MODE_PADTEST, MODE_OPTIONS, MODE_VMU, MODE_RESUME, MODE_DIAG };
 
@@ -133,7 +134,7 @@ static int saver_on; /* screen saver showing (see the screen saver section) */
 static int saver_input(unsigned int btn, int pressed);
 static void saver_start(void);
 enum { SAVER_DRIFT = 0, SAVER_SHOWCASE, SAVER_SWIRL, SAVER_BOUNCE, SAVER_DIM, SAVER_COUNT };
-static const char *saver_names[] = {"Cover drift", "Game showcase", "Swirl", "Bouncing logo", "Dim the screen"};
+static const int saver_names[] = {S_SAVER_DRIFT, S_SAVER_SHOWCASE, S_SAVER_SWIRL, S_SAVER_BOUNCE, S_SAVER_DIM};
 
 /* focus tracking for large art + ambient colour */
 static int focus_game = -1;
@@ -142,7 +143,7 @@ static uint32_t amb_cur = 0xFF101828, amb_prev = 0xFF101828;
 static float amb_t = 1.f;
 
 /* toast */
-static char toast[48];
+static char toast[96];
 static int toast_frames;
 
 /* save debounce */
@@ -150,11 +151,12 @@ static int save_countdown;
 static int save_tries; /* failed saves in a row (they are tried again a few times) */
 static int save_last;  /* result of the failed save being tried again (the banner says why) */
 /* The save banner, so nobody switches off with changes not yet on the VMU:
-   "Unsaved changes. Saving in 3", then "Saving... please wait" until 2 s after the save is really done, then
-   the outcome ("Saved to VMU", or why not). */
-static int save_hold;          /* frames "Saving..." stays up after the save finished */
+   "Unsaved changes. Saving in 3", then T(S_SAVING_WAIT) until 2 s after the save is really done, then
+   the outcome (T(S_SAVED_TO_VMU), or why not). */
+static int save_hold;          /* frames T(S_SAVING) stays up after the save finished */
 static int save_outcome = 1;   /* result waiting to be shown once save_hold runs out (1 = none) */
-static char save_msg[64];      /* the outcome, shown for save_msg_frames */
+static char save_msg[96];      /* the outcome, shown for save_msg_frames */
+static int save_msg_kind;      /* the VMU screen for it: SW_VMU_SAVED, SW_VMU_NO_SPACE or SW_VMU_CHECK */
 static int save_msg_frames;
 static int saving_now;         /* a save that SWIRL waits for (style change, BIOS) is running */
 static void idle_frame(void);
@@ -227,26 +229,26 @@ static float approach(float cur, float target, float rate) {
 
 /* ---------- themes ---------- */
 static const struct {
-  const char *name;
+  int name;
   uint32_t col;
-} accents[] = {{"Orange", 0xFFF28C28}, {"Blue", 0xFF3A8FF0}, {"Green", 0xFF3FB96B}, {"Pink", 0xFFEA3C8F},
-               {"Purple", 0xFF9B6CF0}, {"Red", 0xFFE0584A}, {"Gold", 0xFFE8B822}, {"Teal", 0xFF2EC4B6}};
+} accents[] = {{S_ACCENT_ORANGE, 0xFFF28C28}, {S_ACCENT_BLUE, 0xFF3A8FF0}, {S_ACCENT_GREEN, 0xFF3FB96B}, {S_ACCENT_PINK, 0xFFEA3C8F},
+               {S_ACCENT_PURPLE, 0xFF9B6CF0}, {S_ACCENT_RED, 0xFFE0584A}, {S_ACCENT_GOLD, 0xFFE8B822}, {S_ACCENT_TEAL, 0xFF2EC4B6}};
 #define NUM_ACCENTS ((int)(sizeof(accents) / sizeof(accents[0])))
 enum { BACKDROP_COVER = 0, BACKDROP_NIGHT, BACKDROP_SEASONAL, BACKDROP_COUNT };
-static const char *backdrop_names[BACKDROP_COUNT] = {"Cover colour", "Night", "Seasonal"};
+static const int backdrop_names[BACKDROP_COUNT] = {S_BACKDROP_COVER, S_BACKDROP_NIGHT, S_BACKDROP_SEASONAL};
 enum { PART_NONE = 0, PART_SNOW, PART_LEAVES, PART_PETALS, PART_SPARKLE };
 typedef struct season {
-  const char *name;
+  int name;
   uint32_t accent, glow;
   int particles;
 } season;
 static const season seasons[12] = {
-    {"Winter", 0xFF7FC8F8, 0xFF1C3F7A, PART_SNOW},      {"Valentine", 0xFFEA3C8F, 0xFF5A1638, PART_PETALS},
-    {"Spring", 0xFF6CCB5F, 0xFF1F5A3A, PART_PETALS},    {"Spring", 0xFF6CCB5F, 0xFF1F5A3A, PART_PETALS},
-    {"Early summer", 0xFF2EC4B6, 0xFF0F4A5A, PART_SPARKLE}, {"Summer", 0xFF2EC4B6, 0xFF0F4A5A, PART_SPARKLE},
-    {"Summer", 0xFFF2C230, 0xFF12305A, PART_SPARKLE},   {"Summer", 0xFFF2C230, 0xFF12305A, PART_SPARKLE},
-    {"Harvest", 0xFFE8B822, 0xFF5A3A12, PART_LEAVES},   {"Halloween", 0xFFF28C28, 0xFF3B0F4F, PART_LEAVES},
-    {"Autumn", 0xFFD9772B, 0xFF4A2410, PART_LEAVES},    {"Holidays", 0xFFE0584A, 0xFF123D2A, PART_SNOW}};
+    {S_SEASON_WINTER, 0xFF7FC8F8, 0xFF1C3F7A, PART_SNOW},      {S_SEASON_VALENTINE, 0xFFEA3C8F, 0xFF5A1638, PART_PETALS},
+    {S_SEASON_SPRING, 0xFF6CCB5F, 0xFF1F5A3A, PART_PETALS},    {S_SEASON_SPRING, 0xFF6CCB5F, 0xFF1F5A3A, PART_PETALS},
+    {S_SEASON_EARLY_SUMMER, 0xFF2EC4B6, 0xFF0F4A5A, PART_SPARKLE}, {S_SEASON_SUMMER, 0xFF2EC4B6, 0xFF0F4A5A, PART_SPARKLE},
+    {S_SEASON_SUMMER, 0xFFF2C230, 0xFF12305A, PART_SPARKLE},   {S_SEASON_SUMMER, 0xFFF2C230, 0xFF12305A, PART_SPARKLE},
+    {S_SEASON_HARVEST, 0xFFE8B822, 0xFF5A3A12, PART_LEAVES},   {S_SEASON_HALLOWEEN, 0xFFF28C28, 0xFF3B0F4F, PART_LEAVES},
+    {S_SEASON_AUTUMN, 0xFFD9772B, 0xFF4A2410, PART_LEAVES},    {S_SEASON_HOLIDAYS, 0xFFE0584A, 0xFF123D2A, PART_SNOW}};
 static const season *cur_season;
 
 #define NUM_PARTS 36
@@ -270,6 +272,11 @@ static void reset_part(int i, int top) {
 
 static void apply_theme(void) {
   sw_prefs *p = sw_lib_prefs();
+  static int lang_applied = -1;
+  if (p->lang != lang_applied) { /* the saved language (also when SWIRL.DAT arrives from a late card) */
+    sw_lang_select(p->lang);
+    lang_applied = p->lang;
+  }
   accent_col = accents[p->accent % NUM_ACCENTS].col;
   cur_season = NULL;
   if (p->backdrop == BACKDROP_SEASONAL) {
@@ -315,15 +322,15 @@ static void draw_particles(void) {
 
 static const char *save_banner(char *buf, int len) {
   if (saving_now || sw_lib_busy() || save_hold > 0)
-    return "Saving... please wait";
+    return T(S_SAVING_WAIT);
   if (save_msg_frames > 0)
     return save_msg;
   if (save_countdown > 0 && sw_lib_dirty()) {
     const int secs = (save_countdown + 59) / 60;
     if (save_tries > 0)
-      snprintf(buf, len, "%s. Trying again in %d", save_last == -7 || save_last == -1 ? "VMU busy" : "Not saved", secs);
+      snprintf(buf, len, T(S_RETRY_IN), save_last == -7 || save_last == -1 ? T(S_VMU_BUSY) : T(S_NOT_SAVED), secs);
     else
-      snprintf(buf, len, "Unsaved changes. Saving in %d", secs);
+      snprintf(buf, len, T(S_UNSAVED_IN), secs);
     return buf;
   }
   return NULL;
@@ -339,9 +346,7 @@ static void vmu_status(void) {
   } else if (save_hold > 0) {
     kind = SW_VMU_SAVING;
   } else if (save_msg_frames > 0) {
-    if (!strncmp(save_msg, "Saved", 5)) kind = SW_VMU_SAVED;
-    else if (strstr(save_msg, "space")) kind = SW_VMU_NO_SPACE;
-    else kind = SW_VMU_CHECK;
+    kind = save_msg_kind;
   } else if (save_countdown > 0 && sw_lib_dirty()) {
     if (save_tries > 0) {
       kind = SW_VMU_BUSY;
@@ -366,8 +371,10 @@ static void before_launch(void) {
 }
 
 static void show_toast(const char *msg) {
-  strncpy(toast, msg, sizeof(toast) - 1);
-  toast[sizeof(toast) - 1] = 0;
+  int n = strlen(msg);
+  if (n > (int)sizeof(toast) - 1) n = sw_utf8_boundary(msg, sizeof(toast) - 1);
+  memcpy(toast, msg, n);
+  toast[n] = 0;
   toast_frames = 120;
 }
 
@@ -599,20 +606,20 @@ static float draw_chips(const sw_game *g, float x, float y, float max_w) {
   if (genre) items[n++] = genre;
   int pl = sw_lib_players(g);
   static char pbuf[20];
-  if (pl == 1) { items[n++] = "1 Player"; }
-  else if (pl > 1) { snprintf(pbuf, sizeof(pbuf), "1 to %d Players", pl); items[n++] = pbuf; }
+  if (pl == 1) { items[n++] = T(S_ONE_PLAYER); }
+  else if (pl > 1) { snprintf(pbuf, sizeof(pbuf), T(S_N_PLAYERS), pl); items[n++] = pbuf; }
   static char dbuf[12];
-  if (g->discs > 1) { snprintf(dbuf, sizeof(dbuf), "%d Discs", g->discs); items[n++] = dbuf; }
-  if (g->item->vga[0] == '1') items[n++] = "VGA";
-  if (g->meta && (g->meta->accessories & ACCESORIES_JUMP_PACK)) items[n++] = "Jump Pack";
-  if (g->meta && g->meta->network) items[n++] = "Online";
+  if (g->discs > 1) { snprintf(dbuf, sizeof(dbuf), T(S_N_DISCS), g->discs); items[n++] = dbuf; }
+  if (g->item->vga[0] == '1') items[n++] = T(S_VGA);
+  if (g->meta && (g->meta->accessories & ACCESORIES_JUMP_PACK)) items[n++] = T(S_JUMP_PACK);
+  if (g->meta && g->meta->network) items[n++] = T(S_ONLINE);
   for (int i = 0; i < n; i++) {
     float w = sw_text_width(SWF_SMALL, 12, items[i]) + 16;
     if (cx + w > x + max_w) break;
     cx += draw_chip(cx, y, items[i], C_CHIP, C_TEXT) + 6;
   }
   if (sw_lib_is_fav(g)) {
-    snprintf(buf, sizeof(buf), "Favorite");
+    snprintf(buf, sizeof(buf), T(S_FAVORITE));
     float w = sw_text_width(SWF_SMALL, 12, buf) + 16;
     if (cx + w <= x + max_w)
       cx += draw_chip(cx, y, buf, SW_ALPHA(C_ORANGE, 0x40), mix(C_ORANGE, C_WHITE, 0.55f)) + 6;
@@ -666,20 +673,32 @@ static void draw_header(void) {
     const float u1 = (float)(logo_x + 114) / img_logo_src.width, v1 = (float)(band + 20) / img_logo_src.height;
     sw_image_uv(&img_logo_src, 36, 23, 114, 20, u0, v0, u1, v1, C_WHITE, C_WHITE, C_WHITE, C_WHITE);
   } else {
-    sw_text(SWF_HEAD, 32, 20, 20, C_WHITE, "SWIRL");
+    sw_text(SWF_HEAD, 32, 20, 20, C_WHITE, T(S_STYLE_SWIRL));
   }
 
   float x = 168;
   sw_rrect(x, 25, 16, 16, 3, 0x24EEF1F7);
   sw_text_center(SWF_SMALL, x + 8, 26, 11, C_TEXT, "L");
   x += 24;
+  /* the tab names in a translation can be longer than the English: the size comes down until the row,
+     the R badge and the four port dots end short of the clock */
+  float size = 14, gap = 14;
+  for (;;) {
+    float total = 0;
+    for (int i = 0; i < TAB_COUNT; i++)
+      total += sw_text_width(SWF_UI, size, T(tab_names[i])) + gap;
+    if (x + total + 16 + 30 + 36 <= 540 || size <= 10.5f)
+      break;
+    size -= 0.5f;
+    gap = 10;
+  }
   for (int i = 0; i < TAB_COUNT; i++) {
     int on = (i == tab) && mode != MODE_DETAIL && mode != MODE_OPTIONS;
-    float w = sw_text_width(SWF_UI, 14, tab_names[i]);
-    sw_text(SWF_UI, x, 25, 14, on ? C_WHITE : C_DIM, tab_names[i]);
+    float w = sw_text_width(SWF_UI, size, T(tab_names[i]));
+    sw_text(SWF_UI, x, 25 + (14 - size) / 2, size, on ? C_WHITE : C_DIM, T(tab_names[i]));
     if (on)
       sw_rect(x, 45, w, 2, C_ORANGE);
-    x += w + 14;
+    x += w + gap;
   }
   sw_rrect(x, 25, 16, 16, 3, 0x24EEF1F7);
   sw_text_center(SWF_SMALL, x + 8, 26, 11, C_TEXT, "R");
@@ -711,21 +730,21 @@ static void draw_header(void) {
 static const char *home_label(int pos, const sw_game *g, char *buf, int len) {
   sw_stat *s = sw_stat_get(g, 0);
   if (pos < home_recent_len && s && s->last) {
-    if (pos == 0) return "Continue Playing";
+    if (pos == 0) return T(S_CONTINUE_PLAYING);
     char d[20];
     sw_lib_format_last_played(s->last, d, sizeof(d));
-    snprintf(buf, len, "Last Played %s", d);
+    snprintf(buf, len, T(S_LAST_PLAYED), d);
     return buf;
   }
-  if (s && s->fav) return "Favorite";
+  if (s && s->fav) return T(S_FAVORITE);
   const char *genre = sw_lib_genre_name(g);
-  return genre ? genre : "Your Library";
+  return genre ? genre : T(S_YOUR_LIBRARY);
 }
 
 static void draw_home(float slide) {
   if (home_len <= 0) {
-    sw_text(SWF_HEAD, 32, 120, 20, C_WHITE, "No games found");
-    sw_text_wrap(SWF_BODY, 32, 150, 15, C_DIM, "Add games to your SD card with GDMENUCardManager, then rebuild the menu.", 420, 20, 3);
+    sw_text(SWF_HEAD, 32, 120, 20, C_WHITE, T(S_NO_GAMES));
+    sw_text_wrap(SWF_BODY, 32, 150, 15, C_DIM, T(S_NO_GAMES_HELP), 420, 20, 3);
     return;
   }
   sw_game *g = G(home_list[home_sel]);
@@ -749,13 +768,13 @@ static void draw_home(float slide) {
     sw_text_wrap(SWF_BODY, 32 + ox, y, 15, SW_ALPHA(C_TEXT, 0xDC), desc, 330, 19, lines > 1 ? 2 : 3);
   else {
     char info[64];
-    snprintf(info, sizeof(info), "Slot %02u on your SD card.", g->item->slot_num);
+    snprintf(info, sizeof(info), T(S_SLOT_ON_CARD), g->item->slot_num);
     sw_text(SWF_BODY, 32 + ox, y, 15, C_DIM, info);
   }
   float bx = 32 + ox;
-  bx += draw_button_hint(bx, 282, C_BTN_A, "A", "Play", C_TEXT);
-  bx += draw_button_hint(bx, 282, C_BTN_Y, "Y", sw_lib_is_fav(g) ? "Unfavorite" : "Favorite", C_TEXT);
-  draw_button_hint(bx, 282, C_BTN_X, "X", "Details", C_TEXT);
+  bx += draw_button_hint(bx, 282, C_BTN_A, "A", T(S_PLAY), C_TEXT);
+  bx += draw_button_hint(bx, 282, C_BTN_Y, "Y", sw_lib_is_fav(g) ? T(S_UNFAVORITE) : T(S_FAVORITE), C_TEXT);
+  draw_button_hint(bx, 282, C_BTN_X, "X", T(S_DETAILS), C_TEXT);
 
   /* hero cover + reflection */
   const float sharp = art_sharp(g, 12);
@@ -770,13 +789,13 @@ static void draw_home(float slide) {
   }
 
   /* carousel */
-  const char *row = home_sel < home_recent_len ? "Recently Played" : "All Games";
+  const char *row = home_sel < home_recent_len ? T(S_RECENTLY_PLAYED) : T(S_ALL_GAMES);
   float lw = sw_text(SWF_UI, 32, 318, 14, C_TEXT, row);
   char cnt[32];
   if (home_sel < home_recent_len)
-    snprintf(cnt, sizeof(cnt), "then All Games %d", sw_lib_count());
+    snprintf(cnt, sizeof(cnt), T(S_THEN_ALL_GAMES), sw_lib_count());
   else
-    snprintf(cnt, sizeof(cnt), "%d games", sw_lib_count());
+    snprintf(cnt, sizeof(cnt), T(S_N_GAMES), sw_lib_count());
   sw_text(SWF_SMALL, 32 + lw + 10, 320, 12, C_FAINT, cnt);
 
   const float small = 76, big = 96, gap = 12;
@@ -804,13 +823,13 @@ static void draw_home(float slide) {
   }
 
   char pos[24];
-  snprintf(pos, sizeof(pos), "%d of %d", home_sel + 1, home_len);
-  const char *foot[] = {"L / R  Tabs", "D-Pad  Browse", "Down  Surprise me", "Start  Settings"};
+  snprintf(pos, sizeof(pos), T(S_POS_OF), home_sel + 1, home_len);
+  const char *foot[] = {T(S_FOOT_TABS), T(S_FOOT_BROWSE), T(S_FOOT_SURPRISE), T(S_FOOT_SETTINGS)};
   draw_footer(foot, 4, pos);
 }
 
 /* ---------- LIBRARY ---------- */
-static const char *sort_names[SW_SORT_COUNT] = {"Name", "Recently played", "Most played", "Release year", "Card order"};
+static const int sort_names[SW_SORT_COUNT] = {S_SORT_NAME, S_SORT_RECENT, S_SORT_MOST, S_SORT_YEAR, S_SORT_CARD};
 
 static void draw_game_strip(const sw_game *g, float x, float y, float w) {
   sw_rrect(x, y, w, 58, 8, C_PANEL);
@@ -821,11 +840,12 @@ static void draw_game_strip(const sw_game *g, float x, float y, float w) {
   if (s && s->plays) {
     char d[20];
     sw_lib_format_last_played(s->last, d, sizeof(d));
-    snprintf(buf, sizeof(buf), "Played %u time%s. Last played %s.", s->plays, s->plays == 1 ? "" : "s", d);
+    if (s->plays == 1) snprintf(buf, sizeof(buf), T(S_PLAYED_ONCE), d);
+    else snprintf(buf, sizeof(buf), T(S_PLAYED_TIMES), s->plays, d);
   } else if (g->year_ok) {
-    snprintf(buf, sizeof(buf), "Released %u. Not played yet.", g->year);
+    snprintf(buf, sizeof(buf), T(S_RELEASED_NOT_PLAYED), g->year);
   } else {
-    snprintf(buf, sizeof(buf), "Not played yet.");
+    snprintf(buf, sizeof(buf), T(S_NOT_PLAYED));
   }
   float cw = draw_chips(g, cx, y + 33, w * 0.55f);
   sw_text_clip(SWF_SMALL, cx + cw + 6, y + 36, 12, C_DIM, buf, w - 28 - cw - 6);
@@ -833,11 +853,11 @@ static void draw_game_strip(const sw_game *g, float x, float y, float w) {
 
 static void draw_library(float slide) {
   char head[48];
-  snprintf(head, sizeof(head), "%d games", lib_len);
-  float w = sw_text(SWF_HEAD, 32 + slide, 64, 20, C_WHITE, "Library");
+  snprintf(head, sizeof(head), T(S_N_GAMES), lib_len);
+  float w = sw_text(SWF_HEAD, 32 + slide, 64, 20, C_WHITE, T(S_TAB_LIBRARY));
   sw_text(SWF_SMALL, 32 + slide + w + 10, 70, 12, C_DIM, head);
   char sbuf[40];
-  snprintf(sbuf, sizeof(sbuf), "Sort: %s", sort_names[lib_sort]);
+  snprintf(sbuf, sizeof(sbuf), T(S_SORT_PREFIX), T(sort_names[lib_sort]));
   sw_text_right(SWF_SMALL, 608, 70, 12, C_DIM, sbuf);
   if (lib_len <= 0)
     return;
@@ -863,8 +883,8 @@ static void draw_library(float slide) {
   sw_game *g = G(lib_list[lib_sel]);
   set_focus(lib_list[lib_sel]);
   draw_game_strip(g, 32, 382, 576);
-  const char *foot[] = {"L / R  Tabs", "X  Sort", "Y  Favorite", "Keyboard  Type to jump"};
-  draw_footer(foot, 4, "A  Open");
+  const char *foot[] = {T(S_FOOT_TABS), T(S_FOOT_SORT), T(S_FOOT_FAVORITE), T(S_FOOT_TYPE_TO_JUMP)};
+  draw_footer(foot, 4, T(S_FOOT_OPEN));
 }
 
 /* ---------- COLLECTIONS ---------- */
@@ -892,13 +912,13 @@ static void draw_collections(float slide) {
   /* title */
   float w = sw_text(SWF_HEAD, 226 + slide, 64, 20, C_WHITE, cols[col_sel].name);
   char sub[24];
-  snprintf(sub, sizeof(sub), "%d game%s", col_len, col_len == 1 ? "" : "s");
+  snprintf(sub, sizeof(sub), col_len == 1 ? T(S_ONE_GAME) : T(S_N_GAMES), col_len);
   sw_text(SWF_SMALL, 226 + slide + w + 10, 70, 12, C_DIM, sub);
 
   if (col_len <= 0) {
-    const char *msg = cols[col_sel].id == 1 ? "Press Y on any game to add it to Favorites." : "Nothing here yet.";
+    const char *msg = cols[col_sel].id == 1 ? T(S_FAV_EMPTY) : T(S_NOTHING_HERE);
     sw_text_wrap(SWF_BODY, 226 + slide, 110, 15, C_DIM, msg, 380, 20, 3);
-    const char *foot[] = {"L / R  Tabs", "Up / Down  Collections"};
+    const char *foot[] = {T(S_FOOT_TABS), T(S_FOOT_COLLECTIONS)};
     draw_footer(foot, 2, NULL);
     return;
   }
@@ -926,39 +946,40 @@ static void draw_collections(float slide) {
     sw_text(SWF_SMALL, px + 16 + tw + 10, py + 16, 12, C_FAINT, yb);
   }
   draw_chips(g, px + 16, py + 40, pw - 32);
-  const char *desc = (g->meta && g->meta->description[0]) ? g->meta->description : "No description in META.DAT for this title.";
+  const char *desc = (g->meta && g->meta->description[0]) ? g->meta->description : T(S_NO_META);
   sw_text_wrap(SWF_BODY, px + 16, py + 68, 14, SW_ALPHA(C_TEXT, 0xDC), desc, pw - 32, 18, 3);
   sw_stat *s = sw_stat_get(g, 0);
   char buf[64];
   if (s && s->plays) {
     char d[20];
     sw_lib_format_last_played(s->last, d, sizeof(d));
-    snprintf(buf, sizeof(buf), "Played %u time%s. Last played %s.", s->plays, s->plays == 1 ? "" : "s", d);
+    if (s->plays == 1) snprintf(buf, sizeof(buf), T(S_PLAYED_ONCE), d);
+    else snprintf(buf, sizeof(buf), T(S_PLAYED_TIMES), s->plays, d);
   } else
-    snprintf(buf, sizeof(buf), "Not played yet.");
+    snprintf(buf, sizeof(buf), T(S_NOT_PLAYED));
   sw_text(SWF_SMALL, px + 16, py + 144, 12, C_FAINT, buf);
 
   if (col_focus_grid) {
-    const char *foot[] = {"L / R  Tabs", "B  Collections", "Y  Favorite"};
-    draw_footer(foot, 3, "A  Open");
+    const char *foot[] = {T(S_FOOT_TABS), T(S_FOOT_BACK_COLLECTIONS), T(S_FOOT_FAVORITE)};
+    draw_footer(foot, 3, T(S_FOOT_OPEN));
   } else {
-    const char *foot[] = {"L / R  Tabs", "Up / Down  Collections", "Right  Games"};
-    draw_footer(foot, 3, "A  Open");
+    const char *foot[] = {T(S_FOOT_TABS), T(S_FOOT_COLLECTIONS), T(S_FOOT_RIGHT_GAMES)};
+    draw_footer(foot, 3, T(S_FOOT_OPEN));
   }
 }
 
 /* ---------- SYSTEM ---------- */
 enum {
   SYS_STYLE = 0, SYS_ACCENT, SYS_BACKDROP, SYS_LOGO, SYS_QUALITY, SYS_MUSIC, SYS_MUSIC_VOL, SYS_SFX, SYS_SFX_VOL, SYS_RESUME, SYS_CLOCK,
-  SYS_RUMBLE, SYS_START, SYS_VIDEO, SYS_BEEP, SYS_GAMEID, SYS_ATTRACT, SYS_SAVER_STYLE, SYS_SAVER_TIME, SYS_SAVER_TEST, SYS_VMU, SYS_SAVE, SYS_PADTEST,
+  SYS_LANGUAGE, SYS_RUMBLE, SYS_START, SYS_VIDEO, SYS_BEEP, SYS_GAMEID, SYS_ATTRACT, SYS_SAVER_STYLE, SYS_SAVER_TIME, SYS_SAVER_TEST, SYS_VMU, SYS_SAVE, SYS_PADTEST,
   SYS_BIOS, SYS_DIAG, SYS_COUNT
 };
 #define SYS_ROWS 9
 static int sys_top;
-static const char *style_names[] = {"SWIRL", "Classic list", "Classic grid", "GDMENU"};
+static const int style_names[] = {S_STYLE_SWIRL, S_STYLE_LIST, S_STYLE_GRID, S_STYLE_GDMENU};
 static const int style_values[] = {UI_SWIRL, UI_LINE_DESC, UI_GRID3, UI_GDMENU};
 
-static const char *boot_names[] = {"Straight to the game", "Boot animation", "SEGA screen", "Animation and SEGA"}; /* by SW_BOOT_* */
+static const int boot_names[] = {S_BOOT_NONE, S_BOOT_ANIMATION, S_BOOT_LICENSE, S_BOOT_BOTH}; /* by SW_BOOT_* */
 
 static const char *sys_value(int i, char *buf, int len) {
   sw_prefs *p = sw_lib_prefs();
@@ -966,54 +987,64 @@ static const char *sys_value(int i, char *buf, int len) {
   switch (i) {
     case SYS_STYLE:
       if (style_values[sys_style] != UI_SWIRL && !settings_style_ready(style_values[sys_style])) {
-        snprintf(buf, len, "%s (needs Update SWIRL)", style_names[sys_style]);
+        snprintf(buf, len, T(S_NEEDS_UPDATE), T(style_names[sys_style]));
         return buf;
       }
-      return style_names[sys_style];
-    case SYS_ACCENT: return p->backdrop == BACKDROP_SEASONAL ? "Set by season" : accents[p->accent % NUM_ACCENTS].name;
+      return T(style_names[sys_style]);
+    case SYS_ACCENT: return p->backdrop == BACKDROP_SEASONAL ? T(S_SET_BY_SEASON) : T(accents[p->accent % NUM_ACCENTS].name);
     case SYS_BACKDROP:
       if (p->backdrop == BACKDROP_SEASONAL && cur_season) {
-        snprintf(buf, len, "Seasonal: %s", cur_season->name);
+        snprintf(buf, len, T(S_SEASONAL_PREFIX), T(cur_season->name));
         return buf;
       }
-      return backdrop_names[p->backdrop % BACKDROP_COUNT];
+      return T(backdrop_names[p->backdrop % BACKDROP_COUNT]);
     case SYS_LOGO:
-      if (!logo_sheet) return have_logo ? "Orange (Update SWIRL for blue)" : "No logo on card";
+      if (!logo_sheet) return have_logo ? T(S_LOGO_OLD) : T(S_LOGO_NONE);
       switch (p->logo) {
-        case SW_LOGO_ORANGE: return "Orange (USA, Japan)";
-        case SW_LOGO_BLUE: return "Blue (Europe)";
-        default: return logo_y ? "By region: blue" : "By region: orange";
+        case SW_LOGO_ORANGE: return T(S_LOGO_ORANGE);
+        case SW_LOGO_BLUE: return T(S_LOGO_BLUE);
+        default: return logo_y ? T(S_LOGO_REGION_BLUE) : T(S_LOGO_REGION_ORANGE);
       }
-    case SYS_QUALITY: return p->quality ? "Standard" : "High";
-    case SYS_MUSIC: return !sw_audio_has_music() ? "No music on card" : (p->music ? "On" : "Off");
-    case SYS_MUSIC_VOL: snprintf(buf, len, "%d / 10", p->music_vol); return buf;
-    case SYS_SFX: return p->sfx ? "On" : "Off";
-    case SYS_SFX_VOL: snprintf(buf, len, "%d / 10", p->sfx_vol); return buf;
-    case SYS_RESUME: return p->resume ? "Last played game" : "Home";
-    case SYS_CLOCK: return p->clock24 ? "24 hour" : "12 hour";
-    case SYS_RUMBLE: return p->rumble ? "On" : "Off";
-    case SYS_START: return boot_names[sw_lib_launch_default().boot & 3];
-    case SYS_VIDEO: return p->video ? "Game default" : "Force VGA";
-    case SYS_BEEP: return s->beep == BEEP_ON ? "On" : "Off";
-    case SYS_GAMEID: return p->gameid_off ? "Off" : "On";
-    case SYS_ATTRACT: return p->attract ? "On" : "Off";
-    case SYS_SAVER_STYLE: return saver_names[p->saver_style % SAVER_COUNT];
-    case SYS_SAVER_TIME: snprintf(buf, len, "After %d min", p->saver_min); return buf;
-    case SYS_SAVER_TEST: return "Press A";
+    case SYS_QUALITY: return p->quality ? T(S_QUALITY_STANDARD) : T(S_QUALITY_HIGH);
+    case SYS_MUSIC: return !sw_audio_has_music() ? T(S_NO_MUSIC) : (p->music ? T(S_ON) : T(S_OFF));
+    case SYS_MUSIC_VOL: snprintf(buf, len, T(S_N_OF_10), p->music_vol); return buf;
+    case SYS_SFX: return p->sfx ? T(S_ON) : T(S_OFF);
+    case SYS_SFX_VOL: snprintf(buf, len, T(S_N_OF_10), p->sfx_vol); return buf;
+    case SYS_RESUME: return p->resume ? T(S_RESUME_LAST) : T(S_RESUME_HOME);
+    case SYS_CLOCK: return p->clock24 ? T(S_CLOCK_24) : T(S_CLOCK_12);
+    case SYS_LANGUAGE:
+      if (p->lang == SW_LANG_AUTO) {
+        snprintf(buf, len, T(S_LANG_AUTO), sw_lang_name(sw_lang_current()));
+        return buf;
+      }
+      if (!sw_lang_available(p->lang)) {
+        snprintf(buf, len, T(S_LANG_MISSING), sw_lang_name(p->lang));
+        return buf;
+      }
+      return sw_lang_name(p->lang);
+    case SYS_RUMBLE: return p->rumble ? T(S_ON) : T(S_OFF);
+    case SYS_START: return T(boot_names[sw_lib_launch_default().boot & 3]);
+    case SYS_VIDEO: return p->video ? T(S_VIDEO_DEFAULT) : T(S_VIDEO_VGA);
+    case SYS_BEEP: return s->beep == BEEP_ON ? T(S_ON) : T(S_OFF);
+    case SYS_GAMEID: return p->gameid_off ? T(S_OFF) : T(S_ON);
+    case SYS_ATTRACT: return p->attract ? T(S_ON) : T(S_OFF);
+    case SYS_SAVER_STYLE: return T(saver_names[p->saver_style % SAVER_COUNT]);
+    case SYS_SAVER_TIME: snprintf(buf, len, T(S_AFTER_MIN), p->saver_min); return buf;
+    case SYS_SAVER_TEST: return T(S_PRESS_A);
     case SYS_SAVE: return sw_lib_save_status(buf, len);
     case SYS_DIAG:
-      if (!sw_warn_count()) return "No warnings";
-      snprintf(buf, len, "%d warning%s", sw_warn_count(), sw_warn_count() == 1 ? "" : "s");
+      if (!sw_warn_count()) return T(S_NO_WARNINGS);
+      snprintf(buf, len, sw_warn_count() == 1 ? T(S_ONE_WARNING) : T(S_N_WARNINGS), sw_warn_count());
       return buf;
     default: return "";
   }
 }
 
-static const char *sys_names[SYS_COUNT] = {"Menu style", "Accent colour", "Backdrop", "Header logo", "Picture quality", "Menu music", "Music volume",
-                                           "Navigation sounds", "Sound volume", "Start on", "Clock",
-                                           "Rumble on launch", "Start games with", "Video", "VMU beep on save", "VM2 / VMU Pro game cards", "Screen saver", "Screen saver style",
-                                           "Start screen saver", "Preview screen saver", "VMU saves",
-                                           "Save settings to VMU", "Controller test", "Exit to Dreamcast BIOS", "Diagnostics"};
+static const int sys_names[SYS_COUNT] = {S_SYS_STYLE, S_SYS_ACCENT, S_SYS_BACKDROP, S_SYS_LOGO, S_SYS_QUALITY, S_SYS_MUSIC, S_SYS_MUSIC_VOL,
+                                           S_SYS_SFX, S_SYS_SFX_VOL, S_SYS_RESUME, S_SYS_CLOCK, S_SYS_LANGUAGE,
+                                           S_SYS_RUMBLE, S_SYS_START, S_SYS_VIDEO, S_SYS_BEEP, S_SYS_GAMEID, S_SYS_ATTRACT, S_SYS_SAVER_STYLE,
+                                           S_SYS_SAVER_TIME, S_SYS_SAVER_TEST, S_SYS_VMU,
+                                           S_SYS_SAVE, S_SYS_PADTEST, S_SYS_BIOS, S_SYS_DIAG};
 
 static void show_logo_on_vmu(void) {
   sw_vmu_show_logo();
@@ -1022,7 +1053,7 @@ static void show_logo_on_vmu(void) {
 
 static void draw_system(float slide) {
   show_logo_on_vmu();
-  sw_text(SWF_HEAD, 32 + slide, 64, 20, C_WHITE, "System");
+  sw_text(SWF_HEAD, 32 + slide, 64, 20, C_WHITE, T(S_TAB_SYSTEM));
   if (sys_sel < sys_top) sys_top = sys_sel;
   if (sys_sel >= sys_top + SYS_ROWS) sys_top = sys_sel - SYS_ROWS + 1;
   sw_rrect(32 + slide, 98, 330, SYS_ROWS * 36 + 14, 8, C_PANEL);
@@ -1034,18 +1065,27 @@ static void draw_system(float slide) {
       sw_rrect(38 + slide, y, 318, 32, 6, SW_ALPHA(C_ORANGE, 0x2E));
       sw_rect(38 + slide, y + 6, 3, 20, C_ORANGE);
     }
-    sw_text(SWF_UI, 52 + slide, y + 8, 14, on ? C_WHITE : SW_ALPHA(C_TEXT, 0xD0), sys_names[i]);
-    char buf[40];
+    const float lw = sw_text(SWF_UI, 52 + slide, y + 8, 14, on ? C_WHITE : SW_ALPHA(C_TEXT, 0xD0), T(sys_names[i]));
+    char buf[64];
     const char *v = sys_value(i, buf, sizeof(buf));
     if (v[0]) {
       float vw = sw_text_width(SWF_SMALL, 12, v);
+      const float avail = 342 - 14 - (52 + lw + 12); /* a translated value never runs into its label */
+      const char *full = v;
+      if (vw > avail && avail > 30) {
+        vw = avail;
+        v = NULL;
+      }
       if (i < SYS_VMU && i != SYS_SAVER_TEST && on) {
         sw_text(SWF_SMALL, 342 + slide - vw - 14, y + 10, 12, C_ORANGE, "<");
         sw_text(SWF_SMALL, 342 + slide + 2, y + 10, 12, C_ORANGE, ">");
       }
       if (i == SYS_ACCENT && sw_lib_prefs()->backdrop != BACKDROP_SEASONAL)
         sw_circle(342 + slide - vw - 26, y + 16, 5, C_ORANGE);
-      sw_text_right(SWF_SMALL, 342 + slide, y + 10, 12, on ? C_WHITE : C_DIM, v);
+      if (v)
+        sw_text_right(SWF_SMALL, 342 + slide, y + 10, 12, on ? C_WHITE : C_DIM, v);
+      else
+        sw_text_clip(SWF_SMALL, 342 + slide - vw, y + 10, 12, on ? C_WHITE : C_DIM, full, vw);
     }
   }
   if (SYS_COUNT > SYS_ROWS) {
@@ -1058,7 +1098,7 @@ static void draw_system(float slide) {
   /* library stats card */
   float x = 380 + slide;
   sw_rrect(x, 98, 228, 200, 8, C_PANEL);
-  sw_text(SWF_UI, x + 16, 110, 14, C_WHITE, "Your library");
+  sw_text(SWF_UI, x + 16, 110, 14, C_WHITE, T(S_PANEL_LIBRARY));
   int total = sw_lib_count(), favs = 0, played = 0, plays = 0;
   for (int i = 0; i < total; i++) {
     sw_stat *s = sw_stat_get(G(i), 0);
@@ -1068,7 +1108,7 @@ static void draw_system(float slide) {
       plays += s->plays;
     }
   }
-  const char *labels[4] = {"Games on SD card", "Favorites", "Games played", "Total launches"};
+  const char *labels[4] = {T(S_GAMES_ON_CARD), T(S_FAVORITES), T(S_GAMES_PLAYED), T(S_TOTAL_LAUNCHES)};
   int vals[4] = {total, favs, played, plays};
   for (int i = 0; i < 4; i++) {
     sw_text(SWF_SMALL, x + 16, 140 + i * 36, 12, C_DIM, labels[i]);
@@ -1077,24 +1117,27 @@ static void draw_system(float slide) {
     sw_text_right(SWF_HEAD, x + 212, 134 + i * 36, 20, C_WHITE, b);
   }
   sw_rrect(x, 310, 228, 126, 8, C_PANEL);
-  sw_text(SWF_UI, x + 16, 322, 14, C_WHITE, "About SWIRL");
-  sw_text_right(SWF_SMALL, x + 212, 324, 12, C_DIM, "Version " SWIRL_VERSION);
+  sw_text(SWF_UI, x + 16, 322, 14, C_WHITE, T(S_ABOUT));
+  char ver[48];
+  snprintf(ver, sizeof(ver), T(S_VERSION), SWIRL_VERSION);
+  sw_text_right(SWF_SMALL, x + 212, 324, 12, C_DIM, ver);
   /* the full version and the build id, so a photo of this panel says exactly what is on the card (the
      Diagnostics screen shows the same) */
-  sw_text(SWF_SMALL, x + 16, 340, 11, C_DIM, SWIRL_VERSION_STR ", build " SWIRL_BUILD);
+  snprintf(ver, sizeof(ver), T(S_BUILD), SWIRL_VERSION_STR, SWIRL_BUILD);
+  sw_text(SWF_SMALL, x + 16, 340, 11, C_DIM, ver);
   sw_text(SWF_SMALL, x + 16, 357, 12, C_TEXT, "Created by Glen Huszar");
   sw_text(SWF_SMALL, x + 16, 373, 12, C_ORANGE, "github.com/TheGlengineer");
   sw_text_wrap(SWF_SMALL, x + 16, 391, 11, C_DIM,
-               "Built on openMenu by mrneo240. Fonts: Sora and Barlow (OFL).", 196, 13, 2);
+               T(S_CREDITS), 196, 13, 2);
   {
     char db[40];
     const int n = sw_warn_count();
-    if (n) snprintf(db, sizeof(db), "Diagnostics: %d warning%s", n, n == 1 ? "" : "s");
-    else snprintf(db, sizeof(db), "Diagnostics: no warnings");
+    if (n) snprintf(db, sizeof(db), n == 1 ? T(S_DIAG_ONE) : T(S_DIAG_N), n);
+    else snprintf(db, sizeof(db), T(S_DIAG_NONE));
     sw_text(SWF_SMALL, x + 16, 421, 11, n ? C_ORANGE : C_DIM, db);
   }
 
-  const char *foot[] = {"L / R  Tabs", "Left / Right  Change", "A  Select"};
+  const char *foot[] = {T(S_FOOT_TABS), T(S_FOOT_CHANGE), T(S_FOOT_SELECT)};
   draw_footer(foot, 3, NULL);
 }
 
@@ -1116,13 +1159,13 @@ static void draw_detail(float slide) {
   float ox = slide;
   /* cover and VMU preview */
   draw_cover(g, 32 + ox, 64, 176, art_sharp(g, 6), 0, 1.f);
-  sw_text(SWF_SMALL, 32 + ox, 258, 12, C_FAINT, "VMU PREVIEW");
+  sw_text(SWF_SMALL, 32 + ox, 258, 12, C_FAINT, T(S_VMU_PREVIEW));
   sw_rrect(32 + ox, 276, 150, 102, 8, 0xFF53664F);
   sw_rrect(35 + ox, 279, 144, 96, 6, 0xFF9FB89A);
   sw_image_uv(sw_vmu_preview(), 35 + ox, 279, 144, 96, 0.f, 0.f, 48.f / 64.f, 1.f, 0xFF1D2A1B, 0xFF1D2A1B, 0xFF1D2A1B, 0xFF1D2A1B);
   if (g->meta && g->meta->vmu_blocks) {
     char b[32];
-    snprintf(b, sizeof(b), "Needs %d VMU block%s", g->meta->vmu_blocks, g->meta->vmu_blocks == 1 ? "" : "s");
+    snprintf(b, sizeof(b), g->meta->vmu_blocks == 1 ? T(S_NEEDS_ONE_BLOCK) : T(S_NEEDS_BLOCKS), g->meta->vmu_blocks);
     sw_text(SWF_SMALL, 32 + ox, 386, 12, C_DIM, b);
   }
 
@@ -1131,16 +1174,16 @@ static void draw_detail(float slide) {
   int lines = sw_text_wrap(SWF_TITLE, x, 60, 28, C_WHITE, g->item->name, w, 32, 2);
   float y = 60 + lines * 32 + 4;
   char meta[80];
-  const char *reg = strchr(g->item->region, 'U') ? "USA" : (strchr(g->item->region, 'J') ? "Japan" : (strchr(g->item->region, 'E') ? "Europe" : g->item->region));
+  const char *reg = strchr(g->item->region, 'U') ? T(S_REGION_USA) : (strchr(g->item->region, 'J') ? T(S_REGION_JAPAN) : (strchr(g->item->region, 'E') ? T(S_REGION_EUROPE) : g->item->region));
   if (g->year_ok)
-    snprintf(meta, sizeof(meta), "Released %u     Region %s     Slot %02u", g->year, reg, g->item->slot_num);
+    snprintf(meta, sizeof(meta), T(S_META_FULL), g->year, reg, g->item->slot_num);
   else
-    snprintf(meta, sizeof(meta), "Region %s     Slot %02u", reg, g->item->slot_num);
+    snprintf(meta, sizeof(meta), T(S_META_SHORT), reg, g->item->slot_num);
   sw_text(SWF_SMALL, x, y, 12, C_DIM, meta);
   y += 24;
   draw_chips(g, x, y, w);
   y += 32;
-  const char *desc = (g->meta && g->meta->description[0]) ? g->meta->description : "No description in META.DAT for this title.";
+  const char *desc = (g->meta && g->meta->description[0]) ? g->meta->description : T(S_NO_META);
   load_shots(g);
   int max_lines = g->discs > 1 ? 6 : 9;
   if (shot_count) max_lines = g->discs > 1 ? 2 : 4;
@@ -1150,7 +1193,7 @@ static void draw_detail(float slide) {
     float sh_w = (w - 12) / 2.f, sh_h = sh_w * 0.75f;
     float room = (g->discs > 1 ? 360.f : 420.f) - (y + 36);
     if (sh_h > room) { sh_h = room; sh_w = sh_h / 0.75f; }
-    sw_text(SWF_SMALL, x, y, 12, C_FAINT, "SCREENS");
+    sw_text(SWF_SMALL, x, y, 12, C_FAINT, T(S_SCREENS));
     for (int i = 0; i < shot_count; i++) {
       float sx = x + i * (sh_w + 12), sy = y + 18;
       sw_shadow(sx, sy + 3, sh_w, sh_h, 8, 0x80000000);
@@ -1164,14 +1207,15 @@ static void draw_detail(float slide) {
   if (s && s->plays) {
     char d[20];
     sw_lib_format_last_played(s->last, d, sizeof(d));
-    snprintf(buf, sizeof(buf), "Played %u time%s. Last played %s.", s->plays, s->plays == 1 ? "" : "s", d);
+    if (s->plays == 1) snprintf(buf, sizeof(buf), T(S_PLAYED_ONCE), d);
+    else snprintf(buf, sizeof(buf), T(S_PLAYED_TIMES), s->plays, d);
   } else
-    snprintf(buf, sizeof(buf), "Not played yet.");
+    snprintf(buf, sizeof(buf), T(S_NOT_PLAYED));
   sw_text(SWF_SMALL, x, y, 12, C_FAINT, buf);
 
   if (detail_num_discs > 1) {
     float dy = 374;
-    sw_text(SWF_SMALL, x, dy, 12, C_FAINT, "CHOOSE DISC");
+    sw_text(SWF_SMALL, x, dy, 12, C_FAINT, T(S_CHOOSE_DISC));
     for (int i = 0; i < detail_num_discs; i++) {
       float bx = x + i * 48;
       int on = i == detail_disc;
@@ -1185,17 +1229,17 @@ static void draw_detail(float slide) {
   float bx = 32;
   char play[24];
   if (detail_num_discs > 1)
-    snprintf(play, sizeof(play), "Play Disc %d", detail_discs[detail_disc]->disc[0] - '0');
+    snprintf(play, sizeof(play), T(S_PLAY_DISC), detail_discs[detail_disc]->disc[0] - '0');
   else
-    snprintf(play, sizeof(play), "Play");
+    snprintf(play, sizeof(play), T(S_PLAY));
   if (is_psx_disc(detail_discs[detail_disc]))
-    snprintf(play, sizeof(play), "Play in Bleem");
+    snprintf(play, sizeof(play), T(S_PLAY_BLEEM));
   bx += draw_button_hint(bx, 448, C_BTN_A, "A", play, C_TEXT);
-  bx += draw_button_hint(bx, 448, C_BTN_X, "X", launch_is_custom(g) ? "Options (custom)" : "Options", C_TEXT);
-  bx += draw_button_hint(bx, 448, C_BTN_Y, "Y", sw_lib_is_fav(g) ? "Unfavorite" : "Favorite", C_TEXT);
-  draw_button_hint(bx, 448, C_BTN_B, "B", "Back", C_TEXT);
+  bx += draw_button_hint(bx, 448, C_BTN_X, "X", launch_is_custom(g) ? T(S_OPTIONS_CUSTOM) : T(S_OPTIONS), C_TEXT);
+  bx += draw_button_hint(bx, 448, C_BTN_Y, "Y", sw_lib_is_fav(g) ? T(S_UNFAVORITE) : T(S_FAVORITE), C_TEXT);
+  draw_button_hint(bx, 448, C_BTN_B, "B", T(S_BACK), C_TEXT);
   char slot[24];
-  snprintf(slot, sizeof(slot), "Slot %02u on SD", detail_discs[detail_disc]->slot_num);
+  snprintf(slot, sizeof(slot), T(S_SLOT_ON_SD), detail_discs[detail_disc]->slot_num);
   sw_text_right(SWF_SMALL, 608, 452, 12, C_DIM, slot);
 }
 
@@ -1208,7 +1252,7 @@ static void begin_launch_kind(const sw_game *g, const gd_item *disc, int kind) {
   if (is_psx_disc(disc)) {
     if (have_bleem < 0) have_bleem = bleem_available();
     if (!have_bleem) {
-      show_toast("BLEEM.BIN is not on the menu disc");
+      show_toast(T(S_NO_BLEEM));
       return;
     }
     kind = KIND_BLEEM;
@@ -1234,10 +1278,10 @@ static void begin_launch(const sw_game *g, const gd_item *disc) {
 
 static void draw_launch(void) {
   sw_rect(0, 0, 640, 480, 0xC005070D);
-  const char *what = launch_kind == KIND_CB ? "STARTING WITH CODEBREAKER" : (launch_kind == KIND_BLEEM ? "STARTING IN BLEEM" : "STARTING");
+  const char *what = launch_kind == KIND_CB ? T(S_STARTING_CB) : (launch_kind == KIND_BLEEM ? T(S_STARTING_BLEEM) : T(S_STARTING));
   sw_text_center(SWF_SMALL, 320, 214, 12, C_ORANGE, what);
   sw_text_center(SWF_HEAD, 320, 232, 20, C_WHITE, launch_item ? launch_item->name : "");
-  sw_text_center(SWF_SMALL, 320, 262, 12, C_DIM, "Saving your history to the VMU");
+  sw_text_center(SWF_SMALL, 320, 262, 12, C_DIM, T(S_SAVING_HISTORY));
 }
 
 /* Launch in steps so the TV hears nothing sudden: fade the music, stop the sound chip while it is
@@ -1270,7 +1314,7 @@ static void tick_launch(void) {
   sw_vmu_init(); /* the VMU thread was ended for the hand over */
   mode = MODE_TABS;
   sw_audio_init();
-  show_toast(gdemu_launch_error() ? gdemu_launch_error() : "That launcher is not on the menu disc");
+  show_toast(gdemu_launch_error() ? gdemu_launch_error() : T(S_NO_LAUNCHER));
 }
 
 /* ---------- surprise me ---------- */
@@ -1295,7 +1339,7 @@ static void tick_surprise(void) {
       home_sel = rand() % home_len;
   } else {
     home_sel = surprise_target;
-    show_toast("Surprise pick. Press A to play");
+    show_toast(T(S_SURPRISE_PICK));
   }
 }
 
@@ -1305,16 +1349,16 @@ static void draw_resume(void) {
   if (!g) return;
   sw_rect(0, 0, 640, 480, 0xD005070D);
   draw_cover(g, 232, 92, 176, 1, 0, 1.f);
-  sw_text_center(SWF_SMALL, 320, 292, 12, C_ORANGE, "RESUMING YOUR LAST GAME");
+  sw_text_center(SWF_SMALL, 320, 292, 12, C_ORANGE, T(S_RESUMING));
   sw_text_center(SWF_HEAD, 320, 310, 20, C_WHITE, g->item->name);
   char b[40];
-  snprintf(b, sizeof(b), "Starting in %d", resume_frames / 60 + 1);
+  snprintf(b, sizeof(b), T(S_STARTING_IN), resume_frames / 60 + 1);
   sw_text_center(SWF_BODY, 320, 342, 15, C_DIM, b);
   sw_rrect(220, 370, 200, 4, 2, 0x30EEF1F7);
   sw_rrect(220, 370, 200.f * resume_frames / 300.f, 4, 2, C_ORANGE);
   float x = 226;
-  x += draw_button_hint(x, 392, C_BTN_A, "A", "Start now", C_TEXT);
-  draw_button_hint(x, 392, C_BTN_B, "B", "Stay in SWIRL", C_TEXT);
+  x += draw_button_hint(x, 392, C_BTN_A, "A", T(S_START_NOW), C_TEXT);
+  draw_button_hint(x, 392, C_BTN_B, "B", T(S_STAY), C_TEXT);
 }
 
 static void play_game(int game_idx, int ret_mode);
@@ -1329,7 +1373,7 @@ static void tick_resume(void) {
 }
 
 /* ---------- launch options sheet ---------- */
-static const char *region_names[] = {"Game default", "Japan", "USA", "Europe"};
+static const int region_names[] = {S_REGION_DEFAULT, S_REGION_JAPAN, S_REGION_USA, S_REGION_EUROPE};
 
 static void open_options(void) {
   sw_game *g = G(detail_game);
@@ -1358,7 +1402,7 @@ static void draw_options(void) {
   const float y = 240 - h / 2;
   sw_rect(0, 0, 640, 480, 0x9005070D);
   sw_rrect(x, y, w, h, 12, 0xF80C1222);
-  sw_text(SWF_HEAD, x + 20, y + 16, 18, C_WHITE, "Launch options");
+  sw_text(SWF_HEAD, x + 20, y + 16, 18, C_WHITE, T(S_LAUNCH_OPTIONS));
   sw_text_clip(SWF_SMALL, x + 20, y + 42, 12, C_DIM, g->item->name, w - 40);
   for (int i = 0; i < opt_count; i++) {
     float ry = y + 66 + i * row;
@@ -1369,15 +1413,15 @@ static void draw_options(void) {
     }
     const char *label = "", *val = "";
     switch (opt_items[i]) {
-      case OPT_PLAY: label = "Play"; break;
+      case OPT_PLAY: label = T(S_PLAY); break;
       case OPT_CB:
-        label = "Play with CodeBreaker cheats";
-        if (!have_cb) val = "Add it in Card Manager";
+        label = T(S_PLAY_CB);
+        if (!have_cb) val = T(S_ADD_IN_CM);
         break;
-      case OPT_REGION: label = "Region"; val = region_names[l.region & 3]; break;
-      case OPT_VIDEO: label = "Video"; val = l.vga ? "Force VGA" : "Game default"; break;
-      case OPT_BOOT: label = "Start with"; val = boot_names[l.boot & 3]; break;
-      case OPT_RESET: label = "Reset to defaults"; break;
+      case OPT_REGION: label = T(S_OPT_REGION); val = T(region_names[l.region & 3]); break;
+      case OPT_VIDEO: label = T(S_OPT_VIDEO); val = l.vga ? T(S_VIDEO_VGA) : T(S_VIDEO_DEFAULT); break;
+      case OPT_BOOT: label = T(S_OPT_START_WITH); val = T(boot_names[l.boot & 3]); break;
+      case OPT_RESET: label = T(S_OPT_RESET); break;
     }
     const int off = opt_items[i] == OPT_CB && !have_cb; /* not available on this card */
     sw_text(SWF_UI, x + 24, ry + 9, 14, off ? C_FAINT : on ? C_WHITE : SW_ALPHA(C_TEXT, 0xD0), label);
@@ -1393,7 +1437,7 @@ static void draw_options(void) {
     }
   }
   sw_text_wrap(SWF_SMALL, x + 20, y + h - 34, 11, C_FAINT,
-               "Change these only for games that fail to start. Saved to your VMU.", w - 40, 14, 2);
+               T(S_OPT_HELP), w - 40, 14, 2);
 }
 
 static void input_options(unsigned int btn, int pressed) {
@@ -1412,7 +1456,7 @@ static void input_options(unsigned int btn, int pressed) {
     case OPT_CB:
       if (btn != A) return;
       if (!have_cb) {
-        show_toast("Add CodeBreaker in Card Manager first");
+        show_toast(T(S_ADD_CB_FIRST));
         return;
       }
       begin_launch_kind(g, detail_discs[detail_disc], KIND_CB);
@@ -1423,7 +1467,7 @@ static void input_options(unsigned int btn, int pressed) {
     case OPT_RESET:
       if (btn != A) return;
       l = sw_lib_launch_default();
-      show_toast("Launch options reset to the System defaults");
+      show_toast(T(S_OPT_RESET_DONE));
       break;
   }
   sw_lib_launch_set(g, l);
@@ -1517,10 +1561,10 @@ static void vmu_tick(void) {
 
 static void draw_vmu_manager(void) {
   show_logo_on_vmu();
-  sw_text(SWF_HEAD, 32, 64, 20, C_WHITE, "VMU saves");
+  sw_text(SWF_HEAD, 32, 64, 20, C_WHITE, T(S_VMU_TITLE));
   if (vmu_ndev == 0) {
-    sw_text_wrap(SWF_BODY, 32, 104, 15, C_DIM, "No VMU or memory card found. Plug one into a controller and open this screen again.", 420, 20, 3);
-    const char *foot[] = {"B  Back"};
+    sw_text_wrap(SWF_BODY, 32, 104, 15, C_DIM, T(S_VMU_NONE), 420, 20, 3);
+    const char *foot[] = {T(S_FOOT_BACK)};
     draw_footer(foot, 1, NULL);
     return;
   }
@@ -1537,9 +1581,9 @@ static void draw_vmu_manager(void) {
   /* list */
   sw_rrect(32, 98, 380, VMU_ROWS * 40 + 12, 8, C_PANEL);
   if (vmu_free_blk < 0) {
-    sw_text(SWF_BODY, 48, 116, 15, C_DIM, "This memory card could not be read.");
+    sw_text(SWF_BODY, 48, 116, 15, C_DIM, T(S_VMU_UNREADABLE));
   } else if (vmu_nfiles == 0) {
-    sw_text(SWF_BODY, 48, 116, 15, C_DIM, "No saves on this memory card.");
+    sw_text(SWF_BODY, 48, 116, 15, C_DIM, T(S_VMU_EMPTY));
   }
   if (vmu_file_sel < vmu_top) vmu_top = vmu_file_sel;
   if (vmu_file_sel >= vmu_top + VMU_ROWS) vmu_top = vmu_file_sel - VMU_ROWS + 1;
@@ -1554,17 +1598,17 @@ static void draw_vmu_manager(void) {
     char fname[13];
     vmu_name(&vmu_dir[i], fname);
     const char *desc = (vmu_desc && vmu_desc[i][0] && vmu_desc[i][1]) ? vmu_desc[i] + 1 : NULL;
-    if (!strcmp(fname, "SWIRL.DAT")) desc = "SWIRL settings and history";
+    if (!strcmp(fname, "SWIRL.DAT")) desc = T(S_VMU_SWIRL_FILE);
     sw_text_clip(SWF_UI, 52, y + 3, 14, on ? C_WHITE : SW_ALPHA(C_TEXT, 0xD8), desc ? desc : fname, 280);
     sw_text(SWF_SMALL, 52, y + 20, 11, C_FAINT, fname);
     char b[16];
-    snprintf(b, sizeof(b), "%d block%s", vmu_dir[i].filesize, vmu_dir[i].filesize == 1 ? "" : "s");
+    snprintf(b, sizeof(b), vmu_dir[i].filesize == 1 ? T(S_ONE_BLOCK) : T(S_N_BLOCKS), vmu_dir[i].filesize);
     sw_text_right(SWF_SMALL, 396, y + 12, 12, on ? C_WHITE : C_DIM, b);
   }
   /* info card */
   float ix = 428;
   sw_rrect(ix, 98, 180, 150, 8, C_PANEL);
-  sw_text(SWF_UI, ix + 14, 110, 14, C_WHITE, "Space");
+  sw_text(SWF_UI, ix + 14, 110, 14, C_WHITE, T(S_VMU_SPACE));
   if (vmu_free_blk >= 0) {
     int used = 0;
     for (int i = 0; i < vmu_nfiles; i++) used += vmu_dir[i].filesize;
@@ -1572,26 +1616,26 @@ static void draw_vmu_manager(void) {
     char b[32];
     snprintf(b, sizeof(b), "%d", vmu_free_blk);
     sw_text(SWF_TITLE, ix + 14, 132, 28, C_WHITE, b);
-    sw_text(SWF_SMALL, ix + 14, 168, 12, C_DIM, "blocks free");
+    sw_text(SWF_SMALL, ix + 14, 168, 12, C_DIM, T(S_VMU_BLOCKS_FREE));
     sw_rrect(ix + 14, 192, 152, 8, 4, 0x30EEF1F7);
     if (total > 0) sw_rrect(ix + 14, 192, 152.f * used / total, 8, 4, C_ORANGE);
-    snprintf(b, sizeof(b), "%d saves, %d blocks used", vmu_nfiles, used);
+    snprintf(b, sizeof(b), T(S_VMU_SUMMARY), vmu_nfiles, used);
     sw_text_clip(SWF_SMALL, ix + 14, 208, 11, C_FAINT, b, 152);
   }
   if (vmu_nfiles > 0 && vmu_file_sel < vmu_nfiles) {
     const vmu_dir_t *e = &vmu_dir[vmu_file_sel];
     sw_rrect(ix, 258, 180, 110, 8, C_PANEL);
-    sw_text(SWF_UI, ix + 14, 270, 14, C_WHITE, "Saved");
+    sw_text(SWF_UI, ix + 14, 270, 14, C_WHITE, T(S_VMU_SAVED_LABEL));
     char b[32];
 #define BCD(v) (((v) >> 4) * 10 + ((v) & 15))
     snprintf(b, sizeof(b), "%02d/%02d/%02d%02d", BCD(e->timestamp.month), BCD(e->timestamp.day), BCD(e->timestamp.cent), BCD(e->timestamp.year));
     sw_text(SWF_BODY, ix + 14, 292, 15, C_TEXT, b);
     snprintf(b, sizeof(b), "%02d:%02d", BCD(e->timestamp.hour), BCD(e->timestamp.min));
     sw_text(SWF_SMALL, ix + 14, 314, 12, C_DIM, b);
-    sw_text(SWF_SMALL, ix + 14, 338, 12, C_FAINT, e->filetype == 0xCC ? "VMU game" : "Save file");
+    sw_text(SWF_SMALL, ix + 14, 338, 12, C_FAINT, e->filetype == 0xCC ? T(S_VMU_GAME) : T(S_VMU_SAVE_FILE));
 #undef BCD
   }
-  const char *foot[] = {"L / R  Memory card", "Y  Copy", "X  Delete", "B  Back"};
+  const char *foot[] = {T(S_FOOT_MEMORY_CARD), T(S_FOOT_COPY), T(S_FOOT_DELETE), T(S_FOOT_BACK)};
   draw_footer(foot, 4, NULL);
 
   if (vmu_busy_msg[0]) {
@@ -1607,42 +1651,44 @@ static void draw_vmu_manager(void) {
     maple_device_t *to = vmu_devs[vmu_copy_to];
     sw_rect(0, 0, 640, 480, 0x9005070D);
     sw_rrect(150, 150, 340, 180, 12, 0xF80C1222);
-    sw_text(SWF_HEAD, 170, 166, 18, C_WHITE, "Copy this save");
+    sw_text(SWF_HEAD, 170, 166, 18, C_WHITE, T(S_COPY_TITLE));
     const char *desc = (vmu_desc && vmu_desc[vmu_file_sel][1]) ? vmu_desc[vmu_file_sel] + 1 : fname;
     sw_text_clip(SWF_BODY, 170, 196, 15, C_DIM, desc, 300);
     char line[64];
     const int free_to = vmufs_free_blocks(to);
-    snprintf(line, sizeof(line), "< to %c%d >   %d blocks free", 'A' + to->port, to->unit, free_to);
+    snprintf(line, sizeof(line), T(S_COPY_TARGET), 'A' + to->port, to->unit, free_to);
     sw_text(SWF_UI, 170, 222, 14, C_TEXT, line);
     const char *note = NULL;
-    if (e->copyprotect == 0xFF) note = "This save is copy protected.";
-    else if (free_to < e->filesize) note = "Not enough room on that card.";
+    int replaces = 0; /* the only note that still allows the copy */
+    if (e->copyprotect == 0xFF) note = T(S_COPY_PROTECTED);
+    else if (free_to < e->filesize) note = T(S_COPY_NO_ROOM);
     else {
       char path[32];
       snprintf(path, sizeof(path), "/vmu/%c%d/%s", 'a' + to->port, to->unit, fname);
       file_t f = fs_open(path, O_RDONLY | O_META);
       if (f != FILEHND_INVALID) {
         fs_close(f);
-        note = "Replaces the save of the same name there.";
+        note = T(S_COPY_REPLACES);
+        replaces = 1;
       }
     }
-    sw_text(SWF_SMALL, 170, 246, 12, note && note[0] == 'R' ? C_DIM : C_FAINT, note ? note : "The original stays where it is.");
+    sw_text(SWF_SMALL, 170, 246, 12, replaces ? C_DIM : C_FAINT, note ? note : T(S_COPY_KEEPS));
     float bx = 170;
-    if (!note || note[0] == 'R') bx += draw_button_hint(bx, 288, C_BTN_A, "A", "Copy", C_TEXT);
-    draw_button_hint(bx, 288, C_BTN_B, "B", "Cancel", C_TEXT);
+    if (!note || replaces) bx += draw_button_hint(bx, 288, C_BTN_A, "A", T(S_COPY), C_TEXT);
+    draw_button_hint(bx, 288, C_BTN_B, "B", T(S_CANCEL), C_TEXT);
   }
   if (vmu_confirm == 1 && vmu_file_sel < vmu_nfiles) {
     char fname[13];
     vmu_name(&vmu_dir[vmu_file_sel], fname);
     sw_rect(0, 0, 640, 480, 0x9005070D);
     sw_rrect(150, 170, 340, 140, 12, 0xF80C1222);
-    sw_text(SWF_HEAD, 170, 186, 18, C_WHITE, "Delete this save?");
+    sw_text(SWF_HEAD, 170, 186, 18, C_WHITE, T(S_DELETE_ASK));
     const char *desc = (vmu_desc && vmu_desc[vmu_file_sel][1]) ? vmu_desc[vmu_file_sel] + 1 : fname;
     sw_text_clip(SWF_BODY, 170, 216, 15, C_DIM, desc, 300);
-    sw_text(SWF_SMALL, 170, 238, 12, C_FAINT, "This cannot be undone.");
+    sw_text(SWF_SMALL, 170, 238, 12, C_FAINT, T(S_DELETE_WARN));
     float bx = 170;
-    bx += draw_button_hint(bx, 272, C_BTN_A, "A", "Delete", C_TEXT);
-    draw_button_hint(bx, 272, C_BTN_B, "B", "Keep it", C_TEXT);
+    bx += draw_button_hint(bx, 272, C_BTN_A, "A", T(S_DELETE), C_TEXT);
+    draw_button_hint(bx, 272, C_BTN_B, "B", T(S_KEEP), C_TEXT);
   }
 }
 
@@ -1654,20 +1700,20 @@ static void vmu_copy_now(void) {
   maple_device_t *from = vmu_devs[vmu_dev_sel], *to = vmu_devs[vmu_copy_to];
   char fname[13];
   vmu_name(e, fname);
-  if (e->copyprotect == 0xFF) { show_toast("That save is copy protected"); return; }
-  if (vmufs_free_blocks(to) < e->filesize) { show_toast("Not enough room on that card"); return; }
-  snprintf(vmu_busy_msg, sizeof(vmu_busy_msg), "Copying to %c%d...", 'A' + to->port, to->unit);
+  if (e->copyprotect == 0xFF) { show_toast(T(S_COPY_PROTECTED_TOAST)); return; }
+  if (vmufs_free_blocks(to) < e->filesize) { show_toast(T(S_COPY_NO_ROOM_TOAST)); return; }
+  snprintf(vmu_busy_msg, sizeof(vmu_busy_msg), T(S_COPYING_TO), 'A' + to->port, to->unit);
   idle_frame();
   sw_lib_finish(); /* one user of the memory cards at a time */
   void *buf = NULL;
   int size = 0;
   const char *result = NULL;
   if (vmufs_read_dirent(from, (vmu_dir_t *)e, &buf, &size) < 0 || !buf || size <= 0) {
-    result = "Could not read that save";
+    result = T(S_COPY_READ_FAIL);
   } else {
     const int flags = VMUFS_OVERWRITE | (e->filetype == 0xCC ? VMUFS_VMUGAME : 0);
     if (vmufs_write(to, fname, buf, size, flags) < 0) {
-      result = "The copy could not be written";
+      result = T(S_COPY_WRITE_FAIL);
     } else {
       void *back = NULL;
       int back_size = 0;
@@ -1685,7 +1731,7 @@ static void vmu_copy_now(void) {
       }
       if (!found || vmufs_read_dirent(to, &ent, &back, &back_size) < 0 || !back || back_size < size ||
           memcmp(back, buf, size) != 0)
-        result = "The copy did not read back the same";
+        result = T(S_COPY_VERIFY_FAIL);
       free(back);
     }
   }
@@ -1693,7 +1739,7 @@ static void vmu_copy_now(void) {
   sw_trace("VMU saves: copied %s from %c%d to %c%d: %s", fname, 'A' + from->port, from->unit, 'A' + to->port, to->unit,
            result ? result : "OK");
   vmu_busy_msg[0] = 0;
-  show_toast(result ? result : "Copied");
+  show_toast(result ? result : T(S_COPIED));
 }
 
 static void input_vmu(unsigned int btn, int pressed) {
@@ -1716,7 +1762,7 @@ static void input_vmu(unsigned int btn, int pressed) {
       vmu_name(&vmu_dir[vmu_file_sel], fname);
       sw_lib_finish();
       int r = vmufs_delete(vmu_devs[vmu_dev_sel], fname);
-      show_toast(r == 0 ? "Save deleted" : "Could not delete that save");
+      show_toast(r == 0 ? T(S_DELETED) : T(S_DELETE_FAIL));
       int keep = vmu_file_sel;
       vmu_load_device();
       vmu_file_sel = keep < vmu_nfiles ? keep : (vmu_nfiles ? vmu_nfiles - 1 : 0);
@@ -1730,7 +1776,7 @@ static void input_vmu(unsigned int btn, int pressed) {
   if ((btn == TRIG_R || btn == RIGHT) && pressed && vmu_dev_sel < vmu_ndev - 1) { vmu_dev_sel++; vmu_load_device(); }
   if (btn == X && pressed && vmu_nfiles > 0) vmu_confirm = 1;
   if (btn == Y && pressed && vmu_nfiles > 0) {
-    if (vmu_ndev < 2) { show_toast("Plug in a second memory card to copy to"); return; }
+    if (vmu_ndev < 2) { show_toast(T(S_COPY_NEED_SECOND)); return; }
     vmu_copy_to = vmu_dev_sel == 0 ? 1 : 0;
     vmu_confirm = 2;
   }
@@ -1764,16 +1810,16 @@ static void load_shots(const sw_game *g) {
 /* ---------- controller test ---------- */
 static void draw_padtest(void) {
   sw_rrect(120, 90, 400, 300, 12, 0xF00C1222);
-  sw_text_center(SWF_HEAD, 320, 106, 20, C_WHITE, "Controller test");
+  sw_text_center(SWF_HEAD, 320, 106, 20, C_WHITE, T(S_PAD_TITLE));
   maple_device_t *dev = maple_enum_type(0, MAPLE_FUNC_CONTROLLER);
   cont_state_t *st = dev ? (cont_state_t *)maple_dev_status(dev) : NULL;
   if (!st) {
-    sw_text_center(SWF_BODY, 320, 200, 15, C_DIM, "No controller in port A");
+    sw_text_center(SWF_BODY, 320, 200, 15, C_DIM, T(S_PAD_NONE));
     return;
   }
   struct { uint32_t mask; const char *name; uint32_t col; float x, y; } btn[] = {
       {CONT_A, "A", C_BTN_A, 420, 230}, {CONT_B, "B", C_BTN_B, 450, 200}, {CONT_X, "X", C_BTN_X, 390, 200},
-      {CONT_Y, "Y", C_BTN_Y, 420, 170}, {CONT_START, "Start", C_ORANGE, 320, 250},
+      {CONT_Y, "Y", C_BTN_Y, 420, 170}, {CONT_START, T(S_PAD_START), C_ORANGE, 320, 250},
       {CONT_DPAD_UP, "", C_TEXT, 220, 170}, {CONT_DPAD_DOWN, "", C_TEXT, 220, 230},
       {CONT_DPAD_LEFT, "", C_TEXT, 190, 200}, {CONT_DPAD_RIGHT, "", C_TEXT, 250, 200}};
   for (unsigned i = 0; i < sizeof(btn) / sizeof(btn[0]); i++) {
@@ -1787,11 +1833,11 @@ static void draw_padtest(void) {
   sw_rrect(160, 290, 120 * lt, 10, 5, C_ORANGE);
   sw_rrect(360, 290, 120, 10, 5, 0x30EEF1F7);
   sw_rrect(360, 290, 120 * rt, 10, 5, C_ORANGE);
-  sw_text(SWF_SMALL, 160, 306, 12, C_DIM, "L trigger");
-  sw_text(SWF_SMALL, 360, 306, 12, C_DIM, "R trigger");
+  sw_text(SWF_SMALL, 160, 306, 12, C_DIM, T(S_PAD_L));
+  sw_text(SWF_SMALL, 360, 306, 12, C_DIM, T(S_PAD_R));
   sw_circle(320, 190, 30, 0x20EEF1F7);
   sw_circle(320 + st->joyx / 128.f * 22, 190 + st->joyy / 128.f * 22, 9, C_ORANGE);
-  sw_text_center(SWF_SMALL, 320, 360, 12, C_DIM, "Hold B and Start together to leave");
+  sw_text_center(SWF_SMALL, 320, 360, 12, C_DIM, T(S_PAD_LEAVE));
 }
 
 /* ---------- diagnostics ---------- */
@@ -1802,16 +1848,15 @@ static int diag_top;
 
 static void draw_diag(void) {
   sw_rrect(60, 56, 520, 356, 12, 0xF00C1222);
-  sw_text(SWF_HEAD, 84, 72, 20, C_WHITE, "Diagnostics");
+  sw_text(SWF_HEAD, 84, 72, 20, C_WHITE, T(S_DIAG_TITLE));
   char vb[48];
   snprintf(vb, sizeof(vb), "SWIRL %s, build %s", SWIRL_VERSION, sw_build_id());
   sw_text_right(SWF_SMALL, 556, 78, 12, C_DIM, vb);
   const int n = sw_warn_count();
   if (!n) {
-    sw_text(SWF_BODY, 84, 112, 15, C_TEXT, "No warnings since power on.");
+    sw_text(SWF_BODY, 84, 112, 15, C_TEXT, T(S_DIAG_EMPTY));
     sw_text_wrap(SWF_SMALL, 84, 140, 12, C_DIM,
-                 "A warning is a problem SWIRL got past: a save that failed, a picture it could not use, a line in "
-                 "OPENMENU.INI it skipped. They are listed here with a code.",
+                 T(S_DIAG_HELP),
                  470, 16, 4);
   } else {
     if (diag_top > n - DIAG_ROWS) diag_top = n - DIAG_ROWS;
@@ -1834,17 +1879,16 @@ static void draw_diag(void) {
     }
     if (n > DIAG_ROWS) {
       char more[32];
-      snprintf(more, sizeof(more), "%d to %d of %d", diag_top + 1, diag_top + DIAG_ROWS < n ? diag_top + DIAG_ROWS : n, n);
+      snprintf(more, sizeof(more), T(S_RANGE_OF), diag_top + 1, diag_top + DIAG_ROWS < n ? diag_top + DIAG_ROWS : n, n);
       sw_text_right(SWF_SMALL, 556, 340, 11, C_DIM, more);
     }
   }
   sw_text_wrap(SWF_SMALL, 84, 356, 11, C_DIM,
-               "A shows the full report as QR codes to photograph for a bug report. It holds no game names beyond "
-               "the last few steps.",
+               T(S_DIAG_QR_HELP),
                470, 14, 2);
-  sw_text(SWF_SMALL, 84, 392, 12, C_TEXT, "Up / Down  Scroll");
-  sw_text(SWF_SMALL, 230, 392, 12, C_TEXT, "A  Show as QR codes");
-  sw_text_right(SWF_SMALL, 556, 392, 12, C_TEXT, "B  Back");
+  sw_text(SWF_SMALL, 84, 392, 12, C_TEXT, T(S_FOOT_SCROLL));
+  sw_text(SWF_SMALL, 230, 392, 12, C_TEXT, T(S_FOOT_QR));
+  sw_text_right(SWF_SMALL, 556, 392, 12, C_TEXT, T(S_FOOT_BACK));
 }
 
 static void input_diag(unsigned int btn, int pressed) {
@@ -1892,7 +1936,7 @@ static void change_tab(int d) {
 static void toggle_fav(const sw_game *g) {
   sw_lib_toggle_fav(g);
   sw_audio_sfx(SW_SFX_FAV);
-  show_toast(sw_lib_is_fav(g) ? "Added to Favorites" : "Removed from Favorites");
+  show_toast(sw_lib_is_fav(g) ? T(S_ADDED_FAV) : T(S_REMOVED_FAV));
   save_countdown = 180;
 }
 
@@ -1969,7 +2013,7 @@ static void input_tabs(unsigned int btn, int pressed) {
         build_library();
         for (int i = 0; i < lib_len; i++)
           if (lib_list[i] == keep) lib_sel = i;
-        show_toast(sort_names[lib_sort]);
+        show_toast(T(sort_names[lib_sort]));
       }
       if (btn == B && pressed) { tab = TAB_HOME; change_tab(0); }
       break;
@@ -2021,7 +2065,7 @@ static void input_tabs(unsigned int btn, int pressed) {
             if (btn == A) {
               if (style_values[sys_style] != UI_SWIRL && !settings_style_ready(style_values[sys_style])) {
                 /* the Classic styles need openMenu's theme files; starting one without them stops the console */
-                show_toast("Update SWIRL in Card Manager first");
+                show_toast(T(S_HINT_UPDATE_FIRST));
               } else if (style_values[sys_style] != UI_SWIRL) {
                 s->ui = style_values[sys_style];
                 sw_audio_shutdown(); /* before the VMU writes */
@@ -2033,7 +2077,8 @@ static void input_tabs(unsigned int btn, int pressed) {
                 save_hold = 120;
                 while (save_hold > 0) { idle_frame(); save_hold--; }
                 saving_now = 0;
-                snprintf(save_msg, sizeof(save_msg), "%s", r == 0 ? "Saved to VMU" : r == -2 ? "Not saved: no VMU with space" : r == -8 ? "Not saved: no space on VMU" : "Not saved: check the VMU");
+                snprintf(save_msg, sizeof(save_msg), "%s", r == 0 ? T(S_SAVED_TO_VMU) : r == -2 ? T(S_NOT_SAVED_NO_VMU) : r == -8 ? T(S_NOT_SAVED_NO_SPACE) : T(S_NOT_SAVED_CHECK));
+                save_msg_kind = r == 0 ? SW_VMU_SAVED : (r == -2 || r == -8) ? SW_VMU_NO_SPACE : SW_VMU_CHECK;
                 save_msg_frames = 60;
                 while (save_msg_frames > 0) { idle_frame(); save_msg_frames--; }
                 sw_vmu_shutdown(); /* the Classic styles draw their own VMU screen */
@@ -2044,20 +2089,20 @@ static void input_tabs(unsigned int btn, int pressed) {
               sys_style = (sys_style + d + 4) % 4;
             break;
           case SYS_ACCENT:
-            if (p->backdrop == BACKDROP_SEASONAL) { show_toast("Pick a backdrop other than Seasonal first"); changed_pref = 0; break; }
+            if (p->backdrop == BACKDROP_SEASONAL) { show_toast(T(S_HINT_NOT_SEASONAL)); changed_pref = 0; break; }
             p->accent = (p->accent + d + NUM_ACCENTS) % NUM_ACCENTS;
             break;
           case SYS_BACKDROP: p->backdrop = (p->backdrop + d + BACKDROP_COUNT) % BACKDROP_COUNT; break;
           case SYS_LOGO:
-            if (!logo_sheet) { show_toast(have_logo ? "Update SWIRL from Card Manager 2.15 to choose" : "No logo on this card"); changed_pref = 0; break; }
+            if (!logo_sheet) { show_toast(have_logo ? T(S_HINT_LOGO_UPDATE) : T(S_HINT_LOGO_NONE)); changed_pref = 0; break; }
             p->logo = (uint8_t)((p->logo + d + SW_LOGO_COUNT) % SW_LOGO_COUNT);
             break;
           case SYS_QUALITY:
             p->quality = !p->quality;
-            show_toast("Applies the next time SWIRL starts");
+            show_toast(T(S_HINT_NEXT_START));
             break;
           case SYS_MUSIC:
-            if (!sw_audio_has_music()) { show_toast("Add music with SWIRL Card Manager"); changed_pref = 0; break; }
+            if (!sw_audio_has_music()) { show_toast(T(S_HINT_ADD_MUSIC)); changed_pref = 0; break; }
             p->music = !p->music;
             break;
           case SYS_MUSIC_VOL: p->music_vol = (uint8_t)((p->music_vol + d + 11) % 11); break;
@@ -2065,14 +2110,20 @@ static void input_tabs(unsigned int btn, int pressed) {
           case SYS_SFX_VOL: p->sfx_vol = (uint8_t)((p->sfx_vol + d + 11) % 11); break;
           case SYS_RESUME: p->resume = !p->resume; break;
           case SYS_CLOCK: p->clock24 = !p->clock24; break;
+          case SYS_LANGUAGE:
+            p->lang = (uint8_t)((p->lang + d + SW_LANG_COUNT) % SW_LANG_COUNT);
+            sw_lang_select(p->lang);
+            rebuild_all(); /* the built in collection names */
+            show_toast(sw_lang_available(p->lang) || p->lang == SW_LANG_AUTO ? T(S_HINT_LANGUAGE) : T(S_HINT_LANG_MISSING));
+            break;
           case SYS_RUMBLE: p->rumble = !p->rumble; if (p->rumble) rumble(); break;
           case SYS_START:
             p->start = (uint8_t)((p->start + d + SW_START_COUNT) % SW_START_COUNT);
-            show_toast(p->start == SW_START_BOTH ? "The way the console starts a game" : "A game's own Start with setting still wins");
+            show_toast(p->start == SW_START_BOTH ? T(S_HINT_START_WITH) : T(S_HINT_GAME_START_WINS));
             break;
           case SYS_VIDEO:
             p->video = !p->video;
-            show_toast("A game's own Video setting still wins");
+            show_toast(T(S_HINT_GAME_VIDEO_WINS));
             break;
           case SYS_BEEP:
             s->beep = s->beep == BEEP_ON ? BEEP_OFF : BEEP_ON;
@@ -2160,7 +2211,7 @@ void ui_swirl_settings_changed(void) {
   rebuild_all();
   if (settings_take_dirty()) sw_lib_settings_dirty();
   if (sw_lib_dirty() && save_countdown <= 0) save_countdown = 180; /* an older file taken in is written back */
-  show_toast("Memory card found: your settings are back");
+  show_toast(T(S_CARD_BACK));
 }
 
 void ui_swirl_save_settings_soon(void) {
@@ -2239,6 +2290,8 @@ FUNCTION(UI_NAME, init) {
     DAT_init(&shot_dat);
     have_shot_dat = (DAT_load_parse(&shot_dat, "SHOT.DAT") == 0 && shot_dat.chunk_size == SHOT_CHUNK);
   }
+  sw_trace("SWIRL: language");
+  sw_lang_load("/cd/LANG.DAT"); /* the translations the Card Manager put on the card, if any */
   sw_trace("SWIRL: library and SWIRL.DAT");
   sw_lib_init();
   sw_lib_set_idle(idle_frame);
@@ -2324,7 +2377,7 @@ FUNCTION_INPUT(UI_NAME, handle_input) {
       break;
     case MODE_RESUME:
       if (btn == A && pressed) { mode = MODE_TABS; play_game(resume_game, MODE_TABS); }
-      else if (btn == B && pressed) { mode = MODE_TABS; show_toast("Welcome back"); }
+      else if (btn == B && pressed) { mode = MODE_TABS; show_toast(T(S_WELCOME_BACK)); }
       break;
     case MODE_LAUNCH:
       break;
@@ -2602,7 +2655,7 @@ static void draw_saver_swirl(float t) {
   }
   float pulse = 0.75f + 0.25f * sinf(t * 1.1f);
   sw_glow(cx, cy, 70, SW_ALPHA(C_ORANGE, (uint8_t)(0x50 * pulse)));
-  sw_text_center(SWF_TITLE, cx, cy - 18, 30, SW_ALPHA(C_WHITE, (uint8_t)(255 * pulse)), "SWIRL");
+  sw_text_center(SWF_TITLE, cx, cy - 18, 30, SW_ALPHA(C_WHITE, (uint8_t)(255 * pulse)), T(S_STYLE_SWIRL));
   char buf[16];
   if (clock_text(buf, sizeof(buf)))
     sw_text_center(SWF_UI, cx, cy + 22, 14, C_DIM, buf);
@@ -2625,7 +2678,7 @@ static void draw_saver_bounce(float t) {
   sw_glow(bounce_x + w / 2, bounce_y + h / 2, 150, SW_ALPHA(col, 0x38));
   sw_rrect(bounce_x, bounce_y, w, h, 16, SW_ALPHA(col, 0x30));
   sw_rrect_outline(bounce_x, bounce_y, w, h, 16, 2, col);
-  sw_text_center(SWF_TITLE, bounce_x + w / 2, bounce_y + 14, 30, C_WHITE, "SWIRL");
+  sw_text_center(SWF_TITLE, bounce_x + w / 2, bounce_y + 14, 30, C_WHITE, T(S_STYLE_SWIRL));
   if (has_clock)
     sw_text_center(SWF_UI, bounce_x + w / 2, bounce_y + 58, 14, SW_ALPHA(col, 0xFF), buf);
   (void)t;
@@ -2729,7 +2782,7 @@ FUNCTION(UI_NAME, drawTR) {
     if (sw_lib_save_result(&r)) {
       sw_mem_check("after save");
       save_outcome = r;
-      save_hold = 120; /* "Saving..." stays up 2 s longer, so it is never switched off too soon */
+      save_hold = 120; /* T(S_SAVING) stays up 2 s longer, so it is never switched off too soon */
     }
     if (save_hold > 0 && --save_hold == 0 && save_outcome != 1) {
       const int r2 = save_outcome;
@@ -2738,16 +2791,19 @@ FUNCTION(UI_NAME, drawTR) {
       sw_trace("save: result %d shown", r2);
       sw_lib_retrying(0);
       if (r2 == 0) {
-        snprintf(save_msg, sizeof(save_msg), "Saved to VMU");
+        snprintf(save_msg, sizeof(save_msg), "%s", T(S_SAVED_TO_VMU));
+        save_msg_kind = SW_VMU_SAVED;
         save_tries = 0;
       } else if (r2 == -2) {
         /* no memory card, or no room: trying again won't help; the next change tries again */
-        snprintf(save_msg, sizeof(save_msg), "No VMU with space. Changes not saved");
+        snprintf(save_msg, sizeof(save_msg), "%s", T(S_NO_VMU_SPACE_LONG));
+        save_msg_kind = SW_VMU_NO_SPACE;
         save_tries = 0;
       } else if (r2 == -8) {
         /* the card that holds SWIRL.DAT is full: only freeing space helps */
         const int n = sw_lib_blocks_short();
-        snprintf(save_msg, sizeof(save_msg), "No space on VMU. Free %d block%s in VMU saves", n, n == 1 ? "" : "s");
+        snprintf(save_msg, sizeof(save_msg), n == 1 ? T(S_NO_SPACE_FREE_ONE) : T(S_NO_SPACE_FREE_N), n);
+        save_msg_kind = SW_VMU_NO_SPACE;
         save_tries = 0;
       } else if (save_tries < 5) {
         /* a busy or slow card: try again after 2, 4, 6, 8 and 10 seconds */
@@ -2756,7 +2812,8 @@ FUNCTION(UI_NAME, drawTR) {
         sw_lib_retrying(1);
         save_msg_frames = 0; /* the banner counts down to the next try */
       } else {
-        snprintf(save_msg, sizeof(save_msg), "Not saved: check the VMU");
+        snprintf(save_msg, sizeof(save_msg), "%s", T(S_NOT_SAVED_CHECK));
+        save_msg_kind = SW_VMU_CHECK;
         save_tries = 0;
       }
     }
@@ -2802,12 +2859,12 @@ FUNCTION(UI_NAME, drawTR) {
   if (mode == MODE_RESUME) draw_resume();
   if (mode == MODE_LAUNCH) draw_launch();
 
-  char bbuf[64];
+  char bbuf[96];
   const char *banner = saver_on ? NULL : save_banner(bbuf, sizeof(bbuf));
   if (!banner && !saver_on && mode == MODE_TABS && tab == TAB_SYSTEM && sys_sel == SYS_STYLE &&
       style_values[sys_style] != (int)settings_get()->ui) {
     /* the style is the one setting that isn't saved by itself: it takes effect (and saves) when A is pressed */
-    snprintf(bbuf, sizeof(bbuf), "Press A to switch to %s. It saves right away.", style_names[sys_style]);
+    snprintf(bbuf, sizeof(bbuf), T(S_HINT_SWITCH_STYLE), T(style_names[sys_style]));
     banner = bbuf;
   }
   if (banner) {
@@ -2820,8 +2877,9 @@ FUNCTION(UI_NAME, drawTR) {
     sw_set_fade(a);
     const float ty = banner ? 368.f : 404.f; /* above the save banner when both show */
     float w = sw_text_width(SWF_SMALL, 12, toast) + 28;
+    if (w > 600) w = 600; /* a long translation is clipped with dots rather than running off the panel */
     sw_rrect(320 - w / 2, ty, w, 28, 14, 0xF0161E33);
-    sw_text_center(SWF_SMALL, 320, ty + 7, 12, C_WHITE, toast);
+    sw_text_clip(SWF_SMALL, 320 - w / 2 + 14, ty + 7, 12, C_WHITE, toast, w - 28);
     sw_set_fade(1.f);
   }
 #ifdef SW_SAVER_DEMO

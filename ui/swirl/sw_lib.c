@@ -3,6 +3,7 @@
  */
 #define _DEFAULT_SOURCE
 #include "sw_lib.h"
+#include "sw_lang.h"
 #include "sw_vmu.h"
 
 #include <strings.h>
@@ -1028,16 +1029,17 @@ enum {
   COL_GENRE = 100, COL_CUSTOM = 200, COL_SECTION = 300 /* the card's dividers, see sw_lib_divider_label */
 };
 
-static const char *genre_names[16] = {"Action", "Racing", "Simulation", "Sports", "Light Gun Games", "Fighting",
-                                      "Shooter", "Survival", "Adventure", "Platformer", "RPG", "Shoot 'em Up",
-                                      "Strategy", "Puzzle", "Arcade", "Music"};
+static const int genre_names[16] = {S_GENRE_ACTION,   S_GENRE_RACING,  S_GENRE_SIMULATION, S_GENRE_SPORTS,
+                                    S_GENRE_LIGHTGUN, S_GENRE_FIGHTING, S_GENRE_SHOOTER,   S_GENRE_SURVIVAL,
+                                    S_GENRE_ADVENTURE, S_GENRE_PLATFORMER, S_GENRE_RPG,    S_GENRE_SHMUP,
+                                    S_GENRE_STRATEGY, S_GENRE_PUZZLE,  S_GENRE_ARCADE,     S_GENRE_MUSIC};
 
 const char *sw_lib_genre_name(const sw_game *g) {
   if (!g || !g->meta || !g->meta->genre)
     return NULL;
   for (int b = 0; b < 16; b++)
     if (g->meta->genre & (1 << b))
-      return b == 4 ? "Light Gun" : genre_names[b];
+      return b == 4 ? T(S_COL_LIGHTGUN) : T(genre_names[b]);
   return NULL;
 }
 
@@ -1083,19 +1085,18 @@ static int count_of(int id) {
 }
 
 int sw_lib_collections(sw_collection *out, int max) {
-  static const struct { int id; const char *name; } fixed[] = {
-      {COL_ALL, "All Games"}, {COL_FAV, "Favorites"}, {COL_RECENT, "Recently Played"}, {COL_MOST, "Most Played"},
-      {COL_PARTY, "Party Night (3+)"}, {COL_ONLINE, "Online"}, {COL_LIGHTGUN, "Light Gun"}};
-  static const struct { int id; const char *name; } tail[] = {
-      {COL_VGA, "VGA Compatible"}, {COL_IMPORTS, "Imports"}, {COL_OTHER, "Homebrew & Other"}};
+  static const struct { int id; int name; } fixed[] = {
+      {COL_ALL, S_COL_ALL},     {COL_FAV, S_COL_FAVORITES}, {COL_RECENT, S_COL_RECENT},     {COL_MOST, S_COL_MOST},
+      {COL_PARTY, S_COL_PARTY}, {COL_ONLINE, S_COL_ONLINE}, {COL_LIGHTGUN, S_COL_LIGHTGUN}};
+  static const struct { int id; int name; } tail[] = {
+      {COL_VGA, S_COL_VGA}, {COL_IMPORTS, S_COL_IMPORTS}, {COL_OTHER, S_COL_OTHER}};
   int n = 0;
   for (unsigned i = 0; i < sizeof(fixed) / sizeof(fixed[0]) && n < max; i++) {
     int c = count_of(fixed[i].id);
     if (c || fixed[i].id == COL_ALL || fixed[i].id == COL_FAV) {
       out[n].id = fixed[i].id;
       out[n].count = c;
-      strncpy(out[n].name, fixed[i].name, sizeof(out[n].name) - 1);
-      out[n].name[sizeof(out[n].name) - 1] = 0;
+      snprintf(out[n].name, sizeof(out[n].name), "%s", T(fixed[i].name));
       n++;
     }
     if (fixed[i].id == COL_FAV) {
@@ -1123,8 +1124,7 @@ int sw_lib_collections(sw_collection *out, int max) {
     if (!c) continue;
     out[n].id = COL_GENRE + b;
     out[n].count = c;
-    strncpy(out[n].name, genre_names[b], sizeof(out[n].name) - 1);
-    out[n].name[sizeof(out[n].name) - 1] = 0;
+    snprintf(out[n].name, sizeof(out[n].name), "%s", T(genre_names[b]));
     n++;
   }
   for (unsigned i = 0; i < sizeof(tail) / sizeof(tail[0]) && n < max; i++) {
@@ -1132,8 +1132,7 @@ int sw_lib_collections(sw_collection *out, int max) {
     if (!c) continue;
     out[n].id = tail[i].id;
     out[n].count = c;
-    strncpy(out[n].name, tail[i].name, sizeof(out[n].name) - 1);
-    out[n].name[sizeof(out[n].name) - 1] = 0;
+    snprintf(out[n].name, sizeof(out[n].name), "%s", T(tail[i].name));
     n++;
   }
   return n;

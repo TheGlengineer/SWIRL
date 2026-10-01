@@ -23,7 +23,8 @@
   X(SW_WARN_SCAN, 16, "controller-scan", "A controller port did not answer at start up")                    \
   X(SW_WARN_STEP, 17, "startup-step", "A start up step failed")                                              \
   X(SW_WARN_STYLE, 18, "style-files", "The saved style needs theme files this disc lacks")                  \
-  X(SW_WARN_DISC, 19, "disc-read", "The menu disc could not be read")
+  X(SW_WARN_DISC, 19, "disc-read", "The menu disc could not be read")                                      \
+  X(SW_WARN_LANG, 20, "language-file", "LANG.DAT could not be used, showing English")
 
 enum sw_code {
 #define X(name, num, key, words) name = num,
