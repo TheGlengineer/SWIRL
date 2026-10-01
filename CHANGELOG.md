@@ -3,9 +3,11 @@
 SWIRL (the menu) and SWIRL Card Manager share one version number. Card Manager patch releases (2.11.1)
 may ship without menu changes; the menu then keeps its major.minor version (2.11).
 
-## [2.16.0] (in progress)
+## [2.16.0-preview.2]
 
-Languages. SWIRL's menus can be shown in German, French, Spanish, Italian and Portuguese as well as English.
+Languages. SWIRL's menus and the Card Manager window can be shown in German, French, Spanish, Italian and Portuguese as well as English. Preview 1 (menu only) is folded in. The translations were written by Claude and checked by machine for placeholders and the font range; a native speaker's corrections are welcome in `swirl/lang` and `swirl/cardmanager/web/lang`.
+
+**What to test:** (1) System > Language on the Dreamcast, each choice, and that it survives a power cycle; (2) Console setting on a Dreamcast set to a European language in its own settings; (3) accented game names; (4) long values in System in German and Portuguese; (5) About > Language in Card Manager, each choice, every page; (6) Update SWIRL on a card last written by 2.15 (the Language row should offer every language once the card is updated, and say "not on this card" before).
 
 ### Menu
 
