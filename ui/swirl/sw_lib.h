@@ -84,8 +84,12 @@ typedef struct sw_prefs {
   uint8_t swirl_style_set; /* 1 once SWIRL has switched OPENMENU.CFG's style to SWIRL (done once per card) */
   /* added in SWIRL.DAT version 4 (2.15): the prefs block grew from 16 to 20 bytes, see sw_save.h */
   uint8_t logo;        /* header logo: 0 by the console's region, 1 orange (USA, Japan), 2 blue (Europe) */
-  uint8_t reserved[3]; /* zero; room for the next settings without another layout */
+  uint8_t start;       /* how games start unless set per game: 0 animation and SEGA screen, 1 animation only,
+                          2 SEGA screen only, 3 straight to the game (SW_START_*) */
+  uint8_t video;       /* video unless set per game: 0 force VGA, 1 the game's default */
+  uint8_t reserved[1]; /* zero; room for the next setting without another layout */
 } sw_prefs;
+enum { SW_START_BOTH = 0, SW_START_ANIMATION, SW_START_LICENSE, SW_START_NONE, SW_START_COUNT };
 enum { SW_LOGO_REGION = 0, SW_LOGO_ORANGE, SW_LOGO_BLUE, SW_LOGO_COUNT };
 sw_prefs *sw_lib_prefs(void);
 void sw_lib_note_style_set(void); /* SWIRL took the style over: remember it (saved, without touching the other settings) */
@@ -105,6 +109,9 @@ typedef struct sw_launch {
 } sw_launch;
 sw_launch sw_lib_launch_get(const sw_game *g);
 void sw_lib_launch_set(const sw_game *g, sw_launch l);
+/* the settings a game starts with when nothing is set for it: System > Start games with and Video (2.15),
+   otherwise SW_BOOT_DEFAULT and Force VGA */
+sw_launch sw_lib_launch_default(void);
 
 /* the most recently played game, or -1 */
 int sw_lib_last_played(void);

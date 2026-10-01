@@ -263,6 +263,8 @@ static void launch_loader(const char *region, int game_fix, const launch_opts *o
   param.boot_intro = (o->boot == LAUNCH_BOOT_ANIMATION || o->boot == LAUNCH_BOOT_BOTH) ? 1 : 0;
   param.sega_license = (o->boot == LAUNCH_BOOT_LICENSE || o->boot == LAUNCH_BOOT_BOTH) ? 1 : 0;
   param.game_region = region_code(region, o->region);
+  sw_trace("launch: options: animation %u, SEGA screen %u, VGA %u, region %u", (unsigned)param.boot_intro, (unsigned)param.sega_license,
+           (unsigned)param.force_vga, (unsigned)param.game_region);
 
   sw_trace("launch: waiting for the disc");
   if (wait_cd_ready() != 0) {

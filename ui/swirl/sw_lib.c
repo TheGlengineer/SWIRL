@@ -691,13 +691,23 @@ int sw_lib_init(void) {
    "the start mode was chosen". Files written before 2.14 have bit 5 clear: a start mode of 1 to 3 there was chosen
    and is kept; 0 was the old default (straight to the game) and now means the default, the full start. */
 #define SW_FLAG_BOOT_SET 0x20
+#define SW_FLAG_VIDEO_SET 0x40 /* the video choice was made for this game (2.15); before, bit 2 alone meant Game default */
+
+sw_launch sw_lib_launch_default(void) {
+  static const int boot_of[SW_START_COUNT] = {SW_BOOT_BOTH, SW_BOOT_ANIMATION, SW_BOOT_LICENSE, SW_BOOT_NONE};
+  sw_launch l = {SW_REGION_AUTO, 1, SW_BOOT_DEFAULT};
+  if (prefs.start < SW_START_COUNT) l.boot = boot_of[prefs.start];
+  l.vga = prefs.video ? 0 : 1;
+  return l;
+}
 
 sw_launch sw_lib_launch_get(const sw_game *g) {
-  sw_launch l = {SW_REGION_AUTO, 1, SW_BOOT_DEFAULT};
+  sw_launch l = sw_lib_launch_default();
   sw_stat *s = sw_stat_get(g, 0);
   if (s) {
     l.region = s->flags & 3;
-    l.vga = !(s->flags & 4);
+    if ((s->flags & SW_FLAG_VIDEO_SET) || (s->flags & 4)) /* older saves: Game default was the only choice stored */
+      l.vga = !(s->flags & 4);
     const int boot = (s->flags >> 3) & 3;
     if ((s->flags & SW_FLAG_BOOT_SET) || boot != SW_BOOT_NONE)
       l.boot = boot;
@@ -706,9 +716,10 @@ sw_launch sw_lib_launch_get(const sw_game *g) {
 }
 
 void sw_lib_launch_set(const sw_game *g, sw_launch l) {
+  const sw_launch d = sw_lib_launch_default();
   uint8_t f = 0;
-  if (l.region != SW_REGION_AUTO || !l.vga || l.boot != SW_BOOT_DEFAULT)
-    f = (uint8_t)((l.region & 3) | (l.vga ? 0 : 4) | ((l.boot & 3) << 3) | SW_FLAG_BOOT_SET);
+  if (l.region != SW_REGION_AUTO || l.vga != d.vga || l.boot != d.boot) /* a choice of its own: every part stored */
+    f = (uint8_t)((l.region & 3) | (l.vga ? 0 : 4) | SW_FLAG_VIDEO_SET | ((l.boot & 3) << 3) | SW_FLAG_BOOT_SET);
   sw_stat *s = sw_stat_get(g, f != 0);
   if (s && s->flags != f) {
     s->flags = f;

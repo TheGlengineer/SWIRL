@@ -40,9 +40,9 @@ static int check(const char *path) {
     for (int w = 0; w < 2; w++)
       if (st[i].key == want[w] && st[i].fav) found++;
   }
-  printf("%s: layout %d, %d stats, %d favourites, seq %lu, music %d sfx %d quality %d saver %d min logo %d\n", path,
-         layout, n, favs, (unsigned long)seq, p.music, p.sfx, p.quality, p.saver_min, p.logo);
-  if (layout < SW_SAVE_LAYOUT_CURRENT && (p.logo != 0 || p.reserved[0] || p.reserved[1] || p.reserved[2])) {
+  printf("%s: layout %d, %d stats, %d favourites, seq %lu, music %d sfx %d quality %d saver %d min logo %d start %d video %d\n",
+         path, layout, n, favs, (unsigned long)seq, p.music, p.sfx, p.quality, p.saver_min, p.logo, p.start, p.video);
+  if (layout < SW_SAVE_LAYOUT_CURRENT && (p.logo != 0 || p.start != 0 || p.video != 0 || p.reserved[0])) {
     printf("  an older layout must read with the version 4 bytes at zero\n");
     return 1;
   }

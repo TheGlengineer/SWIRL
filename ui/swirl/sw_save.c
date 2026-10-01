@@ -15,7 +15,7 @@ typedef struct __attribute__((packed)) save_blob {
 /* version 4: after the tail, the settings added since the prefs block was fixed at 16 bytes */
 typedef struct __attribute__((packed)) save_more {
   char tag[4]; /* "PRF4" */
-  uint8_t prefs[4]; /* sw_prefs bytes 16 to 19: logo, reserved[3] */
+  uint8_t prefs[4]; /* sw_prefs bytes 16 to 19: logo, start, video, reserved */
 } save_more;
 
 typedef struct __attribute__((packed)) save_blob_v1 {
@@ -81,6 +81,8 @@ int sw_save_parse(const uint8_t *data, int len, sw_prefs *p, sw_stat *st, int *n
       }
     }
     if (p->logo >= SW_LOGO_COUNT) p->logo = SW_LOGO_REGION;
+    if (p->start >= SW_START_COUNT) p->start = SW_START_BOTH;
+    if (p->video > 1) p->video = 0;
     *layout = b->version < 3 ? SW_SAVE_LAYOUT_V2 : has_more ? SW_SAVE_LAYOUT_CURRENT : SW_SAVE_LAYOUT_V3;
     return 0;
   }

@@ -70,13 +70,15 @@ game that misbehaves or that you want to start differently:
 | Region | Game default, Japan, USA, Europe |
 | Video | Force VGA, Game default |
 | Start with | Animation and SEGA (the default), Straight to the game, Boot animation, SEGA screen |
-| Reset to defaults | Clears the options for this game |
+| Reset to defaults | Clears the options for this game, so it follows the System defaults again |
 
 Choices are saved per game on your VMU, and the game page then shows **Options (custom)**.
 
 Games start with the boot animation and the SEGA screen, as they do from openMenu and GDMENU. That is how every
 game was tested by its makers, and some rely on what the BIOS sets up during the SEGA screen. **Start with:
-Straight to the game** skips both for one game.
+Straight to the game** skips both for one game. To change it for every game at once, use **System > Start games
+with** and **System > Video**: a game with its own options keeps them, every other game follows the System
+choice.
 
 ### Games with no VGA mode
 
@@ -122,6 +124,8 @@ It saves straight away.
 | Start on | Home, Last played game |
 | Clock | 12 hour, 24 hour (uses the Dreamcast's own clock) |
 | Rumble on launch | On, Off |
+| Start games with | Animation and SEGA, Boot animation, SEGA screen, Straight to the game. What every game starts with unless it has its own Start with |
+| Video | Force VGA, Game default. The same, for Video |
 | VMU beep on save | On, Off |
 | VM2 / VMU Pro game cards | On, Off (on by default). See [VM2 and VMU Pro](#vm2-and-vmu-pro) |
 | Screen saver | On, Off (on by default) |

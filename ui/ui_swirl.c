@@ -949,13 +949,15 @@ static void draw_collections(float slide) {
 /* ---------- SYSTEM ---------- */
 enum {
   SYS_STYLE = 0, SYS_ACCENT, SYS_BACKDROP, SYS_LOGO, SYS_QUALITY, SYS_MUSIC, SYS_MUSIC_VOL, SYS_SFX, SYS_SFX_VOL, SYS_RESUME, SYS_CLOCK,
-  SYS_RUMBLE, SYS_BEEP, SYS_GAMEID, SYS_ATTRACT, SYS_SAVER_STYLE, SYS_SAVER_TIME, SYS_SAVER_TEST, SYS_VMU, SYS_SAVE, SYS_PADTEST,
+  SYS_RUMBLE, SYS_START, SYS_VIDEO, SYS_BEEP, SYS_GAMEID, SYS_ATTRACT, SYS_SAVER_STYLE, SYS_SAVER_TIME, SYS_SAVER_TEST, SYS_VMU, SYS_SAVE, SYS_PADTEST,
   SYS_BIOS, SYS_DIAG, SYS_COUNT
 };
 #define SYS_ROWS 9
 static int sys_top;
 static const char *style_names[] = {"SWIRL", "Classic list", "Classic grid", "GDMENU"};
 static const int style_values[] = {UI_SWIRL, UI_LINE_DESC, UI_GRID3, UI_GDMENU};
+
+static const char *boot_names[] = {"Straight to the game", "Boot animation", "SEGA screen", "Animation and SEGA"}; /* by SW_BOOT_* */
 
 static const char *sys_value(int i, char *buf, int len) {
   sw_prefs *p = sw_lib_prefs();
@@ -989,6 +991,8 @@ static const char *sys_value(int i, char *buf, int len) {
     case SYS_RESUME: return p->resume ? "Last played game" : "Home";
     case SYS_CLOCK: return p->clock24 ? "24 hour" : "12 hour";
     case SYS_RUMBLE: return p->rumble ? "On" : "Off";
+    case SYS_START: return boot_names[sw_lib_launch_default().boot & 3];
+    case SYS_VIDEO: return p->video ? "Game default" : "Force VGA";
     case SYS_BEEP: return s->beep == BEEP_ON ? "On" : "Off";
     case SYS_GAMEID: return p->gameid_off ? "Off" : "On";
     case SYS_ATTRACT: return p->attract ? "On" : "Off";
@@ -1006,7 +1010,7 @@ static const char *sys_value(int i, char *buf, int len) {
 
 static const char *sys_names[SYS_COUNT] = {"Menu style", "Accent colour", "Backdrop", "Header logo", "Picture quality", "Menu music", "Music volume",
                                            "Navigation sounds", "Sound volume", "Start on", "Clock",
-                                           "Rumble on launch", "VMU beep on save", "VM2 / VMU Pro game cards", "Screen saver", "Screen saver style",
+                                           "Rumble on launch", "Start games with", "Video", "VMU beep on save", "VM2 / VMU Pro game cards", "Screen saver", "Screen saver style",
                                            "Start screen saver", "Preview screen saver", "VMU saves",
                                            "Save settings to VMU", "Controller test", "Exit to Dreamcast BIOS", "Diagnostics"};
 
@@ -1325,7 +1329,6 @@ static void tick_resume(void) {
 
 /* ---------- launch options sheet ---------- */
 static const char *region_names[] = {"Game default", "Japan", "USA", "Europe"};
-static const char *boot_names[] = {"Straight to the game", "Boot animation", "SEGA screen", "Animation and SEGA"};
 
 static void open_options(void) {
   sw_game *g = G(detail_game);
@@ -1418,8 +1421,8 @@ static void input_options(unsigned int btn, int pressed) {
     case OPT_BOOT: l.boot = (l.boot + d + 4) % 4; break;
     case OPT_RESET:
       if (btn != A) return;
-      l.region = SW_REGION_AUTO; l.vga = 1; l.boot = SW_BOOT_DEFAULT;
-      show_toast("Launch options reset");
+      l = sw_lib_launch_default();
+      show_toast("Launch options reset to the System defaults");
       break;
   }
   sw_lib_launch_set(g, l);
@@ -1427,8 +1430,8 @@ static void input_options(unsigned int btn, int pressed) {
 }
 
 static int launch_is_custom(const sw_game *g) {
-  sw_launch l = sw_lib_launch_get(g);
-  return l.region != SW_REGION_AUTO || !l.vga || l.boot != SW_BOOT_DEFAULT;
+  const sw_launch l = sw_lib_launch_get(g), d = sw_lib_launch_default();
+  return l.region != SW_REGION_AUTO || l.vga != d.vga || l.boot != d.boot;
 }
 
 /* ---------- VMU save manager ---------- */
@@ -1955,6 +1958,14 @@ static void input_tabs(unsigned int btn, int pressed) {
           case SYS_RESUME: p->resume = !p->resume; break;
           case SYS_CLOCK: p->clock24 = !p->clock24; break;
           case SYS_RUMBLE: p->rumble = !p->rumble; if (p->rumble) rumble(); break;
+          case SYS_START:
+            p->start = (uint8_t)((p->start + d + SW_START_COUNT) % SW_START_COUNT);
+            show_toast(p->start == SW_START_BOTH ? "The way the console starts a game" : "A game's own Start with setting still wins");
+            break;
+          case SYS_VIDEO:
+            p->video = !p->video;
+            show_toast("A game's own Video setting still wins");
+            break;
           case SYS_BEEP:
             s->beep = s->beep == BEEP_ON ? BEEP_OFF : BEEP_ON;
             changed_pref = 0;
