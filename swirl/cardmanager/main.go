@@ -666,6 +666,7 @@ func serve() {
 			var req struct {
 				Root, File string
 				Remove     bool
+				Track      int // with Remove: this track only (0 removes them all)
 			}
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 				fail(w, err)
@@ -678,7 +679,9 @@ func serve() {
 			}
 			l := &logBuf{lines: []string{}}
 			var err error
-			if req.Remove {
+			if req.Remove && req.Track > 0 {
+				err = RemoveTrack(root, req.Track)
+			} else if req.Remove {
 				err = RemoveMusic(root)
 			} else {
 				_, err = SetMusic(root, req.File, l.log)

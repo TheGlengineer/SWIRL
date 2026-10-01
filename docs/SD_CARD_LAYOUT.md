@@ -41,7 +41,7 @@ Folder `01` is a small GD-ROM image that GDEMU boots first. Inside it:
 | `META.DAT` | Descriptions, players, genres, accessories, VMU blocks, online (openMenu format) | Optional |
 | `VMU.DAT` | The picture each game shows on the VMU | Optional, added by SWIRL |
 | `SHOT.DAT` | Two screenshots per game | Optional, added by SWIRL |
-| `BGM.ADP` | Menu music (AICA ADPCM) | Optional, added by SWIRL |
+| `BGM.ADP` | Menu music (AICA ADPCM). `BGM2.ADP` to `BGM9.ADP` are further tracks, played in order (2.15) | Optional, added by SWIRL |
 | `COLLECT.TXT` | Your own collections | Optional, added by SWIRL |
 | `LOGO.VMU` | Your own VMU logo | Optional, added by SWIRL |
 | `THEME/` | openMenu themes. SWIRL takes the Sega Dreamcast logo for its header from `THEME/NTSC_U/BG_U_L.PVR`; Card Manager adds that one file from openMenu's release when it is missing | Optional |
@@ -60,7 +60,7 @@ Card Manager keeps your edits here so they survive menu rebuilds and moving the 
 | `games.json` | Names, details and art choices you made in the Edit window |
 | `art/` | Box art, VMU screens and screenshots you uploaded |
 | `collections.json` | Your collections |
-| `BGM.ADP` | Your own menu music, converted |
+| `BGM.ADP` | Your own menu music, converted. `BGM2.ADP` to `BGM9.ADP` are further tracks; each `BGMn.TXT` remembers the file a track came from |
 | `BGM.THEME` | Marks that you chose the SWIRL theme music |
 | `card-id.txt` | A random ID so PC backups of this card are recognised |
 | `legacy_ini.json` | Keys from an openMenu or GDMENU `OPENMENU.INI` that SWIRL does not use, kept by product and written back |

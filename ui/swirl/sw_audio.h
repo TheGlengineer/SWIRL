@@ -5,6 +5,7 @@ enum { SW_SFX_MOVE = 0, SW_SFX_TAB, SW_SFX_SELECT, SW_SFX_BACK, SW_SFX_FAV, SW_S
 
 void sw_audio_init(void);
 int sw_audio_has_music(void);
+int sw_audio_tracks(void);    /* how many music tracks the card has (0 without music) */
 int sw_audio_settled(void);
 void sw_audio_settings(int music_on, int music_level, int sfx_on, int sfx_level); /* levels 0..10 */
 void sw_audio_poll(void);     /* once per frame */

@@ -612,6 +612,7 @@ kbd{font-family:Barlow,sans-serif;font-size:.78rem;font-weight:600;color:var(--t
             <div class="row" style="margin-top:.8rem"><label class="btn small">Use a picture<input type="file" id="logoFile" accept="image/*" hidden></label><button class="btn small" id="logoReset" hidden>Back to the SWIRL logo</button></div></div>
           <div class="panel"><h3>Menu music</h3>
             <p class="hint tight" id="musicInfo">SWIRL plays its own theme unless you pick your own music.</p>
+            <div id="musicTracks"></div>
             <div class="row" style="margin-top:.8rem"><button class="btn small" id="musicPick" disabled>Use my own music</button><button class="btn small" id="musicRemove" hidden>Back to the SWIRL theme</button></div></div>
         </div>
       </section>
@@ -1563,9 +1564,17 @@ async function loadExtras() {
   try {
     const m = await api("/api/music?root=" + encodeURIComponent(card.root));
     const mmss = x => `${Math.floor(x / 60)}:${String(Math.floor(x % 60)).padStart(2, "0")}`;
+    const tracks = m.tracks || [];
     $("musicInfo").innerHTML = m.present
-      ? `<span class="yes">Your own music is set: ${mmss(m.seconds)} (${(m.bytes / 1048576).toFixed(1)} MB).</span> Click Update SWIRL to put it on the card. Going back brings the SWIRL theme back.`
-      : `SWIRL plays its theme, <b>${esc(m.defaultName)}</b> (${mmss(m.defaultSeconds)}). Pick a WAV or MP3 file to use your own music instead. Music can be turned off on the Dreamcast in SWIRL's System tab.`;
+      ? `<span class="yes">Your own music is set: ${tracks.length === 1 ? "one track" : tracks.length + " tracks"}, ${mmss(m.seconds)} (${(m.bytes / 1048576).toFixed(1)} MB).</span> They play in this order and loop. Click Update SWIRL to put them on the card. Going back brings the SWIRL theme back.`
+      : `SWIRL plays its theme, <b>${esc(m.defaultName)}</b> (${mmss(m.defaultSeconds)}). Pick a WAV or MP3 file to use your own music instead; add more files for more tracks (up to ${m.maxTracks || 9}). Music can be turned off on the Dreamcast in SWIRL's System tab.`;
+    $("musicTracks").innerHTML = tracks.map(t => `<div class="row tight" style="margin-top:.4rem"><span class="grow">${t.number}. ${esc(t.name || "Track " + t.number)} <span class="no">${mmss(t.seconds)}</span></span><button class="btn small" data-mt="${t.number}">Remove</button></div>`).join("");
+    $("musicTracks").querySelectorAll("[data-mt]").forEach(b => b.onclick = async () => {
+      try { await api("/api/music", { root: card.root, remove: true, track: +b.dataset.mt }); } catch (e) { alert(e.message); }
+      loadExtras();
+    });
+    $("musicPick").textContent = m.present ? (tracks.length >= (m.maxTracks || 9) ? "Up to " + (m.maxTracks || 9) + " tracks" : "Add another track") : "Use my own music";
+    $("musicPick").disabled = m.present && tracks.length >= (m.maxTracks || 9);
     $("musicRemove").hidden = !m.present;
   } catch (e) {}
   try {
@@ -1608,7 +1617,7 @@ $("colSave").onclick = async () => {
   try { colls = await api("/api/collections", { root: card.root, collections: next }); $("colDlg").close(); loadExtras(); log("Collection saved. Click Update SWIRL to put it on the Dreamcast.", "ok"); }
   catch (e) { $("colMsg").textContent = "Error: " + e.message; }
 };
-$("musicPick").onclick = () => browse({ title: "Pick menu music", kind: "music", pickFile: true, hint: "Click a .wav or .mp3 file. Long tracks are fine; it loops." }, async p => {
+$("musicPick").onclick = () => browse({ title: "Pick menu music", kind: "music", pickFile: true, hint: "Click a .wav or .mp3 file. Long tracks are fine; the tracks play in order and loop." }, async p => {
   $("musicInfo").textContent = "Converting... this takes a few seconds for a long track.";
   try { await api("/api/music", { root: card.root, file: p }); } catch (e) { alert(e.message); }
   loadExtras();

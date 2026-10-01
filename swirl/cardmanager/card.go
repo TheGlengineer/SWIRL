@@ -1300,12 +1300,20 @@ func addExtras(root string, c *Card, data string, log Logger) error {
 		}
 	}
 	os.Remove(filepath.Join(root, editsDir, "BGM.NONE"))
-	removeCI("BGM.ADP")
-	if fileExists(musicPath(root)) {
-		if err := copyFile(musicPath(root), filepath.Join(data, "BGM.ADP")); err != nil {
-			return err
+	for n := 1; n <= maxMusicTracks; n++ {
+		removeCI(trackFile(n)) // tracks the old disc had and this card's settings no longer do
+	}
+	if tracks := musicTracks(root); len(tracks) > 0 {
+		for _, n := range tracks {
+			if err := copyFile(trackPath(root, n), filepath.Join(data, trackFile(n))); err != nil {
+				return err
+			}
 		}
-		log("Added your menu music")
+		if len(tracks) == 1 {
+			log("Added your menu music")
+		} else {
+			log("Added your menu music, %d tracks", len(tracks))
+		}
 		return nil
 	}
 	theme, err := defaultMusic()

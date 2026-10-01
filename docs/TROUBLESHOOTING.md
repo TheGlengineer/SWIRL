@@ -82,7 +82,8 @@ a patch, set **Video: Game default** for that game, or play it over a TV connect
 the same way; it is the game, not the menu. If a game has never worked, test the image itself in an emulator.
 
 **No music.** Check **System > Menu music** and **Music volume**. Music comes from `BGM.ADP` on the menu disc;
-**Update SWIRL** puts it there.
+**Update SWIRL** puts it there. With several tracks, a track that is not in the same format as the first (an
+`.adp` file from another tool) is skipped; the boot log (hold X) says which.
 
 **Settings are not kept after power off.** SWIRL saves a few seconds after a change, to the memory card that
 already has its save or else the first one with room. The banner at the bottom counts down to the

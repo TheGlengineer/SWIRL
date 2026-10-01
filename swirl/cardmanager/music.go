@@ -28,6 +28,54 @@ const (
 
 func musicPath(root string) string { return filepath.Join(root, editsDir, "BGM.ADP") }
 
+// Several tracks (2.15): track 1 is BGM.ADP, the file every SWIRL has played; tracks 2 to 9 are BGM2.ADP
+// to BGM9.ADP. The menu plays them in order and loops. All are 44.1 kHz stereo (encodeBGM makes nothing
+// else; an .adp file brought in from elsewhere must match), because the menu's stream cannot change
+// format between tracks. Each track has a sidecar BGMn.TXT with the name of the file it came from, for
+// Card Manager's list only.
+const maxMusicTracks = 9
+
+func trackFile(n int) string {
+	if n == 1 {
+		return "BGM.ADP"
+	}
+	return fmt.Sprintf("BGM%d.ADP", n)
+}
+
+func trackPath(root string, n int) string { return filepath.Join(root, editsDir, trackFile(n)) }
+
+func trackNamePath(root string, n int) string {
+	return strings.TrimSuffix(trackPath(root, n), ".ADP") + ".TXT"
+}
+
+// musicTracks returns the owner's tracks in play order: 1 to the first missing number.
+func musicTracks(root string) []int {
+	var out []int
+	for n := 1; n <= maxMusicTracks; n++ {
+		if !fileExists(trackPath(root, n)) {
+			break
+		}
+		out = append(out, n)
+	}
+	return out
+}
+
+// bgmFormat reads an OMBG header: rate and channels, or an error for a file that is not menu music.
+func bgmFormat(b []byte) (rate, channels int, err error) {
+	if len(b) <= 32 || string(b[:4]) != "OMBG" {
+		return 0, 0, errors.New("that .ADP file is not menu music")
+	}
+	if binary.LittleEndian.Uint32(b[4:]) != 1 {
+		return 0, 0, errors.New("that .ADP file is a menu music version SWIRL does not play")
+	}
+	rate = int(binary.LittleEndian.Uint32(b[8:]))
+	channels = int(binary.LittleEndian.Uint16(b[12:]))
+	if rate < 8000 || rate > 44100 || (channels != 1 && channels != 2) {
+		return 0, 0, errors.New("that .ADP file has a sample rate or channel count SWIRL does not play")
+	}
+	return rate, channels, nil
+}
+
 type pcm struct {
 	rate     int
 	channels int
@@ -285,57 +333,122 @@ func encodeBGM(p *pcm) ([]byte, float64, error) {
 	return append(hdr.Bytes(), payload...), secs, nil
 }
 
-// SetMusic converts a music file for the card. It is added to the menu disc at the next install.
+// SetMusic converts a music file for the card and adds it as the next track (the first one replaces the
+// SWIRL theme; up to maxMusicTracks). It is put on the menu disc at the next install.
 func SetMusic(root, src string, log Logger) (float64, error) {
+	tracks := musicTracks(root)
+	if len(tracks) >= maxMusicTracks {
+		return 0, fmt.Errorf("the menu plays up to %d tracks; remove one first", maxMusicTracks)
+	}
+	n := len(tracks) + 1
 	b, err := os.ReadFile(src)
 	if err != nil {
 		return 0, fmt.Errorf("could not open %s", src)
 	}
 	var p *pcm
+	var out []byte
+	var secs float64
 	switch strings.ToLower(filepath.Ext(src)) {
 	case ".wav":
 		p, err = decodeWAV(b)
 	case ".mp3":
 		p, err = decodeMP3(bytes.NewReader(b))
 	case ".adp":
-		if len(b) > 32 && string(b[:4]) == "OMBG" {
-			os.MkdirAll(filepath.Join(root, editsDir), 0o755)
-			os.Remove(themeMarker(root))
-			return 0, os.WriteFile(musicPath(root), b, 0o644)
+		rate, ch, ferr := bgmFormat(b)
+		if ferr != nil {
+			return 0, ferr
 		}
-		err = errors.New("that .ADP file is not menu music")
+		if n > 1 {
+			// the menu plays every track at track 1's format
+			first, rerr := os.ReadFile(trackPath(root, 1))
+			if rerr != nil {
+				return 0, rerr
+			}
+			r1, c1, _ := bgmFormat(first)
+			if rate != r1 || ch != c1 {
+				return 0, fmt.Errorf("that .ADP file is %d Hz %s; the tracks already set are %d Hz %s, and the menu plays one format", rate, chName(ch), r1, chName(c1))
+			}
+		}
+		out, secs = b, float64(len(b)-32)/float64(rate*ch/2)
 	default:
 		err = errors.New("pick a .wav or .mp3 file")
 	}
 	if err != nil {
 		return 0, err
 	}
-	out, secs, err := encodeBGM(p)
-	if err != nil {
-		return 0, err
+	if p != nil {
+		if n > 1 {
+			first, rerr := os.ReadFile(trackPath(root, 1))
+			if rerr != nil {
+				return 0, rerr
+			}
+			if r1, c1, _ := bgmFormat(first); r1 != bgmRate || c1 != 2 {
+				return 0, fmt.Errorf("the tracks already set are %d Hz %s (an .ADP file from elsewhere); a converted track is %d Hz stereo, and the menu plays one format", r1, chName(c1), bgmRate)
+			}
+		}
+		out, secs, err = encodeBGM(p)
+		if err != nil {
+			return 0, err
+		}
 	}
 	os.MkdirAll(filepath.Join(root, editsDir), 0o755)
 	os.Remove(filepath.Join(root, editsDir, "BGM.NONE"))
 	os.Remove(themeMarker(root))
-	if err := os.WriteFile(musicPath(root), out, 0o644); err != nil {
+	if err := os.WriteFile(trackPath(root, n), out, 0o644); err != nil {
 		return 0, err
 	}
-	log("Converted %s: %d:%02d of music, %.1f MB", filepath.Base(src), int(secs)/60, int(secs)%60, float64(len(out))/(1<<20))
+	os.WriteFile(trackNamePath(root, n), []byte(filepath.Base(src)), 0o644)
+	if p != nil {
+		log("Converted %s: %d:%02d of music, %.1f MB (track %d)", filepath.Base(src), int(secs)/60, int(secs)%60, float64(len(out))/(1<<20), n)
+	}
 	return secs, nil
 }
 
-// RemoveMusic drops the owner's music, so the SWIRL theme plays again. The theme itself cannot be removed;
-// music can still be turned off on the Dreamcast in SWIRL's System tab.
+func chName(ch int) string {
+	if ch == 2 {
+		return "stereo"
+	}
+	return "mono"
+}
+
+// RemoveTrack drops track n and closes the gap, so the tracks stay numbered 1 to the count. Removing the
+// last track is RemoveMusic.
+func RemoveTrack(root string, n int) error {
+	tracks := musicTracks(root)
+	if n < 1 || n > len(tracks) {
+		return fmt.Errorf("there is no track %d", n)
+	}
+	if len(tracks) == 1 {
+		return RemoveMusic(root)
+	}
+	if err := os.Remove(trackPath(root, n)); err != nil {
+		return err
+	}
+	os.Remove(trackNamePath(root, n))
+	for k := n + 1; k <= len(tracks); k++ {
+		if err := os.Rename(trackPath(root, k), trackPath(root, k-1)); err != nil {
+			return err
+		}
+		os.Rename(trackNamePath(root, k), trackNamePath(root, k-1))
+	}
+	return nil
+}
+
+// RemoveMusic drops the owner's music, every track, so the SWIRL theme plays again. The theme itself
+// cannot be removed; music can still be turned off on the Dreamcast in SWIRL's System tab.
 func RemoveMusic(root string) error {
 	os.Remove(filepath.Join(root, editsDir, "BGM.NONE")) // from versions that allowed no music at all
 	// remembers the choice, so music left on the old menu disc is not picked up as theirs again
 	os.MkdirAll(filepath.Join(root, editsDir), 0o755)
 	os.WriteFile(themeMarker(root), []byte("use the SWIRL theme"), 0o644)
-	err := os.Remove(musicPath(root))
-	if os.IsNotExist(err) {
-		return nil
+	var first error
+	for n := 1; n <= maxMusicTracks; n++ {
+		if err := os.Remove(trackPath(root, n)); err != nil && !os.IsNotExist(err) && first == nil {
+			first = err
+		}
+		os.Remove(trackNamePath(root, n))
 	}
-	return err
+	return first
 }
 
 // ---------- the SWIRL theme ----------
@@ -383,20 +496,43 @@ func isDefaultMusic(b []byte) bool {
 	return err == nil && bytes.Equal(b, d)
 }
 
+type MusicTrack struct {
+	Number  int     `json:"number"`
+	Name    string  `json:"name"` // the file it came from, when known
+	Seconds float64 `json:"seconds"`
+	Bytes   int64   `json:"bytes"`
+}
+
 type MusicInfo struct {
-	Present     bool    `json:"present"` // the owner's own music is set
-	Seconds     float64 `json:"seconds"`
-	Bytes       int64   `json:"bytes"`
-	DefaultName string  `json:"defaultName"`
-	DefaultSecs float64 `json:"defaultSeconds"`
+	Present     bool         `json:"present"` // the owner's own music is set
+	Seconds     float64      `json:"seconds"` // all tracks together
+	Bytes       int64        `json:"bytes"`
+	Tracks      []MusicTrack `json:"tracks"`
+	MaxTracks   int          `json:"maxTracks"`
+	DefaultName string       `json:"defaultName"`
+	DefaultSecs float64      `json:"defaultSeconds"`
 }
 
 func GetMusicInfo(root string) MusicInfo {
-	mi := MusicInfo{DefaultName: defaultMusicName, DefaultSecs: 201}
-	st, err := os.Stat(musicPath(root))
-	if err != nil {
-		return mi
+	mi := MusicInfo{DefaultName: defaultMusicName, DefaultSecs: 201, Tracks: []MusicTrack{}, MaxTracks: maxMusicTracks}
+	for _, n := range musicTracks(root) {
+		st, err := os.Stat(trackPath(root, n))
+		if err != nil {
+			break
+		}
+		t := MusicTrack{Number: n, Bytes: st.Size(), Seconds: float64(st.Size()-32) / bgmRate}
+		if b, err := os.ReadFile(trackPath(root, n)); err == nil {
+			if rate, ch, err := bgmFormat(b); err == nil {
+				t.Seconds = float64(len(b)-32) / float64(rate*ch/2)
+			}
+		}
+		if name, err := os.ReadFile(trackNamePath(root, n)); err == nil {
+			t.Name = strings.TrimSpace(string(name))
+		}
+		mi.Tracks = append(mi.Tracks, t)
+		mi.Present = true
+		mi.Seconds += t.Seconds
+		mi.Bytes += t.Bytes
 	}
-	mi.Present, mi.Bytes, mi.Seconds = true, st.Size(), float64(st.Size()-32)/bgmRate
 	return mi
 }

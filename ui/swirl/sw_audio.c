@@ -7,9 +7,16 @@
  * that fork: a large ring buffer in main RAM so box art loading can use the drive without the music
  * stuttering.
  *
+ * Several tracks (2.15): BGM.ADP is track 1, BGM2.ADP to BGM9.ADP follow, all written by Card Manager at
+ * the same rate and channel count as track 1 (a track that differs is skipped, with a trace, because the
+ * stream cannot change format while it runs). The tracks play in order and loop; the first one is picked
+ * from the clock so a short session does not always hear the same opening. A card from before 2.15 has
+ * BGM.ADP alone and plays as it did.
+ *
  * Navigation sounds are synthesised at start up (short soft blips), so no extra files are needed.
  */
 #include "sw_audio.h"
+#include "sw_trace.h"
 
 #include <dc/g2bus.h>
 #include <dc/sound/sfxmgr.h>
@@ -18,11 +25,13 @@
 #include <dc/spu.h>
 #include <kos.h>
 #include <math.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
 #define BGM_FILE "/cd/BGM.ADP"
+#define BGM_MAX_TRACKS 9 /* BGM.ADP, BGM2.ADP ... BGM9.ADP */
 #define BGM_HEADER_LEN 32
 #define BGM_RING_SIZE (512 << 10)
 #define BGM_READ_CHUNK (64 << 10)
@@ -42,6 +51,8 @@ static int snd_ready;
 static int master_tick, fading_out;
 static int bgm_ok, playing;
 static file_t bgm_fd = FILEHND_INVALID;
+static char track_file[BGM_MAX_TRACKS][16]; /* the tracks that match track 1's format, in play order */
+static int num_tracks, track_cur, track_start_set;
 static snd_stream_hnd_t stream_hnd = SND_STREAM_INVALID;
 static uint32_t sample_rate;
 static int stereo;
@@ -108,6 +119,40 @@ static sfxhnd_t synth(float f0, float f1, int ms, float level) {
   return h;
 }
 
+/* reads an OMBG header; 1 when the file is menu music the stream can play */
+static int track_header(const char *name, uint32_t *rate, int *channels) {
+  file_t fd = fs_open(name, O_RDONLY);
+  if (fd == FILEHND_INVALID)
+    return 0;
+  uint8_t h[BGM_HEADER_LEN];
+  int ok = fs_read(fd, h, sizeof(h)) == (ssize_t)sizeof(h) && !memcmp(h, "OMBG", 4);
+  if (ok) {
+    uint32_t version = h[4] | h[5] << 8 | h[6] << 16 | (uint32_t)h[7] << 24;
+    *rate = h[8] | h[9] << 8 | h[10] << 16 | (uint32_t)h[11] << 24;
+    *channels = h[12] | h[13] << 8;
+    ok = version == 1 && *rate >= 8000 && *rate <= 44100 && (*channels == 1 || *channels == 2) &&
+         fs_total(fd) > BGM_HEADER_LEN;
+  }
+  fs_close(fd);
+  return ok;
+}
+
+/* opens track i at its first sample; the previous track's file is closed */
+static int open_track(int i) {
+  if (bgm_fd != FILEHND_INVALID) {
+    fs_close(bgm_fd);
+    bgm_fd = FILEHND_INVALID;
+  }
+  if (i < 0 || i >= num_tracks)
+    return 0;
+  bgm_fd = fs_open(track_file[i], O_RDONLY);
+  if (bgm_fd == FILEHND_INVALID)
+    return 0;
+  fs_seek(bgm_fd, BGM_HEADER_LEN, SEEK_SET);
+  track_cur = i;
+  return 1;
+}
+
 void sw_audio_init(void) {
   if (snd_ready)
     return; /* already running */
@@ -123,26 +168,41 @@ void sw_audio_init(void) {
   if (!ring)
     ring = memalign(32, BGM_RING_SIZE);
   ring_head = ring_tail = ring_level = 0;
-  bgm_fd = fs_open(BGM_FILE, O_RDONLY);
-  if (bgm_fd == FILEHND_INVALID || !ring)
+  if (!ring)
     return;
-  uint8_t h[BGM_HEADER_LEN];
-  if (fs_read(bgm_fd, h, sizeof(h)) != (ssize_t)sizeof(h) || memcmp(h, "OMBG", 4)) {
-    fs_close(bgm_fd);
-    bgm_fd = FILEHND_INVALID;
-    return;
+  num_tracks = 0;
+  uint32_t rate1 = 0;
+  int ch1 = 0;
+  for (int t = 1; t <= BGM_MAX_TRACKS; t++) {
+    char name[16];
+    if (t == 1) snprintf(name, sizeof(name), "%s", BGM_FILE);
+    else snprintf(name, sizeof(name), "/cd/BGM%d.ADP", t);
+    uint32_t rate;
+    int ch;
+    if (!track_header(name, &rate, &ch)) {
+      if (t == 1) return; /* no music on this card */
+      continue;
+    }
+    if (t == 1) {
+      rate1 = rate;
+      ch1 = ch;
+    } else if (rate != rate1 || ch != ch1) {
+      sw_trace("music: %s skipped, %u Hz %s does not match track 1 (%u Hz %s)", name + 4, (unsigned)rate, ch == 2 ? "stereo" : "mono",
+               (unsigned)rate1, ch1 == 2 ? "stereo" : "mono");
+      continue;
+    }
+    snprintf(track_file[num_tracks++], sizeof(track_file[0]), "%s", name);
   }
-  uint32_t version = h[4] | h[5] << 8 | h[6] << 16 | (uint32_t)h[7] << 24;
-  sample_rate = h[8] | h[9] << 8 | h[10] << 16 | (uint32_t)h[11] << 24;
-  int channels = h[12] | h[13] << 8;
-  if (version != 1 || sample_rate < 8000 || sample_rate > 44100 || (channels != 1 && channels != 2) ||
-      fs_total(bgm_fd) <= BGM_HEADER_LEN) {
-    fs_close(bgm_fd);
-    bgm_fd = FILEHND_INVALID;
-    return;
+  if (!track_start_set) { /* once per boot: a later sw_audio_init (after a VMU write) keeps the track */
+    track_cur = num_tracks > 1 ? (int)(rtc_unix_secs() % (uint32_t)num_tracks) : 0;
+    track_start_set = 1;
   }
-  fs_seek(bgm_fd, BGM_HEADER_LEN, SEEK_SET);
-  stereo = channels == 2;
+  if (track_cur >= num_tracks) track_cur = 0;
+  sample_rate = rate1;
+  stereo = ch1 == 2;
+  if (!open_track(track_cur))
+    return;
+  if (num_tracks > 1) sw_trace("music: %d tracks, starting with %s", num_tracks, track_file[track_cur] + 4);
   bgm_ok = 1;
 }
 
@@ -153,6 +213,10 @@ int sw_audio_settled(void) {
 
 int sw_audio_has_music(void) {
   return bgm_ok;
+}
+
+int sw_audio_tracks(void) {
+  return bgm_ok ? num_tracks : 0;
 }
 
 void sw_audio_sfx(int which) {
@@ -170,6 +234,21 @@ static void fill_chunk(void) {
     run = BGM_READ_CHUNK;
   ssize_t got = fs_read(bgm_fd, ring + ring_head, run);
   if (got == 0) {
+    /* end of the track: the next one (or this one again) follows without a gap, the ring still holds
+       several seconds */
+    if (num_tracks > 1) {
+      int next = (track_cur + 1) % num_tracks;
+      if (open_track(next)) {
+        sw_trace("music: track %s", track_file[next] + 4);
+        return;
+      }
+      if (!open_track(track_cur)) { /* the drive would not give the next one nor this one again */
+        bgm_ok = 0;
+        return;
+      }
+      sw_trace("music: %s could not be opened, playing %s again", track_file[next] + 4, track_file[track_cur] + 4);
+      return;
+    }
     fs_seek(bgm_fd, BGM_HEADER_LEN, SEEK_SET); /* loop */
     return;
   }
@@ -223,7 +302,7 @@ static void start_music(void) {
 static void stop_music(void) {
   snd_stream_stop(stream_hnd);
   ring_head = ring_tail = ring_level = 0;
-  fs_seek(bgm_fd, BGM_HEADER_LEN, SEEK_SET);
+  if (bgm_fd != FILEHND_INVALID) fs_seek(bgm_fd, BGM_HEADER_LEN, SEEK_SET);
   playing = 0;
 }
 
