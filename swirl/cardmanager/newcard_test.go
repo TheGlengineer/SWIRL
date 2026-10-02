@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -75,5 +76,42 @@ func TestNewCardFlow(t *testing.T) {
 	p2, err := planCopy(card)
 	if err != nil || p2.Games != 4 || !p2.HasMenu || !p2.HasINI {
 		t.Fatalf("plan2 %+v %v", p2, err)
+	}
+}
+
+// CM-8: a card made from a backup (or another card) must not carry the source's id, or
+// "Update my last backup" would treat the two cards as one.
+func TestNewCardDropsCardID(t *testing.T) {
+	src := t.TempDir()
+	writeTestCDI(t, filepath.Join(src, "02", "disc.cdi"), "GAME A", "T-00001N")
+	os.MkdirAll(filepath.Join(src, editsDir), 0o755)
+	os.WriteFile(filepath.Join(src, editsDir, "card-id.txt"), []byte("0123456789abcdef"), 0o644)
+	os.WriteFile(filepath.Join(src, editsDir, "names.txt"), []byte("x"), 0o644)
+	p, err := planCopy(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var total int64
+	for _, it := range p.Items {
+		if strings.EqualFold(it.Dst, filepath.Join(editsDir, "card-id.txt")) {
+			t.Fatal("card-id.txt is in the copy plan")
+		}
+		total += it.Size
+	}
+	if total != p.Total {
+		t.Fatalf("plan total %d, items %d", p.Total, total)
+	}
+	card := t.TempDir()
+	if err := runCopy(p, card, func(float64) {}); err != nil {
+		t.Fatal(err)
+	}
+	if !fileExists(filepath.Join(card, editsDir, "names.txt")) {
+		t.Fatal("the rest of the SWIRL folder was not copied")
+	}
+	if existingCardID(card) != "" {
+		t.Fatal("the new card inherited the source's id")
+	}
+	if id := cardID(card); id == "" || id == "0123456789abcdef" {
+		t.Fatal("new card id", id)
 	}
 }

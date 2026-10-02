@@ -135,7 +135,7 @@ folder on your PC.
 - **Update my last backup** (on by default) only copies what changed and removes what you deleted from the card, so repeat backups are quick. Each card gets a hidden ID, so updates never mix two cards. If part of the card could not be read, the update copies what it can, removes nothing, and marks the backup incomplete; check the card and run it again.
 - **Include SWIRL_BACKUP** adds the old menus and removed games kept on the card.
 - **Cancel** stops part way; running it again with Update ticked finishes it.
-- To put a backup onto a card, use **New card from scratch** and pick the backup folder.
+- To put a backup onto a card, use **New card from scratch** and pick the backup folder. The new card is a card of its own: it gets its own hidden ID the first time you back it up, so updates of the old card's backup and the new card's never mix.
 
 **Kept on the card** lists previous menus (restore any of them into folder `01`) and removed games (delete them for good to free the space).
 

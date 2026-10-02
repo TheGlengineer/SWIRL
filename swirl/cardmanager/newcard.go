@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -201,6 +202,15 @@ func planCopy(src string) (*copyPlan, error) {
 				if err := addTree(p, filepath.Join(src, name), editsDir); err != nil {
 					return nil, err
 				}
+				// the id names the card the source came from; the new card gets one of its own
+				// when it is first backed up, or "Update my last backup" would mix the two (CM-8)
+				p.Items = slices.DeleteFunc(p.Items, func(it copyItem) bool {
+					if !strings.EqualFold(it.Dst, filepath.Join(editsDir, "card-id.txt")) {
+						return false
+					}
+					p.Total -= it.Size
+					return true
+				})
 				continue
 			case name == "01" || name == "1":
 				if findGDI(filepath.Join(src, name)) != "" {
