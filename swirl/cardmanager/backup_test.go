@@ -143,3 +143,74 @@ func TestBackupToPC(t *testing.T) {
 	}
 	jobCancel.Store(false)
 }
+
+// CM-7: an update must never remove the backup's copy of something the card would not list.
+func TestBackupUpdateKeepsUnreadable(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the temp folders are all on one drive")
+	}
+	t.Setenv("LOCALAPPDATA", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", os.Getenv("LOCALAPPDATA"))
+	t.Setenv("HOME", os.Getenv("LOCALAPPDATA"))
+	card := t.TempDir()
+	writeTestCDI(t, filepath.Join(card, "02", "disc.cdi"), "FIRST GAME", "T-00001N")
+	writeTestCDI(t, filepath.Join(card, "03", "disc.cdi"), "SECOND GAME", "T-00002N")
+	os.MkdirAll(filepath.Join(card, "01"), 0o755)
+	dest := t.TempDir()
+	if err := StartBackup(BackupRequest{Root: card, Dest: dest}); err != nil {
+		t.Fatal(err)
+	}
+	if j := waitJobAny(t); j.Error != "" {
+		t.Fatal(j.Error)
+	}
+	bk := ListBackups(dest)[0].Path
+	if !fileExists(filepath.Join(bk, "03", "disc.cdi")) {
+		t.Fatal("first backup missing 03")
+	}
+
+	// the card stops listing folder 03; the backup's copy must survive the update
+	walkErrHook = func(p string) error {
+		if filepath.Base(p) == "03" {
+			return os.ErrPermission
+		}
+		return nil
+	}
+	defer func() { walkErrHook = nil }()
+	os.WriteFile(filepath.Join(card, "02", "extra.txt"), []byte("new"), 0o644)
+	if err := StartBackup(BackupRequest{Root: card, Dest: dest, Update: true}); err != nil {
+		t.Fatal(err)
+	}
+	j := waitJobAny(t)
+	if j.Error != "" {
+		t.Fatal(j.Error)
+	}
+	log := strings.Join(j.Log, "\n")
+	if !fileExists(filepath.Join(bk, "03", "disc.cdi")) {
+		t.Fatal("update removed the good copy of an unreadable game:\n" + log)
+	}
+	if !fileExists(filepath.Join(bk, "02", "extra.txt")) {
+		t.Fatal("update did not copy the new file")
+	}
+	if !strings.Contains(log, "Could not read 03 on the card") || !strings.Contains(log, "nothing was removed") {
+		t.Fatal("log does not say what happened:\n" + log)
+	}
+	if l := ListBackups(dest); len(l) != 1 || l[0].Info.Complete {
+		t.Fatalf("a backup with unread entries must be marked incomplete: %+v", l)
+	}
+
+	// the card reads cleanly again and 03 really is gone: now the update prunes it
+	walkErrHook = nil
+	os.RemoveAll(filepath.Join(card, "03"))
+	if err := StartBackup(BackupRequest{Root: card, Dest: dest, Update: true}); err != nil {
+		t.Fatal(err)
+	}
+	if j = waitJobAny(t); j.Error != "" {
+		t.Fatal(j.Error)
+	}
+	if isDir(filepath.Join(bk, "03")) {
+		t.Fatal("a clean update did not mirror the card")
+	}
+	if l := ListBackups(dest); len(l) != 1 || !l[0].Info.Complete {
+		t.Fatalf("clean update should be complete: %+v", l)
+	}
+}

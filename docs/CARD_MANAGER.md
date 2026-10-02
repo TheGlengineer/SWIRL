@@ -132,7 +132,7 @@ file are kept.
 **Back up this card to your PC** copies every game, the menu, your art and edits and `GDEMU.INI` into a dated
 folder on your PC.
 
-- **Update my last backup** (on by default) only copies what changed and removes what you deleted from the card, so repeat backups are quick. Each card gets a hidden ID, so updates never mix two cards.
+- **Update my last backup** (on by default) only copies what changed and removes what you deleted from the card, so repeat backups are quick. Each card gets a hidden ID, so updates never mix two cards. If part of the card could not be read, the update copies what it can, removes nothing, and marks the backup incomplete; check the card and run it again.
 - **Include SWIRL_BACKUP** adds the old menus and removed games kept on the card.
 - **Cancel** stops part way; running it again with Update ticked finishes it.
 - To put a backup onto a card, use **New card from scratch** and pick the backup folder.

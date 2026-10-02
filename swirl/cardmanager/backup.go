@@ -72,15 +72,27 @@ func skipOnCard(rel string, dir bool, includeOld bool) bool {
 	return !dir && isJunk(filepath.Base(rel))
 }
 
-func listCardFiles(root string, includeOld bool) ([]cardFile, int64, error) {
-	var files []cardFile
-	var total int64
-	err := filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
+// walkErrHook lets a test make an entry on the card unreadable (tests run as root, where permissions
+// do not bite). nil in the app.
+var walkErrHook func(p string) error
+
+// listCardFiles lists what is on the card. Entries it could not read (a folder the card would not
+// list, a file that went away between the listing and the stat) come back in unread so the caller
+// knows the list is incomplete: an update must never treat "not listed" as "not on the card" (CM-7).
+func listCardFiles(root string, includeOld bool) (files []cardFile, total int64, unread []string, err error) {
+	err = filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
+		if err == nil && walkErrHook != nil {
+			err = walkErrHook(p)
+		}
 		if err != nil {
 			if p == root {
 				return err
 			}
-			return nil // unreadable entries are reported by the copy, not here
+			rel, _ := filepath.Rel(root, p)
+			if !skipOnCard(rel, true, includeOld) {
+				unread = append(unread, filepath.ToSlash(rel))
+			}
+			return nil
 		}
 		rel, _ := filepath.Rel(root, p)
 		if rel == "." {
@@ -99,7 +111,7 @@ func listCardFiles(root string, includeOld bool) ([]cardFile, int64, error) {
 		total += info.Size()
 		return nil
 	})
-	return files, total, err
+	return files, total, unread, err
 }
 
 func readBackupInfo(dir string) (backupInfo, bool) {
@@ -161,9 +173,16 @@ func runBackup(req BackupRequest, root, dest string) error {
 	jobUpdate(func(j *jobState) { j.Cancellable = true })
 	jobLog("Reading the card")
 	id := cardID(root) // made before listing, so it is part of the first backup too
-	files, total, err := listCardFiles(root, req.IncludeOld)
+	files, total, unread, err := listCardFiles(root, req.IncludeOld)
 	if err != nil {
 		return fmt.Errorf("cannot read the card (%v)", err)
+	}
+	for i, u := range unread {
+		if i == 5 {
+			jobLog("... and %d more", len(unread)-5)
+			break
+		}
+		jobLog("Could not read %s on the card", u)
 	}
 	c, _ := ScanCard(root)
 	games := 0
@@ -249,8 +268,13 @@ func runBackup(req BackupRequest, root, dest string) error {
 			return fmt.Errorf("copying %s: %v", filepath.ToSlash(f.rel), err)
 		}
 	}
-	// an update also drops what is no longer on the card, so the backup matches it
-	if req.Update {
+	// an update also drops what is no longer on the card, so the backup matches it. Not when part of
+	// the card could not be listed: what the listing missed may still be on the card, and the copy in
+	// the backup is then the only good one (CM-7)
+	if req.Update && len(unread) > 0 {
+		jobLog("%d entries on the card could not be read, so nothing was removed from the backup", len(unread))
+	}
+	if req.Update && len(unread) == 0 {
 		removed := 0
 		filepath.Walk(target, func(p string, st os.FileInfo, err error) error {
 			if err != nil || st.IsDir() {
@@ -269,8 +293,11 @@ func runBackup(req BackupRequest, root, dest string) error {
 			jobLog("Removed %d files that are no longer on the card", removed)
 		}
 	}
-	writeInfo(true)
+	writeInfo(len(unread) == 0)
 	jobLog("Backup finished: %d games, %d files, %s, in %s.", games, len(files), sizeText(total), time.Since(start).Round(time.Second))
+	if len(unread) > 0 {
+		jobLog("%d entries on the card could not be read, so the backup is marked incomplete. Check the card, then run Update my last backup again.", len(unread))
+	}
 	jobLog("To put it back onto a card later, use New card from scratch and pick this folder: %s", target)
 	return nil
 }
