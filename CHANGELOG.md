@@ -3,6 +3,17 @@
 SWIRL (the menu) and SWIRL Card Manager share one version number. Card Manager patch releases (2.11.1)
 may ship without menu changes; the menu then keeps its major.minor version (2.11).
 
+## [2.16.1]
+
+Card Manager only; the menu is the 2.16.0 build. Two backup bugs from the audit, both confirmed in the code and both about keeping the one good copy good.
+
+**Tested on:** the Go suite on Linux and Windows (new tests for both fixes, each shown to fail on the 2.16.0 code first) and Glen's Windows 11 PC. Windows is the release; macOS and Linux Card Manager are betas until each has had a run on a real machine.
+
+### Fixed
+
+- **Update my last backup** removed the backup's copy of anything the card would not list (CM-7). If a folder on the card could not be read, the listing left it out, and the update then treated it as deleted and pruned the good copy from the backup. The update now copies what it can, removes nothing when part of the card could not be read, logs each unread entry, and marks the backup incomplete so the backup list says to run it again. A clean listing prunes as before.
+- **New card from scratch** from a backup gave the new card the old card's hidden id (CM-8). The id was copied with the rest of the SWIRL folder, so Update my last backup could not tell the two cards apart and would update the wrong backup. The copy leaves the id out; the new card gets its own the first time it is backed up.
+
 ## [2.16.0]
 
 Languages. SWIRL's menus and the Card Manager window can be shown in German, French, Spanish, Italian and Portuguese as well as English. Preview 2 is folded in below.
