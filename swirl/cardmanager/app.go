@@ -237,11 +237,15 @@ func isPreview(v string) bool {
 	return pre != ""
 }
 
-// versionLabel is how a version reads to people: "2.14.0 preview 1".
+// versionLabel is how a version reads to people: "2.14.0 preview 1", "2.17.0 beta 1".
 func versionLabel(v string) string {
 	core, pre := splitVersion(v)
 	if pre == "" {
 		return core
 	}
-	return core + " preview " + fmt.Sprint(previewNumber(pre))
+	word := "preview"
+	if i := strings.IndexByte(pre, '.'); i > 0 {
+		word = pre[:i]
+	}
+	return core + " " + word + " " + fmt.Sprint(previewNumber(pre))
 }

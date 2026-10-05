@@ -32,7 +32,7 @@ func TestVersionOrder(t *testing.T) {
 			t.Errorf("%s newer than itself", v)
 		}
 	}
-	if versionLabel("2.14.0-preview.1") != "2.14.0 preview 1" || versionLabel("2.13.3") != "2.13.3" {
+	if versionLabel("2.14.0-preview.1") != "2.14.0 preview 1" || versionLabel("2.13.3") != "2.13.3" || versionLabel("2.17.0-beta.1") != "2.17.0 beta 1" {
 		t.Error("labels")
 	}
 	if !isPreview("2.14.0-preview.1") || isPreview("2.14.0") {
