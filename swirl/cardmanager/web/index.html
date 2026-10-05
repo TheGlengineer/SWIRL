@@ -86,7 +86,7 @@ input[type=text]:focus,input[type=number]:focus,select:focus,textarea:focus{outl
 input[type=checkbox]{accent-color:var(--orange);width:1rem;height:1rem;margin:0}
 .btn{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:.5rem;padding:.55rem .9rem;font-weight:600;text-align:center;line-height:1.25;display:inline-flex;align-items:center;justify-content:center;gap:.4rem}
 .btn:hover:not(:disabled){border-color:#3a4a6c}
-.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:disabled,.btn.disabled{opacity:.45;cursor:not-allowed}
 .btn.primary{background:var(--orange);border-color:var(--orange);color:#1a0f05}
 .btn.primary:hover:not(:disabled){background:#ff9c3c;border-color:#ff9c3c}
 .btn.big{font-size:1.02rem;padding:.65rem 1.3rem}
@@ -259,6 +259,23 @@ dialog::backdrop{background:rgba(3,5,10,.72)}
 .art.shot{width:7.75rem;aspect-ratio:4/3;font-size:.72rem}
 .shotpair{display:flex;gap:.5rem;flex-wrap:wrap}
 .logosrc{width:100%;max-width:18rem;max-height:14rem;object-fit:contain;border-radius:.5rem;background:var(--field)}
+.panel.wide{grid-column:1/-1}
+.bglist{display:flex;flex-wrap:wrap;gap:.6rem}
+.bgitem{width:9.5rem;background:var(--panel2);border:1px solid var(--line);border-radius:.6rem;overflow:hidden}
+.bgitem img{display:block;width:100%;aspect-ratio:4/3;object-fit:fill;background:#07090F}
+.bgitem .nm{padding:.4rem .55rem .1rem;font-size:.8rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bgitem .sub{padding:0 .55rem;font-size:.72rem;color:var(--dim)}
+.bgitem .acts{display:flex;gap:.3rem;padding:.35rem .45rem .5rem}
+.bgitem .acts button{flex:1;font-size:.72rem;padding:.25rem .3rem}
+.ed.bg{grid-template-columns:22rem minmax(0,1fr)}
+.bgcrop{position:relative;width:100%;max-width:22rem;aspect-ratio:4/3;background:#07090F;border-radius:.5rem;overflow:hidden;border:1px solid var(--line);cursor:grab}
+.bgcrop canvas{display:block;width:100%;height:100%}
+.bgprev{width:100%;max-width:22rem;aspect-ratio:4/3;border-radius:.5rem;overflow:hidden;border:1px solid var(--line);background:#07090F}
+.bgprev canvas{display:block;width:100%;height:100%}
+.bgnote{font-size:.8rem;margin:.3rem 0 0;color:var(--dim)}
+.bgnote.ok{color:var(--green,#3FB96B)}
+.bgnote.warn{color:var(--yellow)}
+@media (max-width:52rem){.ed.bg{grid-template-columns:minmax(0,1fr)}}
 .lbl{color:var(--dim);font-size:.8rem;font-weight:600;margin:0 0 .4rem}
 .lblrow{display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.4rem}
 .lblrow .lbl{margin:0}
@@ -607,7 +624,7 @@ html.i18n-pending body{visibility:hidden}
       </section>
 
       <section class="view" data-view="look">
-        <div class="vhead"><div class="grow"><h2>Look and sound</h2><p>The VMU logo and menu music SWIRL uses. Changes go onto the Dreamcast at the next Update SWIRL.</p></div></div>
+        <div class="vhead"><div class="grow"><h2>Look and sound</h2><p>The VMU logo, the menu music and the backdrop pictures SWIRL uses. Changes go onto the Dreamcast at the next Update SWIRL.</p></div></div>
         <div class="grid">
           <div class="panel"><h3>VMU logo</h3>
             <div class="media"><div class="vmu sm" id="logoNow">SWIRL logo</div><p class="hint tight" id="logoInfo">Shown on the VMU when SWIRL starts and on its System screens.</p></div>
@@ -616,6 +633,10 @@ html.i18n-pending body{visibility:hidden}
             <p class="hint tight" id="musicInfo">SWIRL plays its own theme unless you pick your own music.</p>
             <div id="musicTracks"></div>
             <div class="row" style="margin-top:.8rem"><button class="btn small" id="musicPick" disabled>Use my own music</button><button class="btn small" id="musicRemove" hidden>Back to the SWIRL theme</button></div></div>
+          <div class="panel wide"><h3>Backdrop pictures</h3>
+            <p class="hint tight" id="bgInfo">Your own pictures behind the menu. Pick one on the Dreamcast under System, Backdrop, after Update SWIRL. Up to 8 per card.</p>
+            <div id="bgList" class="bglist"></div>
+            <div class="row" style="margin-top:.8rem"><label class="btn small" id="bgAddBtn">Add a picture<input type="file" id="bgFile" accept="image/*" hidden></label></div></div>
         </div>
       </section>
 
@@ -786,6 +807,27 @@ html.i18n-pending body{visibility:hidden}
     </div>
   </div>
   <div class="edfoot"><span class="msg" id="logoMsg"></span><button class="btn" id="logoCancel">Cancel</button><button class="btn primary" id="logoSave">Use this logo</button></div>
+</dialog>
+<dialog id="bgDlg">
+  <div class="edhead"><h3 id="bgDlgTitle">Add a backdrop picture</h3><span class="mono">4:3, stored as 512 x 512</span></div>
+  <div class="ed bg">
+    <div>
+      <p class="lbl">Your picture (drag to move, wheel or Zoom to zoom)</p>
+      <div class="bgcrop" id="bgCrop"><canvas id="bgCropC" width="640" height="480"></canvas></div>
+      <p class="bgnote">The dotted boxes show where the menu's text and cover art sit. Keep the interesting part low: the menu draws on top.</p>
+      <p class="lbl" style="margin-top:1rem">On the Dreamcast</p>
+      <div class="bgprev"><canvas id="bgPrevC" width="640" height="480"></canvas></div>
+      <p class="bgnote" id="bgRead"></p>
+    </div>
+    <div class="fields one">
+      <label>Name on the Dreamcast<input type="text" id="bgName" maxlength="19"></label>
+      <label>Zoom <input type="range" id="bgZoom" min="100" max="300" value="100"></label>
+      <label>Darken <span class="count" id="bgDimVal">4 of 10</span><input type="range" id="bgDim" min="0" max="10" value="4"></label>
+      <label class="inline"><input type="checkbox" id="bgKeep" checked> Keep the colours (off tones the picture down so the menu's accent stays the brightest thing)</label>
+      <p class="hint">Darken is the starting value of Picture dim on the Dreamcast, where you can change it any time. The vignette, and a scrim where the text would otherwise be hard to read, are baked into the picture.</p>
+    </div>
+  </div>
+  <div class="edfoot"><span class="msg" id="bgMsg"></span><button class="btn" id="bgCancel">Cancel</button><button class="btn primary" id="bgSave">Use this picture</button></div>
 </dialog>
 <dialog id="capDlg">
   <div class="edhead"><h3>Captured VMU screens</h3><span class="mono">Click the picture each game should use</span></div>
@@ -1144,6 +1186,7 @@ async function scan() {
   loadCaps();
   loadExtras();
   loadLogo();
+  loadBg();
 }
 
 let order = null, dragFrom = null, gFilter = "", scanNo = 0, vgaBusy = false;
@@ -1770,6 +1813,144 @@ $("logoSave").onclick = async () => {
   catch (e) { $("logoMsg").textContent = t("Error: {msg}", { msg: e.message }); }
 };
 $("logoReset").onclick = async () => { try { await api("/api/vmulogo", { root: card.root, reset: true }); } catch (e) {} loadLogo(); };
+
+// ---------- Backdrop pictures ----------
+let bgSrc = null, bgEdit = 0, bgOff = { x: 0, y: 0 }, bgDrag = null, bgProcessed = null, bgTimer = null;
+async function loadBg() {
+  if (!card) return;
+  let list = [];
+  try { list = (await api("/api/bg?root=" + encodeURIComponent(card.root))).pictures || []; } catch (e) {}
+  $("bgList").innerHTML = list.map(p => `<div class="bgitem"><img src="/api/bg/thumb?root=${encodeURIComponent(card.root)}&n=${p.n}&t=${TOKEN}&v=${Date.now()}" alt=""><div class="nm">${esc(p.name)}</div><div class="sub">${t("Dim {n} of 10", { n: p.dim })}</div>
+    <div class="acts"><button class="btn small" data-bgedit="${p.n}">${t("Replace")}</button><button class="btn small" data-bgrm="${p.n}">${t("Remove")}</button></div></div>`).join("");
+  $("bgAddBtn").classList.toggle("disabled", list.length >= 8);
+  $("bgFile").disabled = list.length >= 8;
+  $("bgInfo").textContent = list.length ? t("{n} of 8 pictures on this card. Click Update SWIRL to put them on the Dreamcast, then pick one under System, Backdrop.", { n: list.length }) : t("Your own pictures behind the menu. Pick one on the Dreamcast under System, Backdrop, after Update SWIRL. Up to 8 per card.");
+  $("bgList").querySelectorAll("button[data-bgrm]").forEach(b => b.onclick = async () => {
+    try { await api("/api/bg", { root: card.root, remove: +b.dataset.bgrm }); } catch (e) { log(t("Error: {msg}", { msg: e.message }), "err"); }
+    loadBg();
+  });
+  $("bgList").querySelectorAll("button[data-bgedit]").forEach(b => b.onclick = () => { bgEdit = +b.dataset.bgedit; $("bgFile").click(); });
+}
+$("bgFile").onchange = async () => {
+  const u = await readFile($("bgFile")); $("bgFile").value = "";
+  if (!u) return;
+  const img = new Image();
+  img.onload = () => {
+    bgSrc = img; bgOff = { x: 0, y: 0 };
+    $("bgZoom").value = 100; $("bgDim").value = 4; $("bgKeep").checked = true; $("bgMsg").textContent = "";
+    $("bgName").value = t("Picture");
+    $("bgDlgTitle").textContent = bgEdit ? t("Replace backdrop picture {n}", { n: bgEdit }) : t("Add a backdrop picture");
+    if (img.width < 640 || img.height < 480) $("bgMsg").textContent = t("This picture is smaller than 640 x 480, so it will look soft on the TV.");
+    $("bgDlg").showModal(); bgUpdate();
+  };
+  img.onerror = () => { bgEdit = 0; log(t("SWIRL can't read this picture."), "err"); };
+  img.src = u;
+};
+// the source rectangle shown in the 4:3 crop at the current zoom and offset
+function bgRect() {
+  const z = +$("bgZoom").value / 100, iw = bgSrc.width, ih = bgSrc.height;
+  let w, h;
+  if (iw / ih > 4 / 3) { h = ih / z; w = h * 4 / 3; } else { w = iw / z; h = w * 3 / 4; }
+  const x = Math.max(0, Math.min(iw - w, (iw - w) / 2 + bgOff.x)), y = Math.max(0, Math.min(ih - h, (ih - h) / 2 + bgOff.y));
+  return { x, y, w, h };
+}
+function bgLum(d, x0, y0, x1, y1, step) {
+  let sum = 0, n = 0;
+  for (let y = y0; y < y1; y += step) for (let x = x0; x < x1; x += step) { const i = (y * 512 + x) * 4; sum += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; n++; }
+  return n ? sum / n / 255 : 0;
+}
+// the 512 x 512 texture: the crop, the vignette, the optional toning down, and the readability scrim
+function bgProcess() {
+  // the check assumes a little less darkening than chosen, since Picture dim can be lowered on the console
+  const r = bgRect(), dim = Math.max(0, +$("bgDim").value - 2);
+  const c = document.createElement("canvas"); c.width = 512; c.height = 512;
+  const g = c.getContext("2d");
+  g.drawImage(bgSrc, r.x, r.y, r.w, r.h, 0, 0, 512, 512);
+  if (!$("bgKeep").checked) {
+    const im = g.getImageData(0, 0, 512, 512), d = im.data;
+    for (let i = 0; i < d.length; i += 4) { const l = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; d[i] = d[i] * .7 + l * .3; d[i + 1] = d[i + 1] * .7 + l * .3; d[i + 2] = d[i + 2] * .7 + l * .3; }
+    g.putImageData(im, 0, 0);
+  }
+  const v = g.createRadialGradient(256, 256, 120, 256, 256, 380); v.addColorStop(0, "rgba(0,0,0,0)"); v.addColorStop(1, "rgba(0,0,0,.3)"); g.fillStyle = v; g.fillRect(0, 0, 512, 512);
+  // what the console will show over it: Picture dim and its two gradients; measure the text column and the cover
+  const m = document.createElement("canvas"); m.width = 512; m.height = 512; const mg = m.getContext("2d");
+  const simulate = () => {
+    mg.drawImage(c, 0, 0);
+    mg.fillStyle = `rgba(0,0,0,${dim * 0.075})`; mg.fillRect(0, 0, 512, 512);
+    const gh = mg.createLinearGradient(0, 0, 512, 0); gh.addColorStop(0, "rgba(5,7,13,.94)"); gh.addColorStop(1, "rgba(5,7,13,.35)"); mg.fillStyle = gh; mg.fillRect(0, 0, 512, 512);
+    const gv = mg.createLinearGradient(0, 299, 0, 512); gv.addColorStop(0, "rgba(5,7,13,0)"); gv.addColorStop(1, "rgba(5,7,13,.96)"); mg.fillStyle = gv; mg.fillRect(0, 299, 512, 213);
+    return mg.getImageData(0, 0, 512, 512).data;
+  };
+  let d = simulate();
+  let col = bgLum(d, 26, 64, 304, 320, 4), cov = bgLum(d, 320, 64, 486, 320, 4), scrim = 0, radial = 0;
+  if (col > 0.22) scrim = Math.min(1, (col - 0.18) / 0.25 + 0.4);
+  // local bright patches in the text column count as much as the mean
+  let peak = 0;
+  for (let by = 64; by < 320; by += 64) for (let bx = 26; bx < 304; bx += 64) peak = Math.max(peak, bgLum(d, bx, by, Math.min(304, bx + 64), Math.min(320, by + 64), 4));
+  if (peak > 0.45) scrim = Math.min(1, Math.max(scrim + 0.25, 0.6));
+  if (cov > 0.30) radial = Math.min(1, (cov - 0.25) / 0.3 + 0.3);
+  if (scrim > 0) { const sg = g.createLinearGradient(0, 0, 320, 0); sg.addColorStop(0, `rgba(0,0,0,${0.56 * scrim})`); sg.addColorStop(1, "rgba(0,0,0,0)"); g.fillStyle = sg; g.fillRect(0, 0, 320, 512); }
+  if (radial > 0) { const rg = g.createRadialGradient(403, 192, 0, 403, 192, 160); rg.addColorStop(0, `rgba(0,0,0,${0.38 * radial})`); rg.addColorStop(1, "rgba(0,0,0,0)"); g.fillStyle = rg; g.fillRect(243, 32, 320, 320); }
+  if (scrim > 0 || radial > 0) { d = simulate(); col = bgLum(d, 26, 64, 304, 320, 4); }
+  const note = $("bgRead");
+  if (scrim > 0 || radial > 0) { note.className = "bgnote warn"; note.textContent = t("The picture is bright behind the text, so SWIRL darkens that part. Raise Darken instead to keep more of the picture."); }
+  else { note.className = "bgnote ok"; note.textContent = t("Text will be readable over this picture."); }
+  return c;
+}
+function bgDrawCrop() {
+  const g = $("bgCropC").getContext("2d"), r = bgRect();
+  g.clearRect(0, 0, 640, 480);
+  g.drawImage(bgSrc, r.x, r.y, r.w, r.h, 0, 0, 640, 480);
+  g.strokeStyle = "rgba(255,255,255,.35)"; g.lineWidth = 2; g.strokeRect(32, 24, 576, 432);
+  g.setLineDash([6, 6]); g.strokeStyle = "rgba(242,140,40,.8)";
+  g.strokeRect(32, 60, 348, 240); g.strokeRect(400, 60, 208, 240); g.setLineDash([]);
+  g.fillStyle = "rgba(242,140,40,.9)"; g.font = "600 14px Sora, sans-serif";
+  g.fillText(t("Text goes here"), 40, 80); g.fillText(t("Cover art goes here"), 408, 80);
+}
+function bgDrawPreview(c) {
+  const g = $("bgPrevC").getContext("2d"), dim = +$("bgDim").value;
+  g.drawImage(c, 0, 0, 640, 480);
+  g.fillStyle = `rgba(0,0,0,${dim * 0.075})`; g.fillRect(0, 0, 640, 480);
+  const glow = (x, y, r, col) => { const rg = g.createRadialGradient(x, y, 0, x, y, r); rg.addColorStop(0, col); rg.addColorStop(1, "rgba(0,0,0,0)"); g.fillStyle = rg; g.fillRect(x - r, y - r, r * 2, r * 2); };
+  glow(520, 120, 330, "rgba(232,67,42,.69)"); glow(120, 520, 260, "rgba(5,7,13,.38)");
+  const gh = g.createLinearGradient(0, 0, 640, 0); gh.addColorStop(0, "rgba(5,7,13,.94)"); gh.addColorStop(1, "rgba(5,7,13,.35)"); g.fillStyle = gh; g.fillRect(0, 0, 640, 480);
+  const gv = g.createLinearGradient(0, 280, 0, 480); gv.addColorStop(0, "rgba(5,7,13,0)"); gv.addColorStop(1, "rgba(5,7,13,.96)"); g.fillStyle = gv; g.fillRect(0, 280, 640, 200);
+  g.fillStyle = "#F28C28"; g.font = "600 11px Sora, sans-serif"; g.fillText("FAVORITES", 32, 86);
+  g.fillStyle = "#fff"; g.font = "700 29px Sora, sans-serif"; g.fillText("BEATS OF RAGE", 32, 122);
+  g.fillStyle = "rgba(238,241,247,.86)"; g.font = "15px Barlow, sans-serif"; g.fillText("A side scrolling brawler built for the console,", 32, 185); g.fillText("with four fighters and a two player mode.", 32, 204);
+  g.fillStyle = "#8A8F9A"; g.font = "12px Barlow, sans-serif"; g.fillText("Played 12 times, last on Saturday", 32, 228);
+  g.fillStyle = "#2A1A18"; g.beginPath(); g.roundRect(400, 66, 208, 208, 6); g.fill(); g.fillStyle = "#E8432A"; g.beginPath(); g.arc(514, 150, 46, 0, 6.28); g.fill();
+  for (let i = 0; i < 5; i++) { g.fillStyle = ["#2A1A18", "#1C3F7A", "#1F5A3A", "#5A3A12", "#0F4A5A"][i]; g.beginPath(); g.roundRect(32 + i * 118, 344, 96, 96, 6); g.fill(); }
+  g.fillStyle = "#8A8F9A"; g.font = "12px Barlow, sans-serif"; g.fillText("L / R  tabs     X  options     START  system", 32, 468);
+}
+function bgUpdate() {
+  if (!bgSrc) return;
+  $("bgDimVal").textContent = t("{n} of 10", { n: +$("bgDim").value });
+  bgDrawCrop();
+  clearTimeout(bgTimer);
+  bgTimer = setTimeout(() => { bgProcessed = bgProcess(); bgDrawPreview(bgProcessed); }, 60);
+}
+["bgZoom", "bgDim", "bgKeep"].forEach(id => $(id).oninput = bgUpdate);
+$("bgCrop").onpointerdown = e => { bgDrag = { x: e.clientX, y: e.clientY, ox: bgOff.x, oy: bgOff.y }; $("bgCrop").setPointerCapture(e.pointerId); };
+$("bgCrop").onpointermove = e => {
+  if (!bgDrag || !bgSrc) return;
+  const r = bgRect(), k = r.w / $("bgCrop").clientWidth;
+  bgOff = { x: bgDrag.ox - (e.clientX - bgDrag.x) * k, y: bgDrag.oy - (e.clientY - bgDrag.y) * k };
+  bgUpdate();
+};
+$("bgCrop").onpointerup = $("bgCrop").onpointercancel = () => { bgDrag = null; };
+$("bgCrop").onwheel = e => { e.preventDefault(); $("bgZoom").value = Math.max(100, Math.min(300, +$("bgZoom").value - Math.sign(e.deltaY) * 10)); bgUpdate(); };
+$("bgCancel").onclick = () => { bgEdit = 0; $("bgDlg").close(); };
+$("bgSave").onclick = async () => {
+  if (!bgSrc) return;
+  const c = bgProcess();
+  $("bgSave").disabled = true; $("bgMsg").textContent = t("Compressing the picture for the Dreamcast...");
+  try {
+    await api("/api/bg", { root: card.root, image: c.toDataURL("image/png"), name: $("bgName").value, dim: +$("bgDim").value, n: bgEdit });
+    $("bgDlg").close(); bgEdit = 0; loadBg(); log(t("Backdrop picture saved. Click Update SWIRL to put it on the Dreamcast."), "ok");
+  } catch (e) { $("bgMsg").textContent = t("Error: {msg}", { msg: e.message }); }
+  $("bgSave").disabled = false;
+};
 
 // ---------- VMU capture ----------
 let caps = [];

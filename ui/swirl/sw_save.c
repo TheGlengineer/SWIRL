@@ -18,6 +18,12 @@ typedef struct __attribute__((packed)) save_more {
   uint8_t prefs[4]; /* sw_prefs bytes 16 to 19: logo, start, video, lang */
 } save_more;
 
+/* version 5: one more tagged block after PRF4 (2.17: backdrop motion and the custom picture settings) */
+typedef struct __attribute__((packed)) save_more5 {
+  char tag[4]; /* "PRF5" */
+  uint8_t prefs[4]; /* sw_prefs bytes 20 to 23: motion_off, picture, pic_dim, pic_motion */
+} save_more5;
+
 typedef struct __attribute__((packed)) save_blob_v1 {
   char magic[4];
   uint16_t version;
@@ -35,15 +41,16 @@ typedef struct __attribute__((packed)) save_tail {
 /* The layout is the byte sizes below. Changing sw_prefs or sw_stat changes the file: bump SW_SAVE_VERSION, keep a
    reader for the old size in sw_save_parse, and add a file from the previous release to tests/host/savefiles.
    Then update these numbers. */
-_Static_assert(SW_SAVE_VERSION == 4, "new SWIRL.DAT layout: update the readers, the fixtures and this check");
-_Static_assert(sizeof(sw_prefs) == SW_PREFS_HEAD + 4, "sw_prefs changed size: that is a new SWIRL.DAT layout (see sw_save.h)");
+_Static_assert(SW_SAVE_VERSION == 5, "new SWIRL.DAT layout: update the readers, the fixtures and this check");
+_Static_assert(sizeof(sw_prefs) == SW_PREFS_HEAD + 8, "sw_prefs changed size: that is a new SWIRL.DAT layout (see sw_save.h)");
 _Static_assert(sizeof(sw_stat) == 12, "sw_stat changed size: that is a new SWIRL.DAT layout (see sw_save.h)");
 _Static_assert(sizeof(save_tail) == 8, "save_tail changed size: that is a new SWIRL.DAT layout (see sw_save.h)");
 _Static_assert(sizeof(save_blob) == 8 + SW_PREFS_HEAD, "save_blob is not packed the way the file is");
 _Static_assert(sizeof(save_more) == 8, "save_more changed size: that is a new SWIRL.DAT layout (see sw_save.h)");
+_Static_assert(sizeof(save_more5) == 8, "save_more5 changed size: that is a new SWIRL.DAT layout (see sw_save.h)");
 
 int sw_save_size(int n) {
-  return (int)sizeof(save_blob) + n * (int)sizeof(sw_stat) + (int)sizeof(save_tail) + (int)sizeof(save_more);
+  return (int)sizeof(save_blob) + n * (int)sizeof(sw_stat) + (int)sizeof(save_tail) + (int)sizeof(save_more) + (int)sizeof(save_more5);
 }
 
 int sw_save_parse(const uint8_t *data, int len, sw_prefs *p, sw_stat *st, int *n, int *layout, uint32_t *seq) {
@@ -76,6 +83,15 @@ int sw_save_parse(const uint8_t *data, int len, sw_prefs *p, sw_stat *st, int *n
           if (!memcmp(m.tag, "PRF4", 4)) {
             memcpy((uint8_t *)p + SW_PREFS_HEAD, m.prefs, sizeof(m.prefs));
             has_more = 1;
+            const int more5_at = more_at + (int)sizeof(save_more);
+            if (len >= more5_at + (int)sizeof(save_more5)) {
+              save_more5 m5;
+              memcpy(&m5, data + more5_at, sizeof(m5));
+              if (!memcmp(m5.tag, "PRF5", 4)) {
+                memcpy((uint8_t *)p + SW_PREFS_HEAD + 4, m5.prefs, sizeof(m5.prefs));
+                has_more = 2;
+              }
+            }
           }
         }
       }
@@ -83,7 +99,13 @@ int sw_save_parse(const uint8_t *data, int len, sw_prefs *p, sw_stat *st, int *n
     if (p->logo >= SW_LOGO_COUNT) p->logo = SW_LOGO_REGION;
     if (p->start >= SW_START_COUNT) p->start = SW_START_BOTH;
     if (p->video > 1) p->video = 0;
-    *layout = b->version < 3 ? SW_SAVE_LAYOUT_V2 : has_more ? SW_SAVE_LAYOUT_CURRENT : SW_SAVE_LAYOUT_V3;
+    if (has_more < 2) p->pic_dim = 4; /* no PRF5 block: the picture settings at their defaults */
+    if (p->motion_off > 1) p->motion_off = 0;
+    if (p->picture > SW_BG_MAX) p->picture = 0;
+    if (p->pic_dim > 10) p->pic_dim = 4;
+    if (p->pic_motion >= SW_PIC_MOTION_COUNT) p->pic_motion = 0;
+    if (p->backdrop >= SW_BACKDROP_COUNT) p->backdrop = 0;
+    *layout = b->version < 3 ? SW_SAVE_LAYOUT_V2 : has_more == 2 ? SW_SAVE_LAYOUT_CURRENT : has_more ? SW_SAVE_LAYOUT_V4 : SW_SAVE_LAYOUT_V3;
     return 0;
   }
   if (!memcmp(b->magic, "SWL1", 4)) {
@@ -94,6 +116,7 @@ int sw_save_parse(const uint8_t *data, int len, sw_prefs *p, sw_stat *st, int *n
     p->sort = o->prefs[2];
     p->attract = o->prefs[3];
     p->saver_min = 5;
+    p->pic_dim = 4;
     const int room = (len - (int)sizeof(save_blob_v1)) / (int)sizeof(sw_stat);
     *n = count;
     if (*n > room) *n = room < 0 ? 0 : room;
@@ -123,5 +146,10 @@ int sw_save_build(uint8_t *out, const sw_prefs *p, const sw_stat *st, int n, uin
   memcpy(more.tag, "PRF4", 4);
   memcpy(more.prefs, (const uint8_t *)p + SW_PREFS_HEAD, sizeof(more.prefs));
   memcpy(out + len, &more, sizeof(more));
-  return len + (int)sizeof(more);
+  len += (int)sizeof(more);
+  save_more5 more5;
+  memcpy(more5.tag, "PRF5", 4);
+  memcpy(more5.prefs, (const uint8_t *)p + SW_PREFS_HEAD + 4, sizeof(more5.prefs));
+  memcpy(out + len, &more5, sizeof(more5));
+  return len + (int)sizeof(more5);
 }

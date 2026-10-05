@@ -632,9 +632,12 @@ func buildMenuImageInto(root, datDir string, allowEmpty bool, log Logger) (strin
 	if err := addExtras(root, c, data, log); err != nil {
 		return work, "", nil, err
 	}
-	addOpenMenuFiles(data, log)   // header logo, plus what the Classic styles need
-	addHeaderLogoSheet(data, log) // the small two region logo texture (F1, SW-15)
-	addLanguages(data, log)       // LANG.DAT, the menu's translations
+	addOpenMenuFiles(data, log)                          // header logo, plus what the Classic styles need
+	addHeaderLogoSheet(data, log)                        // the small two region logo texture (F1, SW-15)
+	addLanguages(data, log)                              // LANG.DAT, the menu's translations
+	if err := addBgToDisc(root, data, log); err != nil { // the owner's backdrop pictures (2.17)
+		return work, "", nil, err
+	}
 	bin := swirlBinary
 	if p := os.Getenv("SWIRL_1ST_READ"); p != "" { // development: test a new menu build
 		// only builds that keep the author credit may be installed

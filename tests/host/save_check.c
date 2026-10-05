@@ -42,8 +42,12 @@ static int check(const char *path) {
   }
   printf("%s: layout %d, %d stats, %d favourites, seq %lu, music %d sfx %d quality %d saver %d min logo %d start %d video %d\n",
          path, layout, n, favs, (unsigned long)seq, p.music, p.sfx, p.quality, p.saver_min, p.logo, p.start, p.video);
-  if (layout < SW_SAVE_LAYOUT_CURRENT && (p.logo != 0 || p.start != 0 || p.video != 0 || p.lang)) {
+  if (layout < SW_SAVE_LAYOUT_V4 && (p.logo != 0 || p.start != 0 || p.video != 0 || p.lang)) {
     printf("  an older layout must read with the version 4 bytes at zero\n");
+    return 1;
+  }
+  if (layout < SW_SAVE_LAYOUT_CURRENT && (p.motion_off != 0 || p.picture != 0 || p.pic_dim != 4 || p.pic_motion != 0)) {
+    printf("  an older layout must read with the version 5 bytes at their defaults (dim 4)\n");
     return 1;
   }
   if (found != 2 || favs != 2) {
@@ -72,6 +76,19 @@ static int check(const char *path) {
       memcmp(out + 8 + 16 + n * sizeof(sw_stat) + 8, "PRF4", 4) != 0) {
     printf("  the stats or the tail moved: an older SWIRL would lose the favourites\n");
     return 1;
+  }
+  /* the file cut after PRF4 (what a 2.15 or 2.16 menu writes back) reads as a version 4 file with the
+     2.17 settings at their defaults */
+  {
+    sw_prefs p4;
+    sw_stat st4[SW_SAVE_MAX_STATS];
+    int n4 = 0, layout4 = 0;
+    uint32_t seq4 = 0;
+    if (sw_save_parse(out, 8 + 16 + n * (int)sizeof(sw_stat) + 16, &p4, st4, &n4, &layout4, &seq4) != 0 || n4 != n ||
+        layout4 != SW_SAVE_LAYOUT_V4 || p4.logo != p.logo || p4.lang != p.lang || p4.pic_dim != 4 || p4.picture != 0) {
+      printf("  the file without its PRF5 block does not read as a version 4 file\n");
+      return 1;
+    }
   }
   /* the file cut at the tail (what an older version would write back) still reads, with the new settings at
      their defaults */

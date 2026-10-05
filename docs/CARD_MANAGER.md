@@ -100,6 +100,7 @@ Your own edits from a game's Edit window always win over downloaded art.
 
 - **VMU logo**: shown on the VMU when SWIRL starts. Use your own picture, or go back to the SWIRL logo.
 - **Menu music**: SWIRL plays its theme unless you pick your own WAV or MP3. The theme cannot be deleted, only replaced by your own music, and **Back to the SWIRL theme** restores it.
+- **Backdrop pictures**: up to 8 of your own pictures behind the menu, listed on the Dreamcast under System > Backdrop by the names you give them. **Add a picture** opens any PNG, JPEG, BMP, GIF or WebP; drag and zoom it in the 4:3 frame (the dotted boxes show where the menu's text and cover art sit, so keep the interesting part low), set **Darken** (the starting value of Picture dim on the Dreamcast), and watch the "On the Dreamcast" preview, which draws SWIRL's own glow and shading over the picture. If the part behind the text measures too bright, Card Manager bakes a darkening scrim into that part and says so; raising Darken instead keeps more of the picture. Pictures are stored as 512 x 512 compressed textures (about 66 KB of video memory each; the Dreamcast stretches them to the screen) under SWIRL/BG on the card and go onto the menu disc at Update SWIRL. **Replace** and **Remove** keep the numbering the Dreamcast uses.
 
 ## Collections
 

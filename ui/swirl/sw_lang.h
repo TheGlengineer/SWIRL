@@ -331,7 +331,23 @@
   X(S_DIAG_TITLE, "Diagnostics") \
   X(S_DIAG_EMPTY, "No warnings since power on.") \
   X(S_DIAG_HELP, "A warning is a problem SWIRL got past: a save that failed, a picture it could not use, a line in OPENMENU.INI it skipped. They are listed here with a code.") \
-  X(S_DIAG_QR_HELP, "A shows the full report as QR codes to photograph for a bug report. It holds no game names beyond the last few steps.")
+  X(S_DIAG_QR_HELP, "A shows the full report as QR codes to photograph for a bug report. It holds no game names beyond the last few steps.") \
+  /* 2.17: backdrops and custom pictures */ \
+  X(S_SYS_MOTION, "Backdrop motion") \
+  X(S_BACKDROP_TIDE, "Tide") \
+  X(S_BACKDROP_SPIRAL, "Spiral") \
+  X(S_BACKDROP_STARFIELD, "Starfield") \
+  X(S_BACKDROP_EMBERS, "Embers") \
+  X(S_BACKDROP_HORIZON, "Horizon") \
+  X(S_BACKDROP_PULSE, "Pulse") \
+  X(S_SYS_PIC_DIM, "Picture dim") \
+  X(S_SYS_PIC_MOTION, "Picture motion") \
+  X(S_PIC_MOTION_NONE, "None") \
+  X(S_HINT_PIC_DAMAGED, "This picture could not be used, so Cover colour is shown") \
+  X(S_HINT_PULSE_MUSIC, "Pulse follows the menu music: turn Music on to see it") \
+  X(S_HINT_MOTION_OFF, "Nothing in the backdrop moves now") \
+  X(S_HINT_MOTION_ON, "Backdrops move again") \
+  X(S_PIC_FAILED, "%s (not usable)")
 
 enum {
 #define SW_LANG_ENUM(id, text) id,

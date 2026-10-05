@@ -296,5 +296,20 @@
   "S_DIAG_TITLE": "Diagnose",
   "S_DIAG_EMPTY": "Keine Warnungen seit dem Einschalten.",
   "S_DIAG_HELP": "Eine Warnung ist ein Problem, das SWIRL überstanden hat: ein fehlgeschlagenes Speichern, ein unbrauchbares Bild, eine übersprungene Zeile in OPENMENU.INI. Sie stehen hier mit einem Code.",
-  "S_DIAG_QR_HELP": "A zeigt den vollen Bericht als QR-Codes zum Fotografieren für eine Fehlermeldung. Er enthält keine Spielnamen außer den letzten Schritten."
+  "S_DIAG_QR_HELP": "A zeigt den vollen Bericht als QR-Codes zum Fotografieren für eine Fehlermeldung. Er enthält keine Spielnamen außer den letzten Schritten.",
+  "S_SYS_MOTION": "Hintergrundbewegung",
+  "S_BACKDROP_TIDE": "Gezeiten",
+  "S_BACKDROP_SPIRAL": "Spirale",
+  "S_BACKDROP_STARFIELD": "Sternenhimmel",
+  "S_BACKDROP_EMBERS": "Glut",
+  "S_BACKDROP_HORIZON": "Horizont",
+  "S_BACKDROP_PULSE": "Puls",
+  "S_SYS_PIC_DIM": "Bild abdunkeln",
+  "S_SYS_PIC_MOTION": "Bildbewegung",
+  "S_PIC_MOTION_NONE": "Keine",
+  "S_HINT_PIC_DAMAGED": "Dieses Bild konnte nicht verwendet werden, darum wird Cover-Farbe gezeigt",
+  "S_HINT_PULSE_MUSIC": "Puls folgt der Menümusik: Musik einschalten, um es zu sehen",
+  "S_HINT_MOTION_OFF": "Im Hintergrund bewegt sich jetzt nichts mehr",
+  "S_HINT_MOTION_ON": "Hintergründe bewegen sich wieder",
+  "S_PIC_FAILED": "%s (nicht nutzbar)"
 }

@@ -3,6 +3,31 @@
 SWIRL (the menu) and SWIRL Card Manager share one version number. Card Manager patch releases (2.11.1)
 may ship without menu changes; the menu then keeps its major.minor version (2.11).
 
+## [2.17.0-preview.1]
+
+Backdrops. Six new animated backdrops behind the menu, Seasonal following the clock and the weather of the month, a Backdrop motion switch, and your own pictures added in Card Manager. Every backdrop is built from the same soft shapes the menu already draws, so none of them costs card space or video memory; a picture is one compressed texture. The design, with the limits each backdrop keeps to so the cover art and the text stay the focus, is in the repo as docs/BACKDROPS_DESIGN.md.
+
+**What to test:** (1) System > Backdrop, each of the nine built in backdrops on the console, on a CRT if you have one (thin lines and small dots are what flicker on 480i); (2) Backdrop motion Off, then On, on Seasonal and Spiral; (3) Pulse with the menu music on, then with Music off; (4) Card Manager, Look and sound, Backdrop pictures: add a bright photo and a dark one, Update SWIRL, pick each under System > Backdrop, change Picture dim and Picture motion, and confirm the text column stays readable; (5) Remove a picture in Card Manager while the console had it selected, Update SWIRL, boot: the Backdrop row should say "(not usable)" and draw Cover colour, with warning W21 in Diagnostics; (6) a card last written by 2.16: settings kept, Picture dim at 4; (7) a power cycle keeps the chosen backdrop, motion switch and picture settings.
+
+### Menu
+
+- **System > Backdrop**: Cover colour, Night, Seasonal, Tide, Spiral, Starfield, Embers, Horizon, Pulse, then your own pictures by name. ([Backdrops](docs/USING_SWIRL.md#backdrops))
+- **Seasonal** now follows the clock (dawn, day, dusk and night tints, a sun or moon crossing the top), rains in April and November, has mist in March and October, and keeps the fireflies for summer nights.
+- **Backdrop motion** On, Off: Off holds every backdrop still, Seasonal's particles included.
+- **Your pictures**: SWIRL's glow and shading are drawn over the picture so the menu stays readable; **Picture dim** (0 to 10, starting at the value chosen in Card Manager) and **Picture motion** (None, Seasonal, Spiral, Starfield, Embers, Pulse) appear under Backdrop while a picture is chosen. A picture that is missing, the wrong size or damaged shows as "(not usable)", Cover colour is drawn, and Diagnostics gets warning W21.
+- **Pulse** needs the music: the loudness of what the sound chip is playing drives the glow, so with Music off it is Cover colour and the row says so.
+- SWIRL.DAT grows a PRF5 block after PRF4 (version 5) for the four new settings. A 2.15 or 2.16 menu reads a version 5 file and keeps everything it knows; a version 4 file reads with the new settings at their defaults. tests/host/savefiles has a file written by the real 2.16.1 build.
+
+### Card Manager
+
+- **Look and sound > Backdrop pictures**: up to 8 pictures per card. Drag and zoom in a 4:3 frame with the menu's text and cover regions marked, set Darken, see the result under SWIRL's own glow and shading, and Card Manager darkens the part behind the text by itself when a picture measures too bright there. Stored as 512 x 512 VQ textures (about 66 KB each) with a binary index (BG.DAT: name, dim, size and checksum per picture) under SWIRL/BG, written to the menu disc at Update SWIRL. ([Backdrop pictures](docs/CARD_MANAGER.md#look-and-sound))
+- The window's new strings are in all six languages.
+
+### Known limits
+
+- The speed and opacity limits were tuned in the emulator; a CRT may still show shimmer on Horizon's moving lines or Starfield's smallest stars, which is what the test list is for.
+- A picture's readability scrim is baked in at the Darken value chosen in Card Manager (less two, as a margin); lowering Picture dim well below that on the console can make a bright picture harder to read behind the text.
+
 ## [2.16.1]
 
 Card Manager only; the menu is the 2.16.0 build. Two backup bugs from the audit, both confirmed in the code and both about keeping the one good copy good.

@@ -8,7 +8,8 @@
  *   SWL2  magic[4] version=2 count prefs[16] stats[count] SEQ1 seq              2.14.0 and 2.14.1
  *   SWL2  magic[4] version=3 count prefs[16] stats[count] SEQ1 seq              2.14.2 to 2.14.3 (same bytes;
  *                                                                              the version now says so)
- *   SWL2  magic[4] version=4 count prefs[16] stats[count] SEQ1 seq PRF4 more[4] 2.15.0 on
+ *   SWL2  magic[4] version=4 count prefs[16] stats[count] SEQ1 seq PRF4 more[4] 2.15.0 to 2.16.1
+ *   SWL2  magic[4] version=5 count prefs[16] stats[count] SEQ1 seq PRF4 more[4] PRF5 more[4]  2.17.0 on
  * The prefs block has been 16 bytes since SWL2: 2.13 kept two reserved bytes that 2.14 named. Version 4 adds
  * settings after the tail (the header logo choice and three spare bytes) rather than growing the block, so the
  * stats stay where every older SWIRL looks for them: a 2.14 or 2.13 menu reads a version 4 file whole and only
@@ -22,7 +23,7 @@
 
 #include "sw_lib.h"
 
-#define SW_SAVE_VERSION 4
+#define SW_SAVE_VERSION 5
 #define SW_SAVE_MAX_STATS 256
 
 /* what sw_save_parse found */
@@ -30,7 +31,8 @@ enum {
   SW_SAVE_LAYOUT_V1 = 1,      /* SWL1 */
   SW_SAVE_LAYOUT_V2 = 2,      /* SWL2 version 2 (2.11 to 2.14.1) */
   SW_SAVE_LAYOUT_V3 = 3,      /* SWL2 version 3 (2.14.2 and 2.14.3): no PRF4 block */
-  SW_SAVE_LAYOUT_CURRENT = 4, /* SWL2 version 4: PRF4 block after the tail */
+  SW_SAVE_LAYOUT_V4 = 4,      /* SWL2 version 4 (2.15.0 to 2.16.1): PRF4 block after the tail */
+  SW_SAVE_LAYOUT_CURRENT = 5, /* SWL2 version 5: PRF4 then PRF5 after the tail */
 };
 
 /* Reads the data of a SWIRL.DAT package. st holds up to SW_SAVE_MAX_STATS. Returns 0 and fills n, layout and

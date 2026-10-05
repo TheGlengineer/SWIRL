@@ -296,5 +296,20 @@
   "S_DIAG_TITLE": "Diagnóstico",
   "S_DIAG_EMPTY": "Sem avisos desde que ligou.",
   "S_DIAG_HELP": "Um aviso é um problema que o SWIRL contornou: um save que falhou, uma imagem que não pôde usar, uma linha do OPENMENU.INI que pulou. Eles aparecem aqui com um código.",
-  "S_DIAG_QR_HELP": "A mostra o relatório completo em códigos QR para fotografar e enviar com um relato de erro. Ele não contém nomes de jogos além dos últimos passos."
+  "S_DIAG_QR_HELP": "A mostra o relatório completo em códigos QR para fotografar e enviar com um relato de erro. Ele não contém nomes de jogos além dos últimos passos.",
+  "S_SYS_MOTION": "Movimento do fundo",
+  "S_BACKDROP_TIDE": "Maré",
+  "S_BACKDROP_SPIRAL": "Espiral",
+  "S_BACKDROP_STARFIELD": "Céu estrelado",
+  "S_BACKDROP_EMBERS": "Brasas",
+  "S_BACKDROP_HORIZON": "Horizonte",
+  "S_BACKDROP_PULSE": "Pulso",
+  "S_SYS_PIC_DIM": "Escurecer a imagem",
+  "S_SYS_PIC_MOTION": "Movimento da imagem",
+  "S_PIC_MOTION_NONE": "Nenhum",
+  "S_HINT_PIC_DAMAGED": "Esta imagem não pôde ser usada, por isso é mostrada a Cor da capa",
+  "S_HINT_PULSE_MUSIC": "Pulso segue a música do menu: ligue a música para o ver",
+  "S_HINT_MOTION_OFF": "Agora nada se move no fundo",
+  "S_HINT_MOTION_ON": "Os fundos voltam a mover-se",
+  "S_PIC_FAILED": "%s (não utilizável)"
 }

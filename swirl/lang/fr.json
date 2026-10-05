@@ -296,5 +296,20 @@
   "S_DIAG_TITLE": "Diagnostic",
   "S_DIAG_EMPTY": "Aucun avertissement depuis l'allumage.",
   "S_DIAG_HELP": "Un avertissement est un problème que SWIRL a surmonté : une sauvegarde échouée, une image inutilisable, une ligne ignorée dans OPENMENU.INI. Ils sont listés ici avec un code.",
-  "S_DIAG_QR_HELP": "A affiche le rapport complet en QR codes à photographier pour un signalement. Il ne contient aucun nom de jeu au-delà des dernières étapes."
+  "S_DIAG_QR_HELP": "A affiche le rapport complet en QR codes à photographier pour un signalement. Il ne contient aucun nom de jeu au-delà des dernières étapes.",
+  "S_SYS_MOTION": "Animation du fond",
+  "S_BACKDROP_TIDE": "Marée",
+  "S_BACKDROP_SPIRAL": "Spirale",
+  "S_BACKDROP_STARFIELD": "Ciel étoilé",
+  "S_BACKDROP_EMBERS": "Braises",
+  "S_BACKDROP_HORIZON": "Horizon",
+  "S_BACKDROP_PULSE": "Pulsation",
+  "S_SYS_PIC_DIM": "Assombrir l'image",
+  "S_SYS_PIC_MOTION": "Animation de l'image",
+  "S_PIC_MOTION_NONE": "Aucune",
+  "S_HINT_PIC_DAMAGED": "Cette image n'a pas pu être utilisée, la Couleur de jaquette est affichée",
+  "S_HINT_PULSE_MUSIC": "Pulsation suit la musique du menu : activez la musique pour la voir",
+  "S_HINT_MOTION_OFF": "Plus rien ne bouge dans le fond",
+  "S_HINT_MOTION_ON": "Les fonds s'animent à nouveau",
+  "S_PIC_FAILED": "%s (inutilisable)"
 }

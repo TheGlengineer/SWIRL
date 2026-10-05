@@ -296,5 +296,20 @@
   "S_DIAG_TITLE": "Diagnostica",
   "S_DIAG_EMPTY": "Nessun avviso dall'accensione.",
   "S_DIAG_HELP": "Un avviso è un problema che SWIRL ha superato: un salvataggio fallito, un'immagine inutilizzabile, una riga saltata in OPENMENU.INI. Sono elencati qui con un codice.",
-  "S_DIAG_QR_HELP": "A mostra il rapporto completo in codici QR da fotografare per una segnalazione. Non contiene nomi di giochi oltre gli ultimi passaggi."
+  "S_DIAG_QR_HELP": "A mostra il rapporto completo in codici QR da fotografare per una segnalazione. Non contiene nomi di giochi oltre gli ultimi passaggi.",
+  "S_SYS_MOTION": "Movimento dello sfondo",
+  "S_BACKDROP_TIDE": "Marea",
+  "S_BACKDROP_SPIRAL": "Spirale",
+  "S_BACKDROP_STARFIELD": "Cielo stellato",
+  "S_BACKDROP_EMBERS": "Braci",
+  "S_BACKDROP_HORIZON": "Orizzonte",
+  "S_BACKDROP_PULSE": "Pulsazione",
+  "S_SYS_PIC_DIM": "Scurisci l'immagine",
+  "S_SYS_PIC_MOTION": "Movimento dell'immagine",
+  "S_PIC_MOTION_NONE": "Nessuno",
+  "S_HINT_PIC_DAMAGED": "Impossibile usare questa immagine, viene mostrato Colore della copertina",
+  "S_HINT_PULSE_MUSIC": "Pulsazione segue la musica del menu: attiva la musica per vederla",
+  "S_HINT_MOTION_OFF": "Ora nulla si muove nello sfondo",
+  "S_HINT_MOTION_ON": "Gli sfondi tornano a muoversi",
+  "S_PIC_FAILED": "%s (non utilizzabile)"
 }

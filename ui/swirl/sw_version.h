@@ -3,7 +3,7 @@
  * Manager patch release keeps it); swirl/build.sh passes the full version and the git build id, and a build
  * without them says so. */
 #pragma once
-#define SWIRL_VERSION "2.16"
+#define SWIRL_VERSION "2.17"
 #ifndef SWIRL_VERSION_STR
 #define SWIRL_VERSION_STR SWIRL_VERSION
 #endif

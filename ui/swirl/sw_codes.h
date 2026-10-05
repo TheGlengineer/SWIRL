@@ -24,7 +24,8 @@
   X(SW_WARN_STEP, 17, "startup-step", "A start up step failed")                                              \
   X(SW_WARN_STYLE, 18, "style-files", "The saved style needs theme files this disc lacks")                  \
   X(SW_WARN_DISC, 19, "disc-read", "The menu disc could not be read")                                      \
-  X(SW_WARN_LANG, 20, "language-file", "LANG.DAT could not be used, showing English")
+  X(SW_WARN_LANG, 20, "language-file", "LANG.DAT could not be used, showing English")                      \
+  X(SW_WARN_PICTURE_BG, 21, "backdrop-picture", "A backdrop picture on the card could not be used")
 
 enum sw_code {
 #define X(name, num, key, words) name = num,

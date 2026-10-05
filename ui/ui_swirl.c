@@ -38,6 +38,7 @@
 #include "draw_prototypes.h"
 #include "global_settings.h"
 #include "swirl/sw_audio.h"
+#include "swirl/sw_backdrop.h"
 #include "swirl/sw_gfx.h"
 #include "swirl/sw_trace.h"
 #include "swirl/sw_utf8.h"
@@ -234,42 +235,6 @@ static const struct {
 } accents[] = {{S_ACCENT_ORANGE, 0xFFF28C28}, {S_ACCENT_BLUE, 0xFF3A8FF0}, {S_ACCENT_GREEN, 0xFF3FB96B}, {S_ACCENT_PINK, 0xFFEA3C8F},
                {S_ACCENT_PURPLE, 0xFF9B6CF0}, {S_ACCENT_RED, 0xFFE0584A}, {S_ACCENT_GOLD, 0xFFE8B822}, {S_ACCENT_TEAL, 0xFF2EC4B6}};
 #define NUM_ACCENTS ((int)(sizeof(accents) / sizeof(accents[0])))
-enum { BACKDROP_COVER = 0, BACKDROP_NIGHT, BACKDROP_SEASONAL, BACKDROP_COUNT };
-static const int backdrop_names[BACKDROP_COUNT] = {S_BACKDROP_COVER, S_BACKDROP_NIGHT, S_BACKDROP_SEASONAL};
-enum { PART_NONE = 0, PART_SNOW, PART_LEAVES, PART_PETALS, PART_SPARKLE };
-typedef struct season {
-  int name;
-  uint32_t accent, glow;
-  int particles;
-} season;
-static const season seasons[12] = {
-    {S_SEASON_WINTER, 0xFF7FC8F8, 0xFF1C3F7A, PART_SNOW},      {S_SEASON_VALENTINE, 0xFFEA3C8F, 0xFF5A1638, PART_PETALS},
-    {S_SEASON_SPRING, 0xFF6CCB5F, 0xFF1F5A3A, PART_PETALS},    {S_SEASON_SPRING, 0xFF6CCB5F, 0xFF1F5A3A, PART_PETALS},
-    {S_SEASON_EARLY_SUMMER, 0xFF2EC4B6, 0xFF0F4A5A, PART_SPARKLE}, {S_SEASON_SUMMER, 0xFF2EC4B6, 0xFF0F4A5A, PART_SPARKLE},
-    {S_SEASON_SUMMER, 0xFFF2C230, 0xFF12305A, PART_SPARKLE},   {S_SEASON_SUMMER, 0xFFF2C230, 0xFF12305A, PART_SPARKLE},
-    {S_SEASON_HARVEST, 0xFFE8B822, 0xFF5A3A12, PART_LEAVES},   {S_SEASON_HALLOWEEN, 0xFFF28C28, 0xFF3B0F4F, PART_LEAVES},
-    {S_SEASON_AUTUMN, 0xFFD9772B, 0xFF4A2410, PART_LEAVES},    {S_SEASON_HOLIDAYS, 0xFFE0584A, 0xFF123D2A, PART_SNOW}};
-static const season *cur_season;
-
-#define NUM_PARTS 36
-static struct {
-  float x, y, vx, vy, r, ph;
-} parts[NUM_PARTS];
-static int parts_ready;
-
-static float frand(void) {
-  return (float)(rand() & 0xFFFF) / 65535.f;
-}
-
-static void reset_part(int i, int top) {
-  parts[i].x = frand() * 660.f - 10.f;
-  parts[i].y = top ? -10.f - frand() * 40.f : frand() * 480.f;
-  parts[i].vx = (frand() - 0.5f) * 0.4f;
-  parts[i].vy = 0.25f + frand() * 0.55f;
-  parts[i].r = 1.2f + frand() * 2.2f;
-  parts[i].ph = frand() * 6.28f;
-}
-
 static void apply_theme(void) {
   sw_prefs *p = sw_lib_prefs();
   static int lang_applied = -1;
@@ -278,46 +243,13 @@ static void apply_theme(void) {
     lang_applied = p->lang;
   }
   accent_col = accents[p->accent % NUM_ACCENTS].col;
-  cur_season = NULL;
-  if (p->backdrop == BACKDROP_SEASONAL) {
-    time_t t = rtc_unix_secs();
-    struct tm tmv;
-    gmtime_r(&t, &tmv);
-    cur_season = &seasons[tmv.tm_mon % 12];
-    accent_col = cur_season->accent;
-  }
-  sw_audio_settings(p->music, p->music_vol, p->sfx, p->sfx_vol);
-}
-
-static void draw_particles(void) {
-  if (!cur_season || cur_season->particles == PART_NONE)
-    return;
-  if (!parts_ready) {
-    for (int i = 0; i < NUM_PARTS; i++) reset_part(i, 0);
-    parts_ready = 1;
-  }
-  const int kind = cur_season->particles;
-  for (int i = 0; i < NUM_PARTS; i++) {
-    parts[i].ph += 0.03f;
-    parts[i].x += parts[i].vx + sinf(parts[i].ph) * (kind == PART_SNOW ? 0.35f : 0.6f);
-    parts[i].y += kind == PART_SPARKLE ? -parts[i].vy * 0.4f : parts[i].vy;
-    if (parts[i].y > 490.f || parts[i].y < -20.f || parts[i].x < -20.f || parts[i].x > 660.f) {
-      reset_part(i, 1);
-      if (kind == PART_SPARKLE) parts[i].y = 490.f;
-    }
+  sw_bd_apply(p);
+  {
     uint32_t c;
-    float a = 0.5f + 0.5f * sinf(parts[i].ph * 1.7f);
-    switch (kind) {
-      case PART_SNOW: c = SW_ALPHA(0xFFFFFFFF, 0x70 + (int)(a * 0x50)); break;
-      case PART_LEAVES: c = SW_ALPHA(i & 1 ? 0xFFD9772B : 0xFFB8452A, 0x90); break;
-      case PART_PETALS: c = SW_ALPHA(i & 1 ? 0xFFFFB3D1 : 0xFFFFFFFF, 0x80); break;
-      default: c = SW_ALPHA(cur_season->accent, (int)(a * 0x90)); break;
-    }
-    if (kind == PART_LEAVES || kind == PART_PETALS)
-      sw_rrect(parts[i].x, parts[i].y, parts[i].r * 2.2f, parts[i].r * 1.4f, parts[i].r * 0.7f, c);
-    else
-      sw_circle(parts[i].x, parts[i].y, parts[i].r, c);
+    if (sw_bd_season_accent(&c)) accent_col = c; /* the Seasonal backdrop sets the accent */
   }
+  sw_bd_set_accent(accent_col);
+  sw_audio_settings(p->music, p->music_vol, p->sfx, p->sfx_vol);
 }
 
 static const char *save_banner(char *buf, int len) {
@@ -646,22 +578,13 @@ static void draw_footer(const char *const *items, int n, const char *right) {
 
 /* the colour behind everything: from the selected cover, a fixed night blue, or the season */
 static uint32_t ambient_color(void) {
-  uint32_t c = mix(amb_prev, amb_cur, amb_t);
-  switch (sw_lib_prefs()->backdrop) {
-    case BACKDROP_NIGHT: return 0xFF16295A;
-    case BACKDROP_SEASONAL: return cur_season ? mix(c, cur_season->glow, 0.6f) : c;
-    default: return c;
-  }
+  return sw_bd_ambient(mix(amb_prev, amb_cur, amb_t));
 }
 
 static void draw_ambient(uint32_t base) {
-  /* soft coloured glow standing in for a blurred cover; full-screen shading on top */
-  uint32_t c = ambient_color();
-  sw_glow(520, 120, 330, SW_ALPHA(c, 0xB0));
-  sw_glow(120, 520, 260, SW_ALPHA(base, 0x60));
-  sw_grad_h(0, 0, 640, 480, 0xF005070D, 0x5905070D);
-  sw_grad_v(0, 280, 640, 200, 0x0005070D, 0xF505070D);
-  draw_particles();
+  /* the backdrop: a soft glow in the cover's colour, the chosen motion, the shading that keeps the text
+     readable (sw_backdrop.c) */
+  sw_bd_draw(base, mix(amb_prev, amb_cur, amb_t), mode == MODE_TABS && tab == TAB_HOME);
 }
 
 static void draw_header(void) {
@@ -970,12 +893,36 @@ static void draw_collections(float slide) {
 
 /* ---------- SYSTEM ---------- */
 enum {
-  SYS_STYLE = 0, SYS_ACCENT, SYS_BACKDROP, SYS_LOGO, SYS_QUALITY, SYS_MUSIC, SYS_MUSIC_VOL, SYS_SFX, SYS_SFX_VOL, SYS_RESUME, SYS_CLOCK,
-  SYS_LANGUAGE, SYS_RUMBLE, SYS_START, SYS_VIDEO, SYS_BEEP, SYS_GAMEID, SYS_ATTRACT, SYS_SAVER_STYLE, SYS_SAVER_TIME, SYS_SAVER_TEST, SYS_VMU, SYS_SAVE, SYS_PADTEST,
-  SYS_BIOS, SYS_DIAG, SYS_COUNT
+  SYS_STYLE = 0, SYS_ACCENT, SYS_BACKDROP, SYS_MOTION, SYS_PIC_DIM, SYS_PIC_MOTION, SYS_LOGO, SYS_QUALITY, SYS_MUSIC, SYS_MUSIC_VOL,
+  SYS_SFX, SYS_SFX_VOL, SYS_RESUME, SYS_CLOCK, SYS_LANGUAGE, SYS_RUMBLE, SYS_START, SYS_VIDEO, SYS_BEEP, SYS_GAMEID, SYS_ATTRACT,
+  SYS_SAVER_STYLE, SYS_SAVER_TIME, SYS_SAVER_TEST, SYS_VMU, SYS_SAVE, SYS_PADTEST, SYS_BIOS, SYS_DIAG, SYS_COUNT
 };
 #define SYS_ROWS 9
 static int sys_top;
+/* the rows shown: all of them, except the two picture rows, which exist only while a picture is the backdrop */
+static int sys_rows[SYS_COUNT], sys_nrows;
+static void sys_build_rows(void) {
+  const int pic = sw_lib_prefs()->picture != 0;
+  sys_nrows = 0;
+  for (int i = 0; i < SYS_COUNT; i++)
+    if (pic || (i != SYS_PIC_DIM && i != SYS_PIC_MOTION)) sys_rows[sys_nrows++] = i;
+  if (sys_sel >= sys_nrows) sys_sel = sys_nrows - 1;
+}
+/* the Backdrop row cycles the built in backdrops, then the pictures on the disc by name */
+static int backdrop_index(const sw_prefs *p) {
+  return p->picture ? BACKDROP_COUNT + p->picture - 1 : p->backdrop;
+}
+static void backdrop_set(sw_prefs *p, int idx) {
+  const int n = BACKDROP_COUNT + sw_bd_picture_count();
+  idx = (idx % n + n) % n;
+  if (idx < BACKDROP_COUNT) {
+    p->backdrop = (uint8_t)idx;
+    p->picture = 0;
+  } else {
+    p->picture = (uint8_t)(idx - BACKDROP_COUNT + 1);
+    p->pic_dim = (uint8_t)sw_bd_picture_dim(p->picture); /* the darkening chosen in Card Manager */
+  }
+}
 static const int style_names[] = {S_STYLE_SWIRL, S_STYLE_LIST, S_STYLE_GRID, S_STYLE_GDMENU};
 static const int style_values[] = {UI_SWIRL, UI_LINE_DESC, UI_GRID3, UI_GDMENU};
 
@@ -991,13 +938,31 @@ static const char *sys_value(int i, char *buf, int len) {
         return buf;
       }
       return T(style_names[sys_style]);
-    case SYS_ACCENT: return p->backdrop == BACKDROP_SEASONAL ? T(S_SET_BY_SEASON) : T(accents[p->accent % NUM_ACCENTS].name);
+    case SYS_ACCENT: {
+      uint32_t c;
+      return sw_bd_season_accent(&c) ? T(S_SET_BY_SEASON) : T(accents[p->accent % NUM_ACCENTS].name);
+    }
     case SYS_BACKDROP:
-      if (p->backdrop == BACKDROP_SEASONAL && cur_season) {
-        snprintf(buf, len, T(S_SEASONAL_PREFIX), T(cur_season->name));
+      if (p->picture) {
+        if (sw_bd_picture_failed()) {
+          snprintf(buf, len, T(S_PIC_FAILED), sw_bd_picture_name(p->picture));
+          return buf;
+        }
+        return sw_bd_picture_name(p->picture);
+      }
+      if (p->backdrop == BACKDROP_SEASONAL) {
+        snprintf(buf, len, T(S_SEASONAL_PREFIX), T(sw_bd_season_name()));
         return buf;
       }
-      return T(backdrop_names[p->backdrop % BACKDROP_COUNT]);
+      return T(sw_bd_backdrop_name(p->backdrop));
+    case SYS_MOTION: return p->motion_off ? T(S_OFF) : T(S_ON);
+    case SYS_PIC_DIM: snprintf(buf, len, T(S_N_OF_10), p->pic_dim); return buf;
+    case SYS_PIC_MOTION:
+      if (p->pic_motion == SW_PIC_MOTION_SEASONAL) {
+        snprintf(buf, len, T(S_SEASONAL_PREFIX), T(sw_bd_season_name()));
+        return buf;
+      }
+      return T(sw_bd_pic_motion_name(p->pic_motion));
     case SYS_LOGO:
       if (!logo_sheet) return have_logo ? T(S_LOGO_OLD) : T(S_LOGO_NONE);
       switch (p->logo) {
@@ -1040,7 +1005,8 @@ static const char *sys_value(int i, char *buf, int len) {
   }
 }
 
-static const int sys_names[SYS_COUNT] = {S_SYS_STYLE, S_SYS_ACCENT, S_SYS_BACKDROP, S_SYS_LOGO, S_SYS_QUALITY, S_SYS_MUSIC, S_SYS_MUSIC_VOL,
+static const int sys_names[SYS_COUNT] = {S_SYS_STYLE, S_SYS_ACCENT, S_SYS_BACKDROP, S_SYS_MOTION, S_SYS_PIC_DIM, S_SYS_PIC_MOTION,
+                                           S_SYS_LOGO, S_SYS_QUALITY, S_SYS_MUSIC, S_SYS_MUSIC_VOL,
                                            S_SYS_SFX, S_SYS_SFX_VOL, S_SYS_RESUME, S_SYS_CLOCK, S_SYS_LANGUAGE,
                                            S_SYS_RUMBLE, S_SYS_START, S_SYS_VIDEO, S_SYS_BEEP, S_SYS_GAMEID, S_SYS_ATTRACT, S_SYS_SAVER_STYLE,
                                            S_SYS_SAVER_TIME, S_SYS_SAVER_TEST, S_SYS_VMU,
@@ -1054,18 +1020,21 @@ static void show_logo_on_vmu(void) {
 static void draw_system(float slide) {
   show_logo_on_vmu();
   sw_text(SWF_HEAD, 32 + slide, 64, 20, C_WHITE, T(S_TAB_SYSTEM));
+  sys_build_rows();
   if (sys_sel < sys_top) sys_top = sys_sel;
   if (sys_sel >= sys_top + SYS_ROWS) sys_top = sys_sel - SYS_ROWS + 1;
+  if (sys_top > sys_nrows - SYS_ROWS) sys_top = sys_nrows - SYS_ROWS > 0 ? sys_nrows - SYS_ROWS : 0;
   sw_rrect(32 + slide, 98, 330, SYS_ROWS * 36 + 14, 8, C_PANEL);
-  for (int r = 0; r < SYS_ROWS && sys_top + r < SYS_COUNT; r++) {
-    int i = sys_top + r;
+  for (int r = 0; r < SYS_ROWS && sys_top + r < sys_nrows; r++) {
+    int i = sys_rows[sys_top + r];
     float y = 105 + r * 36;
-    int on = i == sys_sel;
+    int on = sys_top + r == sys_sel;
+    const int child = i == SYS_PIC_DIM || i == SYS_PIC_MOTION; /* under Backdrop, like the screen saver rows */
     if (on) {
       sw_rrect(38 + slide, y, 318, 32, 6, SW_ALPHA(C_ORANGE, 0x2E));
       sw_rect(38 + slide, y + 6, 3, 20, C_ORANGE);
     }
-    const float lw = sw_text(SWF_UI, 52 + slide, y + 8, 14, on ? C_WHITE : SW_ALPHA(C_TEXT, 0xD0), T(sys_names[i]));
+    const float lw = sw_text(SWF_UI, 52 + slide + (child ? 14 : 0), y + 8, 14, on ? C_WHITE : SW_ALPHA(C_TEXT, 0xD0), T(sys_names[i])) + (child ? 14 : 0);
     char buf[64];
     const char *v = sys_value(i, buf, sizeof(buf));
     if (v[0]) {
@@ -1080,7 +1049,8 @@ static void draw_system(float slide) {
         sw_text(SWF_SMALL, 342 + slide - vw - 14, y + 10, 12, C_ORANGE, "<");
         sw_text(SWF_SMALL, 342 + slide + 2, y + 10, 12, C_ORANGE, ">");
       }
-      if (i == SYS_ACCENT && sw_lib_prefs()->backdrop != BACKDROP_SEASONAL)
+      uint32_t sc;
+      if (i == SYS_ACCENT && !sw_bd_season_accent(&sc))
         sw_circle(342 + slide - vw - 26, y + 16, 5, C_ORANGE);
       if (v)
         sw_text_right(SWF_SMALL, 342 + slide, y + 10, 12, on ? C_WHITE : C_DIM, v);
@@ -1088,9 +1058,9 @@ static void draw_system(float slide) {
         sw_text_clip(SWF_SMALL, 342 + slide - vw, y + 10, 12, on ? C_WHITE : C_DIM, full, vw);
     }
   }
-  if (SYS_COUNT > SYS_ROWS) {
-    float h = (SYS_ROWS * 36.f) * SYS_ROWS / SYS_COUNT;
-    float yy = 105 + (SYS_ROWS * 36.f) * sys_top / SYS_COUNT;
+  if (sys_nrows > SYS_ROWS) {
+    float h = (SYS_ROWS * 36.f) * SYS_ROWS / sys_nrows;
+    float yy = 105 + (SYS_ROWS * 36.f) * sys_top / sys_nrows;
     sw_rrect(356 + slide, 105, 3, SYS_ROWS * 36, 1.5f, 0x20EEF1F7);
     sw_rrect(356 + slide, yy, 3, h, 1.5f, 0x90EEF1F7);
   }
@@ -2049,10 +2019,12 @@ static void input_tabs(unsigned int btn, int pressed) {
     case TAB_SYSTEM: {
       sw_prefs *p = sw_lib_prefs();
       openmenu_settings *s = settings_get();
+      sys_build_rows();
       const int was_sel = sys_sel;
       if (btn == UP && dir_pressed(btn) && sys_sel > 0) sys_sel--;
-      if (btn == DOWN && dir_pressed(btn) && sys_sel < SYS_COUNT - 1) sys_sel++;
-      if (was_sel == SYS_STYLE && sys_sel != SYS_STYLE) {
+      if (btn == DOWN && dir_pressed(btn) && sys_sel < sys_nrows - 1) sys_sel++;
+      const int row = sys_rows[sys_sel];
+      if (sys_rows[was_sel] == SYS_STYLE && row != SYS_STYLE) {
         /* a style picked but not switched to with A is dropped: the row shows the style in use again */
         for (int i = 0; i < 4; i++)
           if (style_values[i] == (int)s->ui) sys_style = i;
@@ -2062,7 +2034,7 @@ static void input_tabs(unsigned int btn, int pressed) {
       if ((btn == RIGHT && dir_pressed(btn)) || (btn == A && pressed)) d = 1;
       if (d) {
         int changed_pref = 1;
-        switch (sys_sel) {
+        switch (row) {
           case SYS_STYLE:
             changed_pref = 0;
             if (btn == A) {
@@ -2091,11 +2063,27 @@ static void input_tabs(unsigned int btn, int pressed) {
             } else
               sys_style = (sys_style + d + 4) % 4;
             break;
-          case SYS_ACCENT:
-            if (p->backdrop == BACKDROP_SEASONAL) { show_toast(T(S_HINT_NOT_SEASONAL)); changed_pref = 0; break; }
+          case SYS_ACCENT: {
+            uint32_t sc;
+            if (sw_bd_season_accent(&sc)) { show_toast(T(S_HINT_NOT_SEASONAL)); changed_pref = 0; break; }
             p->accent = (p->accent + d + NUM_ACCENTS) % NUM_ACCENTS;
             break;
-          case SYS_BACKDROP: p->backdrop = (p->backdrop + d + BACKDROP_COUNT) % BACKDROP_COUNT; break;
+          }
+          case SYS_BACKDROP:
+            backdrop_set(p, backdrop_index(p) + d);
+            sw_bd_apply(p);
+            if (sw_bd_picture_failed()) show_toast(T(S_HINT_PIC_DAMAGED));
+            else if (!p->picture && p->backdrop == BACKDROP_PULSE && !(p->music && sw_audio_has_music())) show_toast(T(S_HINT_PULSE_MUSIC));
+            break;
+          case SYS_MOTION:
+            p->motion_off = !p->motion_off;
+            show_toast(p->motion_off ? T(S_HINT_MOTION_OFF) : T(S_HINT_MOTION_ON));
+            break;
+          case SYS_PIC_DIM: p->pic_dim = (uint8_t)((p->pic_dim + d + 11) % 11); break;
+          case SYS_PIC_MOTION:
+            p->pic_motion = (uint8_t)((p->pic_motion + d + SW_PIC_MOTION_COUNT) % SW_PIC_MOTION_COUNT);
+            if (p->pic_motion == SW_PIC_MOTION_PULSE && !(p->music && sw_audio_has_music())) show_toast(T(S_HINT_PULSE_MUSIC));
+            break;
           case SYS_LOGO:
             if (!logo_sheet) { show_toast(have_logo ? T(S_HINT_LOGO_UPDATE) : T(S_HINT_LOGO_NONE)); changed_pref = 0; break; }
             p->logo = (uint8_t)((p->logo + d + SW_LOGO_COUNT) % SW_LOGO_COUNT);
@@ -2184,7 +2172,7 @@ static void input_tabs(unsigned int btn, int pressed) {
           sw_lib_mark_dirty();
           save_countdown = 180;
           apply_theme();
-          if (sys_sel == SYS_SFX_VOL || sys_sel == SYS_SFX) sw_audio_sfx(SW_SFX_SELECT);
+          if (row == SYS_SFX_VOL || row == SYS_SFX) sw_audio_sfx(SW_SFX_SELECT);
         }
       }
       if (btn == B && pressed) { tab = TAB_HOME; change_tab(0); }
@@ -2295,6 +2283,7 @@ FUNCTION(UI_NAME, init) {
   }
   sw_trace("SWIRL: language");
   sw_lang_load("/cd/LANG.DAT"); /* the translations the Card Manager put on the card, if any */
+  sw_bd_init();                 /* the owner's backdrop pictures, if any */
   sw_trace("SWIRL: library and SWIRL.DAT");
   sw_lib_init();
   sw_lib_set_idle(idle_frame);
@@ -2864,7 +2853,7 @@ FUNCTION(UI_NAME, drawTR) {
 
   char bbuf[96];
   const char *banner = saver_on ? NULL : save_banner(bbuf, sizeof(bbuf));
-  if (!banner && !saver_on && mode == MODE_TABS && tab == TAB_SYSTEM && sys_sel == SYS_STYLE &&
+  if (!banner && !saver_on && mode == MODE_TABS && tab == TAB_SYSTEM && sys_rows[sys_sel] == SYS_STYLE &&
       style_values[sys_style] != (int)settings_get()->ui) {
     /* the style is the one setting that isn't saved by itself: it takes effect (and saves) when A is pressed */
     snprintf(bbuf, sizeof(bbuf), T(S_HINT_SWITCH_STYLE), T(style_names[sys_style]));

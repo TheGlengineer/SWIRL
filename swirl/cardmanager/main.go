@@ -11,6 +11,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"image"
 	"io"
 	"io/fs"
 	"net"
@@ -18,6 +19,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -26,7 +28,7 @@ import (
 //go:embed web
 var webFS embed.FS
 
-const version = "2.16.1"
+const version = "2.17.0-preview.1"
 
 var (
 	mu       sync.Mutex
@@ -824,6 +826,65 @@ func serve() {
 	mux.HandleFunc("/api/health/gaps", post(func(m map[string]any) (any, error) { return nil, StartCloseGaps(str(m, "root")) }))
 	mux.HandleFunc("/api/games/arrange", post(func(m map[string]any) (any, error) { return nil, StartArrangeDiscs(str(m, "root")) }))
 	mux.HandleFunc("/api/preview", post(func(m map[string]any) (any, error) { return nil, StartPreview(str(m, "root"), str(m, "dats")) }))
+	mux.HandleFunc("/api/bg", guard(func(w http.ResponseWriter, r *http.Request) {
+		root := r.URL.Query().Get("root")
+		if r.Method == http.MethodPost {
+			var req struct {
+				Root   string `json:"root"`
+				Image  string `json:"image"` // a processed 4:3 picture as a data URL (added or replaced)
+				Name   string `json:"name"`
+				Dim    int    `json:"dim"`
+				N      int    `json:"n"`      // with Image: replace this slot (0 adds); with Rename: the slot
+				Remove int    `json:"remove"` // drop this slot
+				Rename int    `json:"rename"` // change the name and dim of this slot
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				fail(w, err)
+				return
+			}
+			root = req.Root
+			unlock := lockOrFail(w, root, "Backdrop pictures")
+			if unlock == nil {
+				return
+			}
+			var err error
+			switch {
+			case req.Remove > 0:
+				err = RemoveBg(root, req.Remove)
+			case req.Rename > 0:
+				err = RenameBg(root, req.Rename, req.Name, req.Dim)
+			default:
+				var img image.Image
+				img, err = decodeDataURL(req.Image)
+				if err == nil {
+					_, err = AddBg(root, img, req.Name, req.Dim, req.N)
+				}
+			}
+			unlock()
+			if err != nil {
+				fail(w, err)
+				return
+			}
+		}
+		writeJSON(w, map[string]any{"pictures": ListBg(root)})
+	}))
+	mux.HandleFunc("/api/bg/thumb", func(w http.ResponseWriter, r *http.Request) {
+		// loaded by <img> tags, so the token comes in the query string, as for /api/art
+		q := r.URL.Query()
+		if q.Get("t") != token {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		n, _ := strconv.Atoi(q.Get("n"))
+		b, err := os.ReadFile(bgPNG(q.Get("root"), n))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Write(b)
+	})
 	mux.HandleFunc("/api/vmulogo", guard(func(w http.ResponseWriter, r *http.Request) {
 		root := r.URL.Query().Get("root")
 		if r.Method == http.MethodPost {
