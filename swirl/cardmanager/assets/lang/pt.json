@@ -303,12 +303,8 @@
   "S_BACKDROP_STARFIELD": "Céu estrelado",
   "S_BACKDROP_EMBERS": "Brasas",
   "S_BACKDROP_HORIZON": "Horizonte",
-  "S_BACKDROP_PULSE": "Pulso",
   "S_SYS_PIC_DIM": "Escurecer a imagem",
-  "S_SYS_PIC_MOTION": "Movimento da imagem",
-  "S_PIC_MOTION_NONE": "Nenhum",
   "S_HINT_PIC_DAMAGED": "Esta imagem não pôde ser usada, por isso é mostrada a Cor da capa",
-  "S_HINT_PULSE_MUSIC": "Pulso segue a música do menu: ligue a música para o ver",
   "S_HINT_MOTION_OFF": "Agora nada se move no fundo",
   "S_HINT_MOTION_ON": "Os fundos voltam a mover-se",
   "S_PIC_FAILED": "%s (não utilizável)"

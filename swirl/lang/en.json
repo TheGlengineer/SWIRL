@@ -303,12 +303,8 @@
   "S_BACKDROP_STARFIELD": "Starfield",
   "S_BACKDROP_EMBERS": "Embers",
   "S_BACKDROP_HORIZON": "Horizon",
-  "S_BACKDROP_PULSE": "Pulse",
   "S_SYS_PIC_DIM": "Picture dim",
-  "S_SYS_PIC_MOTION": "Picture motion",
-  "S_PIC_MOTION_NONE": "None",
   "S_HINT_PIC_DAMAGED": "This picture could not be used, so Cover colour is shown",
-  "S_HINT_PULSE_MUSIC": "Pulse follows the menu music: turn Music on to see it",
   "S_HINT_MOTION_OFF": "Nothing in the backdrop moves now",
   "S_HINT_MOTION_ON": "Backdrops move again",
   "S_PIC_FAILED": "%s (not usable)"

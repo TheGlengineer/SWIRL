@@ -339,12 +339,8 @@
   X(S_BACKDROP_STARFIELD, "Starfield") \
   X(S_BACKDROP_EMBERS, "Embers") \
   X(S_BACKDROP_HORIZON, "Horizon") \
-  X(S_BACKDROP_PULSE, "Pulse") \
   X(S_SYS_PIC_DIM, "Picture dim") \
-  X(S_SYS_PIC_MOTION, "Picture motion") \
-  X(S_PIC_MOTION_NONE, "None") \
   X(S_HINT_PIC_DAMAGED, "This picture could not be used, so Cover colour is shown") \
-  X(S_HINT_PULSE_MUSIC, "Pulse follows the menu music: turn Music on to see it") \
   X(S_HINT_MOTION_OFF, "Nothing in the backdrop moves now") \
   X(S_HINT_MOTION_ON, "Backdrops move again") \
   X(S_PIC_FAILED, "%s (not usable)")

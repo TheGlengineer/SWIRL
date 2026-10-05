@@ -893,19 +893,19 @@ static void draw_collections(float slide) {
 
 /* ---------- SYSTEM ---------- */
 enum {
-  SYS_STYLE = 0, SYS_ACCENT, SYS_BACKDROP, SYS_MOTION, SYS_PIC_DIM, SYS_PIC_MOTION, SYS_LOGO, SYS_QUALITY, SYS_MUSIC, SYS_MUSIC_VOL,
+  SYS_STYLE = 0, SYS_ACCENT, SYS_BACKDROP, SYS_MOTION, SYS_PIC_DIM, SYS_LOGO, SYS_QUALITY, SYS_MUSIC, SYS_MUSIC_VOL,
   SYS_SFX, SYS_SFX_VOL, SYS_RESUME, SYS_CLOCK, SYS_LANGUAGE, SYS_RUMBLE, SYS_START, SYS_VIDEO, SYS_BEEP, SYS_GAMEID, SYS_ATTRACT,
   SYS_SAVER_STYLE, SYS_SAVER_TIME, SYS_SAVER_TEST, SYS_VMU, SYS_SAVE, SYS_PADTEST, SYS_BIOS, SYS_DIAG, SYS_COUNT
 };
 #define SYS_ROWS 9
 static int sys_top;
-/* the rows shown: all of them, except the two picture rows, which exist only while a picture is the backdrop */
+/* the rows shown: all of them, except Picture dim, which exists only while a picture is the backdrop */
 static int sys_rows[SYS_COUNT], sys_nrows;
 static void sys_build_rows(void) {
   const int pic = sw_lib_prefs()->picture != 0;
   sys_nrows = 0;
   for (int i = 0; i < SYS_COUNT; i++)
-    if (pic || (i != SYS_PIC_DIM && i != SYS_PIC_MOTION)) sys_rows[sys_nrows++] = i;
+    if (pic || i != SYS_PIC_DIM) sys_rows[sys_nrows++] = i;
   if (sys_sel >= sys_nrows) sys_sel = sys_nrows - 1;
 }
 /* the Backdrop row cycles the built in backdrops, then the pictures on the disc by name */
@@ -957,12 +957,6 @@ static const char *sys_value(int i, char *buf, int len) {
       return T(sw_bd_backdrop_name(p->backdrop));
     case SYS_MOTION: return p->motion_off ? T(S_OFF) : T(S_ON);
     case SYS_PIC_DIM: snprintf(buf, len, T(S_N_OF_10), p->pic_dim); return buf;
-    case SYS_PIC_MOTION:
-      if (p->pic_motion == SW_PIC_MOTION_SEASONAL) {
-        snprintf(buf, len, T(S_SEASONAL_PREFIX), T(sw_bd_season_name()));
-        return buf;
-      }
-      return T(sw_bd_pic_motion_name(p->pic_motion));
     case SYS_LOGO:
       if (!logo_sheet) return have_logo ? T(S_LOGO_OLD) : T(S_LOGO_NONE);
       switch (p->logo) {
@@ -1005,7 +999,7 @@ static const char *sys_value(int i, char *buf, int len) {
   }
 }
 
-static const int sys_names[SYS_COUNT] = {S_SYS_STYLE, S_SYS_ACCENT, S_SYS_BACKDROP, S_SYS_MOTION, S_SYS_PIC_DIM, S_SYS_PIC_MOTION,
+static const int sys_names[SYS_COUNT] = {S_SYS_STYLE, S_SYS_ACCENT, S_SYS_BACKDROP, S_SYS_MOTION, S_SYS_PIC_DIM,
                                            S_SYS_LOGO, S_SYS_QUALITY, S_SYS_MUSIC, S_SYS_MUSIC_VOL,
                                            S_SYS_SFX, S_SYS_SFX_VOL, S_SYS_RESUME, S_SYS_CLOCK, S_SYS_LANGUAGE,
                                            S_SYS_RUMBLE, S_SYS_START, S_SYS_VIDEO, S_SYS_BEEP, S_SYS_GAMEID, S_SYS_ATTRACT, S_SYS_SAVER_STYLE,
@@ -1029,7 +1023,7 @@ static void draw_system(float slide) {
     int i = sys_rows[sys_top + r];
     float y = 105 + r * 36;
     int on = sys_top + r == sys_sel;
-    const int child = i == SYS_PIC_DIM || i == SYS_PIC_MOTION; /* under Backdrop, like the screen saver rows */
+    const int child = i == SYS_PIC_DIM; /* under Backdrop, like the screen saver rows */
     if (on) {
       sw_rrect(38 + slide, y, 318, 32, 6, SW_ALPHA(C_ORANGE, 0x2E));
       sw_rect(38 + slide, y + 6, 3, 20, C_ORANGE);
@@ -2073,17 +2067,12 @@ static void input_tabs(unsigned int btn, int pressed) {
             backdrop_set(p, backdrop_index(p) + d);
             sw_bd_apply(p);
             if (sw_bd_picture_failed()) show_toast(T(S_HINT_PIC_DAMAGED));
-            else if (!p->picture && p->backdrop == BACKDROP_PULSE && !(p->music && sw_audio_has_music())) show_toast(T(S_HINT_PULSE_MUSIC));
             break;
           case SYS_MOTION:
             p->motion_off = !p->motion_off;
             show_toast(p->motion_off ? T(S_HINT_MOTION_OFF) : T(S_HINT_MOTION_ON));
             break;
           case SYS_PIC_DIM: p->pic_dim = (uint8_t)((p->pic_dim + d + 11) % 11); break;
-          case SYS_PIC_MOTION:
-            p->pic_motion = (uint8_t)((p->pic_motion + d + SW_PIC_MOTION_COUNT) % SW_PIC_MOTION_COUNT);
-            if (p->pic_motion == SW_PIC_MOTION_PULSE && !(p->music && sw_audio_has_music())) show_toast(T(S_HINT_PULSE_MUSIC));
-            break;
           case SYS_LOGO:
             if (!logo_sheet) { show_toast(have_logo ? T(S_HINT_LOGO_UPDATE) : T(S_HINT_LOGO_NONE)); changed_pref = 0; break; }
             p->logo = (uint8_t)((p->logo + d + SW_LOGO_COUNT) % SW_LOGO_COUNT);

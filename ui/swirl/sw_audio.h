@@ -13,4 +13,3 @@ void sw_audio_sfx(int which);
 void sw_audio_fade_out(void); /* start a quick fade before launching */
 int sw_audio_quiet(void);     /* the fade has finished (or nothing is playing) */
 void sw_audio_shutdown(void); /* before launching anything */
-float sw_audio_level(void); /* 0..1, how loud the music is right now against its own average (Pulse backdrop); 0 when silent */

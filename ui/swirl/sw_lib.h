@@ -93,12 +93,10 @@ typedef struct sw_prefs {
   uint8_t motion_off;  /* 1: backdrops hold still (System > Backdrop motion Off) */
   uint8_t picture;     /* 0: a built in backdrop; 1..SW_BG_MAX: that picture from BG.DAT is the backdrop */
   uint8_t pic_dim;     /* 0..10 darkening over the picture (4 when the save has no PRF5 block) */
-  uint8_t pic_motion;  /* motion drawn over the picture: 0 none, else SW_PIC_MOTION_* */
+  uint8_t spare5;      /* zero; the fourth byte of the PRF5 block, kept for a later setting */
 } sw_prefs;
 #define SW_BG_MAX 8
-enum { SW_PIC_MOTION_NONE = 0, SW_PIC_MOTION_SEASONAL, SW_PIC_MOTION_SPIRAL, SW_PIC_MOTION_STARFIELD, SW_PIC_MOTION_EMBERS,
-       SW_PIC_MOTION_PULSE, SW_PIC_MOTION_COUNT };
-#define SW_BACKDROP_COUNT 9 /* cover colour, night, seasonal, tide, spiral, starfield, embers, horizon, pulse */
+#define SW_BACKDROP_COUNT 8 /* cover colour, night, seasonal, tide, spiral, starfield, embers, horizon */
 enum { SW_START_BOTH = 0, SW_START_ANIMATION, SW_START_LICENSE, SW_START_NONE, SW_START_COUNT };
 enum { SW_LOGO_REGION = 0, SW_LOGO_ORANGE, SW_LOGO_BLUE, SW_LOGO_COUNT };
 sw_prefs *sw_lib_prefs(void);

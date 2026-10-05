@@ -10,7 +10,7 @@
 
 enum {
   BACKDROP_COVER = 0, BACKDROP_NIGHT, BACKDROP_SEASONAL, BACKDROP_TIDE, BACKDROP_SPIRAL, BACKDROP_STARFIELD,
-  BACKDROP_EMBERS, BACKDROP_HORIZON, BACKDROP_PULSE, BACKDROP_COUNT
+  BACKDROP_EMBERS, BACKDROP_HORIZON, BACKDROP_COUNT
 };
 
 void sw_bd_init(void);                 /* once, after the menu disc is readable: reads BG/BG.DAT */
@@ -23,6 +23,5 @@ const char *sw_bd_picture_name(int n); /* 1..count, as named in Card Manager */
 int sw_bd_picture_failed(void);        /* 1 when the chosen picture could not be used (Cover colour is drawn) */
 int sw_bd_picture_dim(int n);          /* the darkening Card Manager chose for picture n */
 void sw_bd_set_accent(uint32_t c);     /* the accent in use (Spiral, Starfield, Embers, Horizon, Pulse draw in it) */
-int sw_bd_pic_motion_name(int m);      /* S_* for a Picture motion value */
 uint32_t sw_bd_ambient(uint32_t cover); /* the glow colour for the current backdrop, from the cover's */
 void sw_bd_draw(uint32_t base, uint32_t cover, int home); /* the whole background of a frame */

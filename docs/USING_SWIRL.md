@@ -116,9 +116,9 @@ It saves straight away.
 |---|---|
 | Menu style | SWIRL, Classic list, Classic grid, GDMENU. Press **A** to switch (it saves at once); a style picked but not switched to is dropped when you leave the row. The Classic styles use openMenu's theme files, which **Update SWIRL** adds; without them the setting says "needs Update SWIRL". Hold **Y** while the Dreamcast starts, until SWIRL appears, to go back to SWIRL |
 | Accent colour | Orange, Blue, Green, Pink, Purple, Red, Gold, Teal |
-| Backdrop | Cover colour, Night, Seasonal, Tide, Spiral, Starfield, Embers, Horizon, Pulse, then your own pictures by name. See [Backdrops](#backdrops) |
+| Backdrop | Cover colour, Night, Seasonal, Tide, Spiral, Starfield, Embers, Horizon, then your own pictures by name. See [Backdrops](#backdrops) |
 | Backdrop motion | On, Off. Off holds every backdrop still (Seasonal's snow and leaves too) |
-| Picture dim, Picture motion | Only while one of your pictures is the backdrop: how much it is darkened (0 to 10), and what moves over it (None, Seasonal, Spiral, Starfield, Embers, Pulse) |
+| Picture dim | Only while one of your pictures is the backdrop: how much it is darkened, 0 to 10 |
 | Header logo | By region (blue on a European Dreamcast, orange elsewhere), Orange (USA, Japan), Blue (Europe). Needs a card updated by Card Manager 2.15 or newer; older cards have the orange logo only |
 | Picture quality | High, Standard |
 | Menu music, Music volume | On or off, 0 to 10 |
@@ -160,12 +160,9 @@ nothing fast, and the left of the screen always stays dark enough to read.
 - **Starfield**: a slow night sky with a shooting star every half minute or so.
 - **Embers**: warm sparks rising from the bottom in the accent colour.
 - **Horizon**: the blue and white of the Dreamcast's own start up screen, as a lit floor along the bottom.
-- **Pulse**: the glow breathes with the menu music, with a soft ring on each beat. With the music off it is
-  the same as Cover colour.
 - **Your pictures**: any picture you added in Card Manager (Look and sound, Backdrop pictures) is listed by
   its name after the built in backdrops. SWIRL's glow and shading are still drawn over it so the menu stays
-  readable, **Picture dim** darkens it (the starting value is the one chosen in Card Manager), and **Picture
-  motion** puts one of the animations over it. A picture that cannot be read (missing, damaged, the wrong
+  readable, and **Picture dim** darkens it (the starting value is the one chosen in Card Manager). A picture that cannot be read (missing, damaged, the wrong
   size) shows as "(not usable)" and Cover colour is drawn instead; fix it in Card Manager and run Update
   SWIRL.
 

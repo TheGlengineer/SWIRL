@@ -14,7 +14,6 @@
 #include <time.h>
 
 #include "../dc/pvr_texture.h"
-#include "sw_audio.h"
 #include "sw_codes.h"
 #include "sw_gfx.h"
 #include "sw_lang.h"
@@ -51,7 +50,7 @@ static void soft_band(float x, float y, float w, float h, uint32_t c, int a) {
 /* ---------- state ---------- */
 static float now;              /* seconds of motion, frozen when Backdrop motion is Off */
 static int motion = 1;
-static int backdrop, picture, pic_dim, pic_motion;
+static int backdrop, picture, pic_dim;
 static uint32_t accent = 0xFFF28C28;
 static float hour = 21.f;      /* clock, read every second */
 static int hour_frames;
@@ -310,33 +309,6 @@ static void draw_horizon(void) {
   sw_glow(560, 300, 50, SW_ALPHA(accent, 0x30));
 }
 
-/* ---------- pulse ---------- */
-static float level;
-static float rings[12];
-static int nrings;
-static float last_beat = -1.f;
-static void draw_pulse_glow(uint32_t c) {
-  const float raw = sw_audio_level();
-  level += raw > level ? (raw - level) * 0.35f : (raw - level) * 0.06f;
-  sw_glow(520, 120, 330.f * (1.f + 0.08f * level), SW_ALPHA(c, 0xB0 + (int)(0x18 * level)));
-  if (motion && raw > 0.6f && now - last_beat > 0.33f && nrings < 12) {
-    rings[nrings++] = 0.f;
-    last_beat = now;
-  }
-  for (int i = 0; i < nrings; i++) {
-    if (motion) rings[i] += 1.f / 150.f;
-    if (rings[i] >= 1.f) {
-      rings[i] = rings[--nrings];
-      i--;
-      continue;
-    }
-    const float rad = 120.f + 240.f * rings[i];
-    const int a = (int)(0x28 * (1.f - rings[i]));
-    sw_glow(520, 120, rad, SW_ALPHA(accent, a));
-    sw_glow(520, 120, rad - 40.f, SW_ALPHA(NAVY, a));
-  }
-}
-
 /* ---------- pictures (BG/BG.DAT and BG/BGnn.PVR, written by Card Manager) ---------- */
 typedef struct __attribute__((packed)) bg_entry {
   char name[20];
@@ -440,7 +412,6 @@ void sw_bd_apply(const sw_prefs *p) {
   motion = !p->motion_off;
   backdrop = p->backdrop < BACKDROP_COUNT ? p->backdrop : 0;
   pic_dim = p->pic_dim <= 10 ? p->pic_dim : 4;
-  pic_motion = p->pic_motion < SW_PIC_MOTION_COUNT ? p->pic_motion : 0;
   read_clock();
   cur_season = &seasons[cur_month];
   const int want = p->picture <= SW_BG_MAX ? p->picture : 0;
@@ -455,7 +426,7 @@ void sw_bd_set_accent(uint32_t c) {
 }
 
 int sw_bd_season_accent(uint32_t *c) {
-  if (picture ? pic_motion != SW_PIC_MOTION_SEASONAL : backdrop != BACKDROP_SEASONAL) return 0;
+  if (backdrop != BACKDROP_SEASONAL || (picture && pic_loaded)) return 0;
   if (!cur_season) return 0;
   *c = cur_season->accent;
   return 1;
@@ -467,7 +438,7 @@ int sw_bd_season_name(void) {
 
 int sw_bd_backdrop_name(int b) {
   static const int names[BACKDROP_COUNT] = {S_BACKDROP_COVER, S_BACKDROP_NIGHT, S_BACKDROP_SEASONAL, S_BACKDROP_TIDE, S_BACKDROP_SPIRAL,
-                                             S_BACKDROP_STARFIELD, S_BACKDROP_EMBERS, S_BACKDROP_HORIZON, S_BACKDROP_PULSE};
+                                             S_BACKDROP_STARFIELD, S_BACKDROP_EMBERS, S_BACKDROP_HORIZON};
   return names[b >= 0 && b < BACKDROP_COUNT ? b : 0];
 }
 
@@ -485,12 +456,6 @@ int sw_bd_picture_failed(void) {
 
 int sw_bd_picture_dim(int n) {
   return n >= 1 && n <= bg_count ? bg[n - 1].dim : 4;
-}
-
-int sw_bd_pic_motion_name(int m) {
-  static const int names[SW_PIC_MOTION_COUNT] = {S_PIC_MOTION_NONE, S_BACKDROP_SEASONAL, S_BACKDROP_SPIRAL, S_BACKDROP_STARFIELD,
-                                                  S_BACKDROP_EMBERS, S_BACKDROP_PULSE};
-  return names[m >= 0 && m < SW_PIC_MOTION_COUNT ? m : 0];
 }
 
 uint32_t sw_bd_ambient(uint32_t cover) {
@@ -516,8 +481,7 @@ void sw_bd_draw(uint32_t base, uint32_t cover, int home) {
     cur_season = &seasons[cur_month];
   }
   const int on_pic = picture && pic_loaded;
-  const int what = on_pic ? -1 : backdrop;
-  const int overlay = on_pic ? pic_motion : SW_PIC_MOTION_NONE;
+  const int what = on_pic ? -1 : backdrop; /* a picture is the whole backdrop: nothing moves over it */
   const uint32_t glow = sw_bd_ambient(cover);
   float day = 1.f;
 
@@ -537,16 +501,13 @@ void sw_bd_draw(uint32_t base, uint32_t cover, int home) {
     sw_glow(520, 120, 330, SW_ALPHA(glow, (int)(0xB0 * (0.6f + 0.4f * day))));
     sw_glow(120, 520, 260, SW_ALPHA(cur_season->glow, 0x60));
     draw_weather(cur_season, day, 0);
-  } else if (what == BACKDROP_PULSE || overlay == SW_PIC_MOTION_PULSE) {
-    draw_pulse_glow(glow);
-    sw_glow(120, 520, 260, SW_ALPHA(base, 0x60));
   } else {
     sw_glow(520, 120, 330, SW_ALPHA(glow, 0xB0));
     sw_glow(120, 520, 260, SW_ALPHA(base, 0x60));
   }
-  if (what == BACKDROP_SPIRAL || overlay == SW_PIC_MOTION_SPIRAL) draw_spiral(on_pic);
-  if (what == BACKDROP_STARFIELD || overlay == SW_PIC_MOTION_STARFIELD) draw_stars(on_pic);
-  if (what == BACKDROP_EMBERS || overlay == SW_PIC_MOTION_EMBERS) draw_embers(home, on_pic);
+  if (what == BACKDROP_SPIRAL) draw_spiral(0);
+  if (what == BACKDROP_STARFIELD) draw_stars(0);
+  if (what == BACKDROP_EMBERS) draw_embers(home, 0);
 
   /* the shading every backdrop gets: the text column and the footer stay dark whatever is behind them */
   sw_grad_h(0, 0, 640, 480, 0xF005070D, 0x5905070D);
@@ -558,9 +519,5 @@ void sw_bd_draw(uint32_t base, uint32_t cover, int home) {
   if (what == BACKDROP_SEASONAL && cur_season) {
     const int night = hour >= 20.f || hour < 5.f;
     if (cur_season->particles != PART_SPARKLE || night) draw_particles(cur_season->particles, cur_season->accent, 0);
-  } else if (overlay == SW_PIC_MOTION_SEASONAL && cur_season) {
-    sky_tint(hour, &day);
-    draw_weather(cur_season, day, 1);
-    draw_particles(cur_season->particles, cur_season->accent, 1);
   }
 }

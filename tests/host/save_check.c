@@ -46,7 +46,7 @@ static int check(const char *path) {
     printf("  an older layout must read with the version 4 bytes at zero\n");
     return 1;
   }
-  if (layout < SW_SAVE_LAYOUT_CURRENT && (p.motion_off != 0 || p.picture != 0 || p.pic_dim != 4 || p.pic_motion != 0)) {
+  if (layout < SW_SAVE_LAYOUT_CURRENT && (p.motion_off != 0 || p.picture != 0 || p.pic_dim != 4 || p.spare5 != 0)) {
     printf("  an older layout must read with the version 5 bytes at their defaults (dim 4)\n");
     return 1;
   }

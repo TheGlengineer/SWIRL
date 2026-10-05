@@ -1,5 +1,7 @@
 # SWIRL backdrops: design proposal
 
+Note, 2026-10-05, after preview 1 on Glen's console: Pulse (concept 5) and the Picture motion overlay (part D) were built and then removed. Pulse's rings cost up to two dozen full screen translucent quads a frame, which lagged the whole menu on the PowerVR, and it did not read as engaging; an animation over a picture did not work visually. Everything else below shipped in 2.17.0-preview.2.
+
 For Glen. Covers new animated backdrops for System > Backdrop and custom pictures through Card Manager.
 
 What exists today (ui_swirl.c 236 to 330, 657 to 665): three backdrops. Cover colour (ambient glow in the cover's dominant colour), Night (fixed blue glow 0x16295A), Seasonal (12 month table with its own accent and glow, plus 36 particles: snow, leaves, petals, sparkle). Every frame draws two glows (one at 520,120 radius 330 in the ambient colour at alpha 0xB0, one at 120,520 radius 260 in the base colour at 0x60), a horizontal near black gradient 0xF0 to 0x59 alpha across the screen, a vertical near black gradient over the bottom 200 px, then the particles. Everything proposed below slots in between the glows and those two gradients, or between the gradients and the particles, so the existing darkening keeps protecting the text.

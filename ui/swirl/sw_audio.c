@@ -258,26 +258,6 @@ static void fill_chunk(void) {
   ring_level += (uint32_t)got;
 }
 
-/* a loudness figure for the Pulse backdrop (2.17): the size of the ADPCM steps handed to the sound chip is a
-   cheap stand in for the level of the music (bigger steps, bigger waveform). Fast up, slow down, and measured
-   against its own slow average so a loud, flat track still shows its beats rather than sitting at full. */
-static float level_fast, level_avg = 0.2f;
-static void note_level(const uint8_t *b, int n) {
-  if (n <= 0) return;
-  unsigned sum = 0;
-  int cnt = 0;
-  for (int i = 0; i < n; i += 4, cnt += 2) sum += (b[i] & 7) + ((b[i] >> 4) & 7);
-  float v = (float)sum / (float)(cnt * 7);
-  level_avg += (v - level_avg) * 0.01f;
-  float rel = level_avg > 0.02f ? v / (level_avg * 1.6f) : 0.f;
-  if (rel > 1.f) rel = 1.f;
-  level_fast += rel > level_fast ? (rel - level_fast) * 0.5f : (rel - level_fast) * 0.08f;
-}
-
-float sw_audio_level(void) {
-  return playing && fade > 0 ? level_fast : 0.f;
-}
-
 static void *stream_cb(snd_stream_hnd_t hnd, int req, int *recv) {
   (void)hnd;
   if (req > (int)sizeof(staging))
@@ -292,7 +272,6 @@ static void *stream_cb(snd_stream_hnd_t hnd, int req, int *recv) {
   ring_level -= have;
   if (have < (uint32_t)req)
     memset(staging + have, 0, req - have);
-  note_level(staging, (int)have);
   *recv = req;
   return staging;
 }

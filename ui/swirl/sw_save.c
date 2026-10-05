@@ -21,7 +21,7 @@ typedef struct __attribute__((packed)) save_more {
 /* version 5: one more tagged block after PRF4 (2.17: backdrop motion and the custom picture settings) */
 typedef struct __attribute__((packed)) save_more5 {
   char tag[4]; /* "PRF5" */
-  uint8_t prefs[4]; /* sw_prefs bytes 20 to 23: motion_off, picture, pic_dim, pic_motion */
+  uint8_t prefs[4]; /* sw_prefs bytes 20 to 23: motion_off, picture, pic_dim, spare */
 } save_more5;
 
 typedef struct __attribute__((packed)) save_blob_v1 {
@@ -103,7 +103,7 @@ int sw_save_parse(const uint8_t *data, int len, sw_prefs *p, sw_stat *st, int *n
     if (p->motion_off > 1) p->motion_off = 0;
     if (p->picture > SW_BG_MAX) p->picture = 0;
     if (p->pic_dim > 10) p->pic_dim = 4;
-    if (p->pic_motion >= SW_PIC_MOTION_COUNT) p->pic_motion = 0;
+    p->spare5 = 0;
     if (p->backdrop >= SW_BACKDROP_COUNT) p->backdrop = 0;
     *layout = b->version < 3 ? SW_SAVE_LAYOUT_V2 : has_more == 2 ? SW_SAVE_LAYOUT_CURRENT : has_more ? SW_SAVE_LAYOUT_V4 : SW_SAVE_LAYOUT_V3;
     return 0;

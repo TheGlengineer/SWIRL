@@ -303,12 +303,8 @@
   "S_BACKDROP_STARFIELD": "Cielo estrellado",
   "S_BACKDROP_EMBERS": "Brasas",
   "S_BACKDROP_HORIZON": "Horizonte",
-  "S_BACKDROP_PULSE": "Pulso",
   "S_SYS_PIC_DIM": "Oscurecer la imagen",
-  "S_SYS_PIC_MOTION": "Movimiento de la imagen",
-  "S_PIC_MOTION_NONE": "Ninguno",
   "S_HINT_PIC_DAMAGED": "No se pudo usar esta imagen, así que se muestra Color de la carátula",
-  "S_HINT_PULSE_MUSIC": "Pulso sigue la música del menú: activa la música para verlo",
   "S_HINT_MOTION_OFF": "Ahora nada se mueve en el fondo",
   "S_HINT_MOTION_ON": "Los fondos vuelven a moverse",
   "S_PIC_FAILED": "%s (no utilizable)"
