@@ -904,5 +904,6 @@
  "Changed 1 game. Click Update SWIRL to put it on the Dreamcast.": "1 jogo alterado. Clique em Update SWIRL para colocá-lo no Dreamcast.",
  "Changed {n} games. Click Update SWIRL to put them on the Dreamcast.": "{n} jogos alterados. Clique em Update SWIRL para colocá-los no Dreamcast.",
  "1 file, {gb}": "1 arquivo, {gb}",
- "{n} files, {gb}": "{n} arquivos, {gb}"
+ "{n} files, {gb}": "{n} arquivos, {gb}",
+ "<b>jkoehler11</b>: the Linux port (pull request 11); <b>sergiosaint</b>: the padded strings helper for the Classic styles (pull request 10)": "<b>jkoehler11</b>: a versão para Linux (pull request 11); <b>sergiosaint</b>: a função que preenche as linhas de informação dos estilos Classic (pull request 10)"
 }

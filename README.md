@@ -253,6 +253,11 @@ They stand on the work of:
 - [Redump](http://redump.org/) and [libretro-database](https://github.com/libretro/libretro-database) for game titles, [libretro-thumbnails](https://github.com/libretro-thumbnails/Sega_-_Dreamcast) for screenshots
 - The Sora, Barlow and Silkscreen fonts, and the Go libraries listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
 
+Contributors, through pull requests on this repository:
+
+- **jkoehler11**: the Linux port of SWIRL Card Manager, static binary and AppImage, tested on real hardware ([#11](https://github.com/TheGlengineer/SWIRL/pull/11))
+- **sergiosaint**: the bounded helper that builds the Classic styles' padded info lines ([#10](https://github.com/TheGlengineer/SWIRL/pull/10))
+
 ## Support SWIRL
 
 SWIRL is free and always will be. If it brings your Dreamcast back to life and you would like to say
