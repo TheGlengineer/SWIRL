@@ -15,6 +15,7 @@ type Drive struct {
 	Type      string `json:"type"`
 	Removable bool   `json:"removable"`
 	HasMenu   bool   `json:"hasMenu"`
+	CardLabel string `json:"cardLabel,omitempty"` // the owner's name for the card (cardlabel.go)
 	Ready     bool   `json:"ready"`
 	FS        string `json:"fs,omitempty"`
 	Total     uint64 `json:"total,omitempty"`
@@ -38,6 +39,7 @@ func statDrive(p, label, typ string) Drive {
 	}
 	if st, err := os.Stat(filepath.Join(p, "01")); err == nil && st.IsDir() {
 		d.HasMenu = true
+		d.CardLabel = CardLabel(p)
 	}
 	return d
 }

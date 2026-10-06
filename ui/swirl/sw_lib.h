@@ -43,6 +43,9 @@ int sw_lib_init(void);
 int sw_lib_count(void);
 sw_game *sw_lib_game(int idx);
 
+/* the description in the menu's language (2.17), the English one, or NULL when META.DAT has none */
+const char *sw_lib_desc(const sw_game *g);
+
 /* stats */
 sw_stat *sw_stat_get(const sw_game *g, int create);
 int sw_lib_is_fav(const sw_game *g);

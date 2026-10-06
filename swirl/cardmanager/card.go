@@ -70,6 +70,7 @@ type Card struct {
 	MenuImage  string `json:"menuImage,omitempty"`
 	MenuFormat string `json:"menuFormat,omitempty"`
 	SwirlVer   string `json:"swirlVersion"`
+	Label      string `json:"label,omitempty"` // the owner's name for the card (cardlabel.go)
 	// SwirlRelease is the version SWIRL reports in About ("2.10"); empty for early builds
 	SwirlRelease string `json:"swirlRelease,omitempty"`
 	// Gaps is set when the game folder numbers skip (GDEMU stops at the first gap)
@@ -169,7 +170,7 @@ func ScanCard(root string) (*Card, error) {
 		}
 	}
 	fixed = append(fixed, hiddenFolderWarnings(root)...)
-	c := &Card{Root: root, MenuType: "None", Backups: listBackups(root), BackupList: listBackupItems(root), Warnings: fixed}
+	c := &Card{Root: root, MenuType: "None", Label: CardLabel(root), Backups: listBackups(root), BackupList: listBackupItems(root), Warnings: fixed}
 	var boxIDs, iconIDs, metaIDs, vmuIDs map[string]bool
 	edits := loadEdits(root)
 
@@ -626,6 +627,9 @@ func buildMenuImageInto(root, datDir string, allowEmpty bool, log Logger) (strin
 	if err := applyEdits(root, c, data, log); err != nil {
 		return work, "", nil, err
 	}
+	if err := addLanguageMeta(root, c, data, log); err != nil { // META_DE.DAT and the others (2.17)
+		return work, "", nil, err
+	}
 	if err := importVFBFolders(root, c, log); err != nil {
 		log("%v", err)
 	}
@@ -715,6 +719,7 @@ func installSwirl(root, datDir string, allowEmpty bool, log Logger) error {
 	if err := syncDiscDB(root, c, log); err != nil {
 		log("%v", err)
 	}
+	writeMenuStamp(root, log) // what this menu was built from, for Changes waiting (2.17)
 	log("SWIRL installed in folder 01. Game folders were not changed.")
 	return nil
 }
@@ -1019,13 +1024,14 @@ func applyEdits(root string, c *Card, data string, log Logger) error {
 // ---------- editor API ----------
 
 type GameDetail struct {
-	Game      Game  `json:"game"`
-	Meta      Meta  `json:"meta"`
-	HasBox    bool  `json:"hasBox"`
-	HasVMU    bool  `json:"hasVmu"`
-	HasDisc   bool  `json:"hasDiscArt"`
-	MetaFound bool  `json:"metaFound"`
-	Stamp     int64 `json:"stamp"`
+	Game      Game      `json:"game"`
+	Meta      Meta      `json:"meta"`
+	HasBox    bool      `json:"hasBox"`
+	HasVMU    bool      `json:"hasVmu"`
+	HasDisc   bool      `json:"hasDiscArt"`
+	MetaFound bool      `json:"metaFound"`
+	Stamp     int64     `json:"stamp"`
+	Descs     GameDescs `json:"descs"` // descriptions in the menu's other languages (2.17)
 }
 
 func findGame(c *Card, folder string) *Game {
@@ -1056,6 +1062,7 @@ func GetGameDetail(root, folder string) (*GameDetail, error) {
 		}
 		m.Close()
 	}
+	det.Descs = gameDescs(root, g, det.Meta.Description)
 	det.HasBox = g.HasArt
 	det.HasVMU = g.HasVMU
 	if b, err := readDiscFile(filepath.Join(root, folder), "0GDTEX.PVR", 4<<20); err == nil {
@@ -1125,20 +1132,21 @@ func GameArt(root, folder, kind string) ([]byte, error) {
 }
 
 type SaveGameRequest struct {
-	Root     string `json:"root"`
-	Folder   string `json:"folder"`
-	Name     string `json:"name"`
-	Serial   string `json:"serial"`
-	Region   string `json:"region"`
-	VGA      bool   `json:"vga"`
-	Date     string `json:"date"`
-	Meta     Meta   `json:"meta"`
-	Box      string `json:"box"`      // data URL of a new image
-	BoxDisc  bool   `json:"boxDisc"`  // use the disc's own artwork (0GDTEX.PVR)
-	ClearBox bool   `json:"clearBox"` // drop a box art edit
-	VMU      string `json:"vmu"`      // data URL of an image to convert
-	VMUArt   bool   `json:"vmuArt"`   // make the VMU screen from the box art
-	ClearVMU bool   `json:"clearVmu"`
+	Root     string            `json:"root"`
+	Folder   string            `json:"folder"`
+	Name     string            `json:"name"`
+	Serial   string            `json:"serial"`
+	Region   string            `json:"region"`
+	VGA      bool              `json:"vga"`
+	Date     string            `json:"date"`
+	Meta     Meta              `json:"meta"`
+	Box      string            `json:"box"`      // data URL of a new image
+	BoxDisc  bool              `json:"boxDisc"`  // use the disc's own artwork (0GDTEX.PVR)
+	ClearBox bool              `json:"clearBox"` // drop a box art edit
+	VMU      string            `json:"vmu"`      // data URL of an image to convert
+	VMUArt   bool              `json:"vmuArt"`   // make the VMU screen from the box art
+	ClearVMU bool              `json:"clearVmu"`
+	Desc     map[string]string `json:"desc"` // descriptions per language (de, fr, es, it, pt), 2.17
 }
 
 func SaveGame(req SaveGameRequest) error {
@@ -1177,7 +1185,7 @@ func SaveGame(req SaveGameRequest) error {
 	edits := loadEdits(req.Root)
 	vga := req.VGA
 	m := req.Meta
-	edits.Games[req.Folder] = &GameEdit{Product: product, Region: strings.ToUpper(strings.TrimSpace(req.Region)), VGA: &vga, Date: strings.TrimSpace(req.Date), Meta: &m, UserName: userName}
+	edits.Games[req.Folder] = &GameEdit{Product: product, Region: strings.ToUpper(strings.TrimSpace(req.Region)), VGA: &vga, Date: strings.TrimSpace(req.Date), Meta: &m, UserName: userName, Desc: cleanDescs(req.Desc)}
 	if err := edits.save(); err != nil {
 		return err
 	}
@@ -1285,6 +1293,7 @@ func addExtras(root string, c *Card, data string, log Logger) error {
 		log("Added your VMU logo")
 	}
 	if cols := LoadCollections(root); len(cols) > 0 {
+		cols = resolveCollections(root, c, cols, filepath.Join(data, "META.DAT")) // smart collections find their games now
 		if err := os.WriteFile(filepath.Join(data, "COLLECT.TXT"), []byte(collectText(cols)), 0o644); err != nil {
 			return err
 		}

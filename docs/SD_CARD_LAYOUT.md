@@ -48,6 +48,9 @@ Folder `01` is a small GD-ROM image that GDEMU boots first. Inside it:
 | `PELICAN.BIN` | CodeBreaker, for the "Play with CodeBreaker cheats" option. Added from Card Manager's Art and info page | Optional |
 | `BLEEM.BIN` | Bleem, for PlayStation discs | Optional |
 | `GDEMUNFO.TXT` | Notes which tool made the disc | Optional |
+| `LANG.DAT` | The menu's translations (2.16) | Optional, added by SWIRL |
+| `BG/BG.DAT`, `BG/BGnn.PVR` | Your backdrop pictures (2.17) | Optional, added by SWIRL |
+| `META_DE.DAT`, `META_FR.DAT`, `META_ES.DAT`, `META_IT.DAT`, `META_PT.DAT` | Game descriptions in each language, same layout as `META.DAT`, written for the games Card Manager has text for (2.17) | Optional, added by SWIRL |
 
 Every optional file can be missing: SWIRL shows what it has and falls back gracefully.
 
@@ -59,7 +62,10 @@ Card Manager keeps your edits here so they survive menu rebuilds and moving the 
 |---|---|
 | `games.json` | Names, details and art choices you made in the Edit window |
 | `art/` | Box art, VMU screens and screenshots you uploaded |
-| `collections.json` | Your collections |
+| `collections.json` | Your collections, each with its rule when it has one (2.17) |
+| `card.json` | The card's name, if you gave it one (2.17) |
+| `menu.json` | What the menu in `01` was built from, so the window can say which changes are still waiting (2.17) |
+| `BG/` | Your backdrop pictures and their index (2.17) |
 | `BGM.ADP` | Your own menu music, converted. `BGM2.ADP` to `BGM9.ADP` are further tracks; each `BGMn.TXT` remembers the file a track came from |
 | `BGM.THEME` | Marks that you chose the SWIRL theme music |
 | `card-id.txt` | A random ID so PC backups of this card are recognised |

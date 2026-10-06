@@ -1,0 +1,9 @@
+# What's new in 2.17.0 beta 2
+- Descriptions in your language. Set System > Language on the Dreamcast and the game descriptions follow: 483 titles from the translation pack built into Card Manager, or your own words from a game's Edit window.
+- Changes waiting. The Update SWIRL button counts what the Dreamcast has not got yet, and each page says so.
+- Drop games onto the window. Folders, discs and archives, added like Add games.
+- Smart collections. Give a collection a rule (genre, players, online, region) and new games sort themselves in.
+- Edit several games at once. Tick them in Games, then Edit selected.
+- Box art framing. Drag, zoom, fill or fit an uploaded picture instead of a squashed one.
+- Card names and safe eject. Name a card, and eject it from the window when you are done.
+- Keyboard. Ctrl+U updates SWIRL, Ctrl+1 to 9 jump to a page.

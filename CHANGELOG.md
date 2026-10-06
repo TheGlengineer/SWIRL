@@ -3,6 +3,41 @@
 SWIRL (the menu) and SWIRL Card Manager share one version number. Card Manager patch releases (2.11.1)
 may ship without menu changes; the menu then keeps its major.minor version (2.11).
 
+## [2.17.0-beta.2]
+
+Descriptions in your language, and a Card Manager batch. The menu's game descriptions now follow System > Language, with a translation pack of 483 titles built into Card Manager and your own words per language in the Edit window. Card Manager gains Changes waiting on the Update SWIRL button, drag and drop of games onto the window, smart collections, batch edit, box art framing, card names, safe eject, What's new, more keyboard shortcuts and teaching empty pages. Everything on the card is additive: META.DAT, OPENMENU.INI and the game folders are written exactly as before, so a card from this beta still reads in 2.16 and in other tools.
+
+**Tested on:** the emulator harness: the 14 screen baseline against beta 1 (identical apart from the clock and the build string), German descriptions from the pack and from an owner's own text with umlauts and ß, the live switch back to English from System > Language, and the W22 path; the Go suite (new tests for the pack, the language files, changes waiting, smart collections, batch edit and the drop flow) and the host checks; the window driven through every new dialog in a headless browser, with the six languages swept. Windows is the release; macOS and Linux Card Manager are betas until each has had a run on a real machine. Not yet run on Glen's Dreamcast and PC: that is what this beta is for.
+
+**What to test:** (1) Update SWIRL, then System > Language on the console: Deutsch, Français, Español, Italiano, Português, and watch a game's description on Home, in the Library and on the game page follow, and come back to English; (2) in Card Manager, open a game, pick Deutsch in the description box, type your own text, Update SWIRL, and see it on the console; clear it and the built in text returns; (3) the Update SWIRL badge after an edit, a new picture and a new collection, and that it clears after Update SWIRL; (4) drop a game folder, a .cdi and an archive onto the window; (5) a collection with Fill by rule, then add a matching game and Update SWIRL: it should appear in the collection by itself; (6) Edit selected on a few games; (7) Upload image for box art with a tall scan and a wide photo; (8) Card name, then pull the card and put it back: the drive list should show the name; (9) Eject card, then pull the card; (10) a card last written by 2.16: everything as before, the badge silent until the first Update SWIRL.
+
+### Menu
+
+- **Descriptions in the menu's language**: beside the English database the menu loads META_DE.DAT, META_FR.DAT, META_ES.DAT, META_IT.DAT or META_PT.DAT for the language in use (same DAT layout and record as META.DAT, text in UTF-8) and shows a game's translated description on Home, in the Library and on the game page; a game without one shows its English text. Changing the language in System switches at once. A language file that cannot be read gives warning W22 and English. About 180 KB of main memory for a 483 game card, nothing in video memory. ([Descriptions in your language](docs/USING_SWIRL.md#descriptions-in-your-language))
+
+### Card Manager
+
+- **Translation pack**: the 483 community descriptions in German, French, Spanish, Italian and Portuguese, built into the app (no download) and length checked for the 375 byte record. A game is matched by serial, or by its English text when another region's serial carries the same blurb. Written as META_xx.DAT at every Update SWIRL for the games on the card; META.DAT itself is untouched.
+- **Edit window, Description**: a language picker on the description box. The built in translation shows greyed out; your own words win and are kept on the card in games.json.
+- **Changes waiting**: after every build a note on the card (SWIRL/menu.json) records what the menu was made from. The Update SWIRL button shows how many groups of changes the Dreamcast has not got yet, the card chip says "N changes waiting", and the Games, Art and info, Look and sound and Collections pages carry a "Not on the Dreamcast yet" pill when they hold one. A card last built by an older Card Manager says nothing until its next Update SWIRL. ([SD card](docs/CARD_MANAGER.md#sd-card))
+- **Drop games onto the window**: folders, .cdi discs and archives, added through the same pipeline as Add games. The window runs in a browser, which never gives a dropped file's path, so the files are streamed to a staging folder on the PC first; the window says so, and Add games from a folder stays the quicker way for a very large game. The staging folder goes when the job ends, however it ends.
+- **Smart collections**: Fill by rule in the collection window: genres, players, online play, accessories, region. The rule's games are added at every build beside the ones you tick, with a live "by rule" preview in the window. The empty Collections page offers three starters. ([Collections](docs/CARD_MANAGER.md#collections))
+- **Edit selected**: region, VGA tag, players, online support, genres and accessories for several games at once; everything else about each game stays. ([Games](docs/CARD_MANAGER.md#games))
+- **Frame the box art**: a square framing window for uploaded box art (drag, zoom, fill or fit with bars matching the picture's edge) instead of a squashed picture.
+- **Card name**: kept on the card in SWIRL/card.json, shown in the drive list and at the top of the window.
+- **Eject card**: flushes and dismounts the card and asks Windows to eject it; says so when another program holds it. On a Mac or Linux PC it unmounts.
+- **What's new** after an update, and from About.
+- **Keyboard**: Ctrl+U for Update SWIRL, Ctrl+1 to 9 for the sections, Esc clears Find a game.
+- Empty Collections, Backups and Backdrop pictures pages explain what goes there.
+- The window's new strings are in all six languages.
+
+### Known limits
+
+- The description translations, like the UI strings, are Claude's and await native speakers; any single one can be overwritten in the Edit window.
+- Titles outside the pack (homebrew, unusual regions) have only the text you type.
+- A game edit written by this beta carries a `desc` field that a Card Manager older than 2.17 drops if it rewrites games.json for that game.
+- Eject on a Mac or Linux PC has not had a real machine run.
+
 ## [2.17.0-beta.1]
 
 Backdrops. Five new animated backdrops behind the menu, Seasonal following the clock and the weather of the month, a Backdrop motion switch, and your own pictures added in Card Manager. Every backdrop is built from the same soft shapes the menu already draws, so none of them costs card space or video memory; a picture is one compressed texture. The design, with the limits each backdrop keeps to so the cover art and the text stay the focus, is in the repo as docs/BACKDROPS_DESIGN.md. A beta: it ran on Glen's Dreamcast and PC through the list below (previews 1 and 2), and goes to the preview channel for a round with the community before 2.17.0.

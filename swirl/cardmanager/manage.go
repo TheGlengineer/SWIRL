@@ -313,12 +313,21 @@ func afterUnpack(root string, p *copyPlan, before map[string]string, log Logger)
 }
 
 func StartAddGames(root string, sources []string, dats string) error {
+	return startAddGames(root, sources, dats, nil)
+}
+
+// startAddGames is StartAddGames with something to do when the job is over, however it ends (a drop's
+// staging folder to remove).
+func startAddGames(root string, sources []string, dats string, cleanup func()) error {
 	before := cardGameKeys(root)
 	p, err := planAdd(root, sources)
 	if err != nil {
 		return err
 	}
 	return runJob(root, "Copying games", "Done. Put the card back in your GDEMU.", func() error {
+		if cleanup != nil {
+			defer cleanup()
+		}
 		jobLog("Adding %d games (%.1f GB)", p.Games, float64(p.Total)/(1<<30))
 		for _, s := range p.Skipped {
 			jobLog("%s", s)
@@ -425,4 +434,11 @@ func naturalLess(a, b string) bool {
 		return na < nb
 	}
 	return a < b
+}
+
+// jobRunning says whether a background task holds the card.
+func jobRunning() bool {
+	jobMu.Lock()
+	defer jobMu.Unlock()
+	return job.Running
 }

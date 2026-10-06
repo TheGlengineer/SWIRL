@@ -16,6 +16,7 @@ type Drive struct {
 	Type      string `json:"type"` // removable, fixed, network, cd, ram
 	Removable bool   `json:"removable"`
 	HasMenu   bool   `json:"hasMenu"`
+	CardLabel string `json:"cardLabel,omitempty"` // the owner's name for the card (cardlabel.go)
 	Ready     bool   `json:"ready"`
 	FS        string `json:"fs,omitempty"`
 	Total     uint64 `json:"total,omitempty"`
@@ -65,6 +66,7 @@ func listDrives() []Drive {
 			if typ != "network" && typ != "cd" {
 				if st, err := os.Stat(filepath.Join(root, "01")); err == nil && st.IsDir() {
 					d.HasMenu = true
+					d.CardLabel = CardLabel(root)
 				}
 			}
 		}

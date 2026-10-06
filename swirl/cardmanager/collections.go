@@ -15,6 +15,7 @@ import (
 type Collection struct {
 	Name     string   `json:"name"`
 	Products []string `json:"products"`
+	Rule     *ColRule `json:"rule,omitempty"` // a smart collection's rule (2.17), see smartcol.go
 }
 
 func collectionsPath(root string) string { return filepath.Join(root, editsDir, "collections.json") }
@@ -51,7 +52,11 @@ func SaveCollections(root string, list []Collection) error {
 				prods = append(prods, p)
 			}
 		}
-		clean = append(clean, Collection{Name: name, Products: prods})
+		rule := c.Rule
+		if rule.empty() {
+			rule = nil
+		}
+		clean = append(clean, Collection{Name: name, Products: prods, Rule: rule})
 	}
 	if len(clean) > 24 {
 		return errors.New("SWIRL shows up to 24 collections of your own")

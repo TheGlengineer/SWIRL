@@ -14,7 +14,19 @@ Game folders are never changed by an update.
 Pick the card from the list of drives, or type a drive letter and click **Scan**. The page shows which menu
 is in folder `01`, how many games the card has (a multi disc game is one game, so it says both numbers, for
 example **46 games on 52 discs**) and how many have box art and descriptions. From here you can also install the
-app on your PC, start a new card, or close the app.
+app on your PC, start a new card, eject the card, or close the app.
+
+- **Card name**: a name of your own for the card ("Main card", "RPGs"), kept on the card in `SWIRL\card.json`
+  so it travels with it. It shows in the drive list and at the top of the window, which is how you tell cards
+  apart before scanning.
+- **Eject card** (also at the top of the window) finishes every write, releases the card and tells Windows to
+  eject it, so it is safe to take out. If another program has the card open (an Explorer window, a file on it)
+  the eject says so instead of pulling the card from under it.
+- **Changes waiting**: after every build Card Manager keeps a note on the card of what the menu was made from.
+  When you edit a game, add a picture or change a collection, the **Update SWIRL** button shows how many groups
+  of changes the Dreamcast has not got yet (hover for the list), the card chip says "N changes waiting", and
+  the section with the change carries a **Not on the Dreamcast yet** pill. A card last built by an older Card
+  Manager has no note and says nothing until its next Update SWIRL.
 
 Whatever is in folder `01` is recognised: a GDI or CDI menu (openMenu, GDMENU, the Virtual Folder Bundle), a game,
 or an unknown image. A game in `01` blocks the install with a message instead of being moved. Game folders are
@@ -43,7 +55,9 @@ The answer is kept under [About](#about-and-updates), where you can change it.
 - **Drag to reorder**: drag rows by the handle, or drag covers, then **Save new order**. GDEMU and SWIRL list games in folder order.
 - **Tidy names**: proper titles from the Redump list, matched by each disc's serial. For discs the list does not know, it offers the name without version or dump tags ("Toy Commander v1.022" becomes "Toy Commander"). You see every change before it is made, and names you typed yourself are never changed.
 - **Put discs together**: keeps the discs of multi disc games next to each other and in order. Discs of one game are grouped in the list.
-- **Find a game** (Ctrl+F) filters the list.
+- **Edit selected**: tick games, then change their region, VGA tag, players, online support, genres or accessories in one go. Only what you set changes; names, art and descriptions stay.
+- **Drop games onto the window**: game folders, `.cdi` discs and `.zip`, `.7z` or `.rar` archives dropped anywhere on the window are added like **Add games**. For a `.gdi` game drop its whole folder, so the tracks come along. The window runs in a browser, which never says where a dropped file lives, so a drop is copied to this PC first and then onto the card; for a very large game **Add games** from its folder is quicker.
+- **Find a game** (Ctrl+F) filters the list; Esc clears it.
 - The **VGA** column says **Needs patch** for a game with no VGA mode that has a known patch, **Patched** once the
   patch is on the card, and **No (patch removed)** for one you took off by hand (it is not patched again by
   itself). **Patch N games for VGA** above the list patches every game that needs it.
@@ -66,10 +80,11 @@ on your PC.
 Click a game (or **Edit**) to change:
 
 - **Title**, with a suggested proper name you can accept in one click
-- **Box art**: upload a picture, or go back to the disc's own art
+- **Box art**: upload a picture and frame it (drag, zoom, fill the square or fit the whole picture with bars in a matching colour), or go back to the disc's own art
 - **VMU screen**: make one from the box art, upload one, or capture it by playing the game in the emulator
 - **Screenshots**: upload two, or **Get online** from libretro thumbnails
 - **Serial, region and VGA tag shown in the menu, release date, players, VMU blocks, online support, genres, accessories and description**
+- **Description in each language**: the picker on the description box switches between English (META.DAT) and German, French, Spanish, Italian and Portuguese. For the other languages the box shows the translation built into Card Manager greyed out; type over it to use your own words, which SWIRL then shows when that language is chosen on the Dreamcast, and clear the box to go back to the built in text. Accented letters count two bytes of the 375.
 - **Apply VGA patch** or **Remove VGA patch**, with the patch author, for a game with no VGA mode. The patch
   changes a few bytes of the game in place on the card; the original bytes are kept under
   `SWIRL_BACKUP\patches` and **Remove** puts them back. Only GDI images can be patched in place; a CDI says so.
@@ -108,6 +123,12 @@ Your own edits from a game's Edit window always win over downloaded art.
 
 Make your own groups of games, such as "Couch co-op". They appear in SWIRL's Collections tab, next to the
 ones SWIRL builds for you.
+
+**Fill by rule** turns a collection into a smart one: any of the chosen genres, at least so many players,
+online play, any of the chosen accessories, a region. The games the rule finds are added every time the menu
+is built, so a game you add next month lands in "Racing" by itself; games you tick are kept beside them. The
+window shows which games the rule finds right now ("by rule"). A new card page offers three starters: Couch
+co-op (2 or more players), Racing and Online play.
 
 ## GDEMU settings
 
@@ -184,6 +205,8 @@ health check lines, error messages from the app itself and the decoded Dreamcast
 paste into a bug report, so they read the same for everyone. The strings are in the SWIRL repository under
 `swirl/cardmanager/web/lang`, one file per language; corrections are welcome.
 
+**What's new** opens the note for this version; it also opens by itself the first time a new version runs.
+
 ### Previews
 
 Before a big version is released, a **preview** of it may be put up for testing. Previews are never
@@ -230,7 +253,9 @@ renumbered. A database that cannot be read is set aside in `SWIRL_BACKUP` with a
 | Keys | What they do |
 |---|---|
 | F1 | About |
-| Ctrl + F | Find a game |
+| Ctrl + F | Find a game (Esc clears the search) |
+| Ctrl + U | Update SWIRL |
+| Ctrl + 1 to 9 | Jump to a section |
 | F5 | Read the card again |
 | Enter | In a folder box: open that folder |
 | Esc | Close a window |

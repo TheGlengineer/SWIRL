@@ -91,6 +91,7 @@ reused, only added.
 | W19 | disc-read | The menu disc could not be read |
 | W20 | language-file | LANG.DAT could not be used, showing English. Run Update SWIRL in Card Manager so the card gets a language file made for this menu |
 | W21 | backdrop-picture | A backdrop picture on the card could not be used (missing, the wrong size, or damaged). Cover colour is shown until it is fixed: open the picture in Card Manager under Look and sound and run Update SWIRL |
+| W22 | meta-language | A translated description file on the card (META_DE.DAT and the others) could not be read. English descriptions are shown; run Update SWIRL in Card Manager 2.17 or newer to write the files again |
 
 System > Diagnostics lists the warnings since power on in these words, with the count and the first detail
 (six to a page, Up and Down scroll), and the About card on the System tab says how many there are. Card

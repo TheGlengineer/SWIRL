@@ -32,6 +32,8 @@ type GameEdit struct {
 	Meta    *Meta  `json:"meta,omitempty"`
 	// UserName is set when the name was typed in the Edit window, so Tidy names leaves it alone
 	UserName bool `json:"userName,omitempty"`
+	// Desc holds the owner's description per language (de, fr, es, it, pt), 2.17; see metadb.go
+	Desc map[string]string `json:"desc,omitempty"`
 }
 
 type editStore struct {
@@ -106,6 +108,22 @@ func openMenuDisc(root string) (*menuReader, error) {
 }
 
 func (m *menuReader) Close() { m.d.Close() }
+
+// readFile reads a whole (small) file from the menu disc.
+func (m *menuReader) readFile(name string) ([]byte, error) {
+	f, ok := m.files[strings.ToUpper(name)]
+	if !ok {
+		return nil, os.ErrNotExist
+	}
+	if f.Size > 8<<20 {
+		return nil, errors.New("too big to read whole")
+	}
+	b, err := m.d.readSectors(f.LBA, (f.Size+sectorSize-1)/sectorSize)
+	if err != nil {
+		return nil, err
+	}
+	return b[:f.Size], nil
+}
 
 // datChunk reads one entry of a DAT file on the menu disc without extracting the whole file.
 func (m *menuReader) datChunk(dat, id string) ([]byte, error) {

@@ -180,10 +180,20 @@ A card last updated by an older Card Manager has no LANG.DAT: the Language row s
 with "(not on this card)" after the ones it can't show, and SWIRL stays in English until the card is updated.
 
 What changes with the language: every menu, message, hint, the built in collection names (Favorites, Party
-Night, the genres) and the sort names. What doesn't: game names and descriptions (they are what the card
-holds), the names of your own collections, the Classic list, Classic grid and GDMENU styles (openMenu's, in
-English), and the Diagnostics report itself (its QR codes are decoded by Card Manager, in English, so a bug
-report reads the same wherever it comes from).
+Night, the genres), the sort names and, from 2.17, the game descriptions. What doesn't: game names (they are
+what the card holds), the names of your own collections, the Classic list, Classic grid and GDMENU styles
+(openMenu's, in English), and the Diagnostics report itself (its QR codes are decoded by Card Manager, in
+English, so a bug report reads the same wherever it comes from).
+
+### Descriptions in your language
+
+Card Manager 2.17 writes a description file per language beside META.DAT (META_DE.DAT, META_FR.DAT,
+META_ES.DAT, META_IT.DAT, META_PT.DAT). The text comes from the translation pack built into Card Manager, 483
+titles translated from the community descriptions, or from your own words typed in the game's Edit window,
+which always win. SWIRL loads the file for the language in use and shows a game's translated description on
+Home, in the Library and on the game page; a game with no translated text shows its English description, and
+changing the language in System switches at once. A description file that cannot be read gives warning W22
+and English descriptions. META.DAT itself is unchanged, so other tools read the card as before.
 
 The choice is saved with the rest of your settings on the VMU. If the translations have a mistake, the strings
 are in the SWIRL repository under swirl/lang, one file per language; corrections are welcome.

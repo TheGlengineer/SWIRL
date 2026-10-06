@@ -922,6 +922,24 @@ sw_game *sw_lib_game(int idx) {
   return &games[idx];
 }
 
+/* The description to show for a game: in the menu's language when Card Manager wrote one (META_DE.DAT and the
+   others, loaded on the first draw after the language changes), else the English from META.DAT, else NULL. */
+const char *sw_lib_desc(const sw_game *g) {
+  static int desc_lang = -1;
+  static const char *const files[SW_LANG_COUNT] = {"", "", "META_DE.DAT", "META_FR.DAT", "META_ES.DAT", "META_IT.DAT", "META_PT.DAT"};
+  const int lang = sw_lang_current();
+  if (lang != desc_lang) {
+    desc_lang = lang;
+    db_load_lang((lang > SW_LANG_EN && lang < SW_LANG_COUNT) ? files[lang] : "");
+  }
+  if (lang != SW_LANG_EN && g && g->item) {
+    const char *d = db_get_desc_lang(g->item->product);
+    if (d)
+      return d;
+  }
+  return (g && g->meta && g->meta->description[0]) ? g->meta->description : NULL;
+}
+
 sw_stat *sw_stat_get(const sw_game *g, int create) {
   if (!g)
     return NULL;

@@ -28,7 +28,13 @@ import (
 //go:embed web
 var webFS embed.FS
 
-const version = "2.17.0-beta.1"
+//go:embed assets/whatsnew.txt
+var whatsNew embed.FS
+
+const version = "2.17.0-beta.2"
+
+// lastScan keeps the most recent scan of each card root for /api/pending (root -> *Card)
+var lastScan sync.Map
 
 var (
 	mu       sync.Mutex
@@ -103,7 +109,22 @@ func serve() {
 			fail(w, err)
 			return
 		}
-		writeJSON(w, map[string]any{"card": c, "swirlVersion": swirlHash(swirlBinary)})
+		lastScan.Store(c.Root, c)
+		writeJSON(w, map[string]any{"card": c, "swirlVersion": swirlHash(swirlBinary), "pending": PendingChanges(c.Root, c)})
+	}))
+	// the window asks again after every change it makes; the card's game list is the one from the last scan
+	// (every change to the games themselves ends in a scan), so this never reads a few hundred disc headers
+	mux.HandleFunc("/api/pending", guard(func(w http.ResponseWriter, r *http.Request) {
+		root := r.URL.Query().Get("root")
+		c, ok := lastScan.Load(root)
+		if !ok {
+			var err error
+			if c, err = ScanCard(root); err != nil {
+				fail(w, err)
+				return
+			}
+		}
+		writeJSON(w, PendingChanges(root, c.(*Card)))
 	}))
 	mux.HandleFunc("/api/install", guard(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
@@ -218,6 +239,10 @@ func serve() {
 		w.Header().Set("Content-Type", "image/png")
 		w.Header().Set("Cache-Control", "private, max-age=86400") // the page adds a version to the address
 		w.Write(b)
+	}))
+	mux.HandleFunc("/api/whatsnew", guard(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := whatsNew.ReadFile("assets/whatsnew.txt")
+		writeJSON(w, map[string]any{"version": version, "text": string(b)})
 	}))
 	mux.HandleFunc("/api/uiprefs", guard(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
@@ -501,6 +526,26 @@ func serve() {
 		rememberFolders("games", req.Sources)
 		writeJSON(w, map[string]any{"ok": true})
 	}))
+	mux.HandleFunc("/api/games/batch", guard(func(w http.ResponseWriter, r *http.Request) {
+		var req BatchEdit
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			fail(w, err)
+			return
+		}
+		unlock := lockOrFail(w, req.Root, "Edit games")
+		if unlock == nil {
+			return
+		}
+		defer unlock()
+		mu.Lock()
+		n, err := ApplyBatchEdit(req)
+		mu.Unlock()
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, map[string]any{"changed": n})
+	}))
 	mux.HandleFunc("/api/names", guard(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Root  string            `json:"root"`
@@ -635,6 +680,83 @@ func serve() {
 		})
 	}
 	str := func(m map[string]any, k string) string { v, _ := m[k].(string); return v }
+	// games dropped onto the window: open a drop, stream every file into it, then add from it (dropadd.go)
+	mux.HandleFunc("/api/drop/open", post(func(m map[string]any) (any, error) {
+		id, err := newDrop()
+		return map[string]any{"id": id}, err
+	}))
+	mux.HandleFunc("/api/drop/file", guard(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			fail(w, errors.New("PUT the file"))
+			return
+		}
+		n, err := receiveDrop(r.URL.Query().Get("id"), r.URL.Query().Get("path"), r.Body)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, map[string]any{"bytes": n})
+	}))
+	mux.HandleFunc("/api/drop/discard", post(func(m map[string]any) (any, error) { discardDrop(str(m, "id")); return nil, nil }))
+	mux.HandleFunc("/api/drop/add", post(func(m map[string]any) (any, error) {
+		return nil, StartAddDropped(str(m, "root"), str(m, "id"), str(m, "dats"))
+	}))
+	// safe eject: nothing may be writing, the card's lock is taken for the moment of the eject
+	mux.HandleFunc("/api/eject", guard(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Root string `json:"root"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			fail(w, err)
+			return
+		}
+		if jobRunning() {
+			fail(w, errors.New("wait for the current job to finish"))
+			return
+		}
+		unlock := lockOrFail(w, req.Root, "Eject")
+		if unlock == nil {
+			return
+		}
+		defer unlock()
+		mu.Lock()
+		err := ejectDrive(req.Root)
+		mu.Unlock()
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		lastScan.Delete(req.Root)
+		writeJSON(w, map[string]any{"ok": true})
+	}))
+	mux.HandleFunc("/api/cardlabel", post(func(m map[string]any) (any, error) {
+		return nil, SetCardLabel(str(m, "root"), str(m, "label"))
+	}))
+	mux.HandleFunc("/api/collections/preview", guard(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Root string  `json:"root"`
+			Rule ColRule `json:"rule"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			fail(w, err)
+			return
+		}
+		c, ok := lastScan.Load(req.Root)
+		if !ok {
+			cc, err := ScanCard(req.Root)
+			if err != nil {
+				fail(w, err)
+				return
+			}
+			c = cc
+		}
+		prods, err := RulePreview(req.Root, c.(*Card), &req.Rule)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, map[string]any{"products": prods})
+	}))
 	mux.HandleFunc("/api/collections", guard(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			var req struct {
@@ -1021,6 +1143,7 @@ func serve() {
 	}
 	go idleWatch()
 	go cleanUpdates()
+	go cleanDrops()
 	go defaultMusic() // convert the SWIRL theme once, ahead of the first install
 	http.Serve(ln, hostCheck(port, mux))
 }

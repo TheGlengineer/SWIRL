@@ -686,7 +686,7 @@ static void draw_home(float slide) {
   float y = 96 + lines * 34 + 8;
   draw_chips(g, 32 + ox, y, 340);
   y += 30;
-  const char *desc = (g->meta && g->meta->description[0]) ? g->meta->description : NULL;
+  const char *desc = sw_lib_desc(g);
   if (desc)
     sw_text_wrap(SWF_BODY, 32 + ox, y, 15, SW_ALPHA(C_TEXT, 0xDC), desc, 330, 19, lines > 1 ? 2 : 3);
   else {
@@ -869,7 +869,8 @@ static void draw_collections(float slide) {
     sw_text(SWF_SMALL, px + 16 + tw + 10, py + 16, 12, C_FAINT, yb);
   }
   draw_chips(g, px + 16, py + 40, pw - 32);
-  const char *desc = (g->meta && g->meta->description[0]) ? g->meta->description : T(S_NO_META);
+  const char *desc = sw_lib_desc(g);
+  if (!desc) desc = T(S_NO_META);
   sw_text_wrap(SWF_BODY, px + 16, py + 68, 14, SW_ALPHA(C_TEXT, 0xDC), desc, pw - 32, 18, 3);
   sw_stat *s = sw_stat_get(g, 0);
   char buf[64];
@@ -1150,7 +1151,8 @@ static void draw_detail(float slide) {
   y += 24;
   draw_chips(g, x, y, w);
   y += 32;
-  const char *desc = (g->meta && g->meta->description[0]) ? g->meta->description : T(S_NO_META);
+  const char *desc = sw_lib_desc(g);
+  if (!desc) desc = T(S_NO_META);
   load_shots(g);
   int max_lines = g->discs > 1 ? 6 : 9;
   if (shot_count) max_lines = g->discs > 1 ? 2 : 4;

@@ -226,6 +226,37 @@ tr.child td{border-top-color:transparent}
 .colrow{display:flex;align-items:center;gap:.5rem;padding:.45rem 0;border-bottom:1px solid var(--line2);font-size:.92rem}
 .colrow span{flex:1;min-width:0}
 .count{font-weight:400;color:var(--faint)}
+.nbadge{display:inline-block;min-width:1.35em;padding:.05em .4em;margin-left:.5em;border-radius:999px;background:#fff;color:var(--orange);font-size:.78em;font-weight:800;line-height:1.35;text-align:center}
+.nbadge[hidden]{display:none}
+.btn.waiting{box-shadow:0 0 0 3px var(--orange-t),0 0 18px rgba(242,140,40,.35)}
+.pendpill{display:inline-flex;align-items:center;gap:.35rem;margin-left:.6rem;padding:.15rem .55rem;border-radius:999px;background:var(--orange-t);color:var(--orange);font-size:.74rem;font-weight:600;vertical-align:middle;white-space:nowrap}
+.pendpill svg{width:.85rem;height:.85rem;stroke:currentColor;fill:none;stroke-width:2}
+.pendpill[hidden]{display:none}
+.dropzone{position:fixed;inset:0;z-index:60;background:rgba(7,10,18,.78);display:flex;align-items:center;justify-content:center;padding:2rem}
+.dropzone[hidden]{display:none}
+.dropcard{display:flex;flex-direction:column;align-items:center;gap:.6rem;max-width:30rem;padding:2rem 2.4rem;border:2px dashed var(--orange);border-radius:1.2rem;background:var(--panel);text-align:center;color:var(--dim);pointer-events:none}
+.dropcard svg{width:3rem;height:3rem;stroke:var(--orange);fill:none;stroke-width:1.6}
+.dropcard b{color:var(--text);font-size:1.1rem}
+.news h4{margin:.2rem 0 .5rem;font-size:1rem}
+.news ul{margin:0 0 .6rem 1.1rem;padding:0}
+.news li{margin:.3rem 0;color:var(--dim);line-height:1.45}
+.news li b{color:var(--text)}
+.colrule{border:1px solid var(--line);border-radius:.6rem;padding:.2rem .75rem;margin:.6rem 0}
+.colrule summary{display:flex;gap:.6rem;align-items:center;cursor:pointer;padding:.4rem 0;font-weight:600;font-size:.9rem}
+.colrule[open] summary{border-bottom:1px solid var(--line2);margin-bottom:.5rem}
+.colrule .fields{margin-bottom:.6rem}
+.bl div.byrule{cursor:default;color:var(--dim)}
+.bl div.byrule .side{color:var(--orange)}
+.artframe{position:relative;width:min(100%,22rem);aspect-ratio:1;margin:0 auto .6rem;background:#07090F;border-radius:.5rem;overflow:hidden;border:1px solid var(--line);cursor:grab}
+.artframe canvas{width:100%;height:100%;display:block}
+.stat.label input{font:inherit;font-size:.95rem;font-weight:600;width:100%;max-width:13rem;padding:.2rem .45rem;border-radius:.4rem;background:var(--field);color:var(--text);border:1px solid var(--line2)}
+.stat.label input::placeholder{color:var(--faint);font-weight:400}
+.teach{display:flex;flex-direction:column;gap:.35rem;padding:1rem 1.1rem;border:1px dashed var(--line);border-radius:.8rem;color:var(--dim);font-size:.9rem;line-height:1.5}
+.teach b{color:var(--text)}
+.count.over{color:var(--red,#e0584a);font-weight:600}
+.lblrow{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.fields .lblrow select.inline-sel{width:auto;flex:none;font:inherit;font-size:.8rem;padding:.15rem 1.6rem .15rem .5rem;border-radius:.4rem;background-color:var(--field);color:var(--text);border:1px solid var(--line2);height:auto;min-height:0}
+label.wide .fnote{margin-top:.35rem;width:100%}
 .set{display:grid;grid-template-columns:minmax(0,1fr) minmax(9rem,13rem);gap:.7rem 1rem;align-items:center;font-size:.9rem}
 .set select,.set input{width:100%;padding:.42rem .55rem;font-size:.88rem}
 .set small{display:block;color:var(--faint);font-size:.78rem}
@@ -283,7 +314,8 @@ dialog::backdrop{background:rgba(3,5,10,.72)}
 .btnrow{display:flex;flex-wrap:wrap;gap:.4rem;margin:.5rem 0 1.1rem}
 .fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem .9rem;align-content:start}
 .fields.one{grid-template-columns:minmax(0,1fr)}
-.fields label{display:flex;flex-direction:column;gap:.3rem;font-size:.78rem;color:var(--dim);font-weight:600}
+.fields label,.fields .lbl{display:flex;flex-direction:column;gap:.3rem;font-size:.78rem;color:var(--dim);font-weight:600}
+.fields .lbl label.tiny{flex-direction:row;align-items:center;gap:.4rem;font-weight:400;color:var(--dim);font-size:.8rem}
 .fields .fnote{grid-column:1/-1;display:flex;gap:.55rem;align-items:flex-start;margin:-.2rem 0 0;padding:.6rem .75rem;border-radius:.6rem;background:var(--field);border:1px solid var(--line2);color:var(--dim);font-size:.84rem;line-height:1.45}
 .fields .fnote svg{width:1.05rem;height:1.05rem;flex:none;margin-top:.1rem;stroke:var(--orange);fill:none;stroke-width:1.8;stroke-linecap:round}
 .fields .fnote b{color:var(--text)}
@@ -549,6 +581,7 @@ html.i18n-pending body{visibility:hidden}
     <div class="spacer"></div>
     <div class="topacts">
       <button class="btn small ghost opt" id="newCard">New card from scratch</button>
+      <button class="btn small ghost opt" id="eject" hidden title="Finish every write and release the card, so it is safe to take out of the reader">Eject card</button>
       <button class="btn small ghost opt" id="quit">Close app</button>
       <button class="btn primary big" id="install" disabled title="Only folder 01 (the menu) is rebuilt. Game folders are never changed. The current menu is moved to SWIRL_BACKUP on the card first.">Install SWIRL</button>
     </div>
@@ -588,17 +621,17 @@ html.i18n-pending body{visibility:hidden}
         </div>
         <div class="grid">
           <div class="panel"><h3>New card from scratch</h3><p class="hint tight">Formats a card to FAT32 with the settings GDEMU likes, installs SWIRL and can copy your games over, all in one go.</p><div class="row" style="margin-top:.8rem"><button class="btn accent" id="newCard2">Set up a new card</button></div></div>
-          <div class="panel"><h3>Done for now?</h3><p class="hint tight">Closes SWIRL Card Manager. It also closes by itself a few minutes after this tab is gone.</p><div class="row" style="margin-top:.8rem"><button class="btn" id="quit2">Close app</button></div></div>
+          <div class="panel"><h3>Done for now?</h3><p class="hint tight">Eject releases the card once every write has settled, so it is safe to take out. Close app closes SWIRL Card Manager; it also closes by itself a few minutes after this tab is gone.</p><div class="row" style="margin-top:.8rem"><button class="btn" id="eject2" hidden>Eject card</button><button class="btn" id="quit2">Close app</button></div></div>
         </div>
       </section>
 
       <section class="view" data-view="games">
-        <div class="vhead"><div class="grow"><h2>Games</h2><p id="gamesSub">Folders 02 and up, in the order GDEMU and SWIRL list them.</p></div></div>
+        <div class="vhead"><div class="grow"><h2>Games</h2><span class="pendpill" data-pend="games,edits" hidden><svg><use href="#i-info"/></svg>Not on the Dreamcast yet</span><p id="gamesSub">Folders 02 and up, in the order GDEMU and SWIRL list them.</p></div></div>
         <div class="gamesbox" id="games"></div>
       </section>
 
       <section class="view" data-view="art">
-        <div class="vhead"><div class="grow"><h2>Art and info</h2><p>Box art, descriptions, screenshots, VMU screens and CodeBreaker for SWIRL. Your own edits from a game's Edit window always win over anything filled in here.</p></div></div>
+        <div class="vhead"><div class="grow"><h2>Art and info</h2><span class="pendpill" data-pend="edits,art,extras" hidden><svg><use href="#i-info"/></svg>Not on the Dreamcast yet</span><p>Box art, descriptions, screenshots, VMU screens and CodeBreaker for SWIRL. Your own edits from a game's Edit window always win over anything filled in here.</p></div></div>
         <div class="grid">
           <div class="panel"><h3>Online art and info</h3>
             <p class="hint tight" id="dbInfo">Downloads the community openMenu art and info databases (about 115 MB, once) and fills in games that have none. Art already on your card and your own edits are never replaced.</p>
@@ -624,7 +657,7 @@ html.i18n-pending body{visibility:hidden}
       </section>
 
       <section class="view" data-view="look">
-        <div class="vhead"><div class="grow"><h2>Look and sound</h2><p>The VMU logo, the menu music and the backdrop pictures SWIRL uses. Changes go onto the Dreamcast at the next Update SWIRL.</p></div></div>
+        <div class="vhead"><div class="grow"><h2>Look and sound</h2><span class="pendpill" data-pend="look" hidden><svg><use href="#i-info"/></svg>Not on the Dreamcast yet</span><p>The VMU logo, the menu music and the backdrop pictures SWIRL uses. Changes go onto the Dreamcast at the next Update SWIRL.</p></div></div>
         <div class="grid">
           <div class="panel"><h3>VMU logo</h3>
             <div class="media"><div class="vmu sm" id="logoNow">SWIRL logo</div><p class="hint tight" id="logoInfo">Shown on the VMU when SWIRL starts and on its System screens.</p></div>
@@ -641,7 +674,7 @@ html.i18n-pending body{visibility:hidden}
       </section>
 
       <section class="view" data-view="coll">
-        <div class="vhead"><div class="grow"><h2>Collections</h2><p>Your own groups of games, like Couch co-op. They appear in SWIRL's Collections tab after Update SWIRL.</p></div><button class="btn accent" id="colNew" disabled>New collection</button></div>
+        <div class="vhead"><div class="grow"><h2>Collections</h2><span class="pendpill" data-pend="collections" hidden><svg><use href="#i-info"/></svg>Not on the Dreamcast yet</span><p>Your own groups of games, like Couch co-op. They appear in SWIRL's Collections tab after Update SWIRL.</p></div><button class="btn accent" id="colNew" disabled>New collection</button></div>
         <div class="panel"><div id="colList" class="empty">No card selected</div></div>
       </section>
 
@@ -706,6 +739,7 @@ html.i18n-pending body{visibility:hidden}
   </main>
 </div>
 
+<div class="dropzone" id="dropZone" hidden aria-hidden="true"><div class="dropcard"><svg><use href="#i-games"/></svg><b>Drop games to add them to this card</b><span>Game folders, .cdi discs and .zip, .7z or .rar archives. For a .gdi game drop its whole folder, so the tracks come along.</span></div></div>
 <dialog id="ncDlg">
   <div class="edhead"><h3>New card from scratch</h3><span class="mono">Format to FAT32 and install SWIRL in one go</span></div>
   <div class="dbody" id="ncForm">
@@ -776,6 +810,17 @@ html.i18n-pending body{visibility:hidden}
   <div class="edhead"><h3 id="colTitle">Collection</h3></div>
   <div class="dbody">
     <div class="fields one"><label>Name<input type="text" id="colName" maxlength="30" placeholder="Couch co-op"></label></div>
+    <details class="colrule" id="colRuleBox">
+      <summary><span>Fill by rule</span><span class="count" id="colRuleSum"></span></summary>
+      <p class="hint tight">Games that match are added every time the menu is built, so new games land here by themselves. Tick games below to add more by hand.</p>
+      <div class="fields">
+        <label>Players<select id="crPlayers"><option value="0">Any</option><option value="2">2 or more</option><option value="3">3 or more</option><option value="4">4</option></select></label>
+        <label>Region<div class="checks" id="crRegions"><label><input type="checkbox" value="USA"> USA</label><label><input type="checkbox" value="EUR"> Europe</label><label><input type="checkbox" value="JPN"> Japan</label></div></label>
+        <label class="wide inline"><input type="checkbox" id="crOnline"> Online play (modem or broadband)</label>
+        <label class="wide">Genres (any of)<div class="checks" id="crGenres"></div></label>
+        <label class="wide">Accessories (any of)<div class="checks" id="crAcc"></div></label>
+      </div>
+    </details>
     <div class="row"><span class="hint tight" style="flex:1" id="colCount"></span><input type="text" id="colFilter" placeholder="Filter games" style="flex:0 1 14rem"></div>
     <div class="bl" id="colGames" style="max-height:46vh"></div>
   </div>
@@ -829,6 +874,19 @@ html.i18n-pending body{visibility:hidden}
   </div>
   <div class="edfoot"><span class="msg" id="bgMsg"></span><button class="btn" id="bgCancel">Cancel</button><button class="btn primary" id="bgSave">Use this picture</button></div>
 </dialog>
+<dialog id="artDlg" class="narrow">
+  <div class="edhead"><h3>Frame the box art</h3><span class="mono">Stored as a square, 256 x 256 on the Dreamcast</span></div>
+  <div class="dbody">
+    <div class="artframe" id="artCrop"><canvas id="artCropC" width="400" height="400"></canvas></div>
+    <p class="hint tight">Drag to move, wheel or Zoom to zoom. Fill crops the picture to a square; Fit keeps all of it with bars.</p>
+    <div class="fields">
+      <label>Zoom <input type="range" id="artZoom" min="100" max="300" value="100"></label>
+      <label>Picture<select id="artMode"><option value="fill">Fill the square (crop)</option><option value="fit">Fit the whole picture (bars)</option></select></label>
+      <label class="wide">Bar colour<div class="checks" id="artBars"><label><input type="radio" name="artBar" value="auto" checked> Match the picture's edge</label><label><input type="radio" name="artBar" value="#000000"> Black</label><label><input type="radio" name="artBar" value="#ffffff"> White</label></div></label>
+    </div>
+  </div>
+  <div class="edfoot"><span class="msg" id="artMsg"></span><button class="btn" id="artCancel">Cancel</button><button class="btn primary" id="artUse">Use this framing</button></div>
+</dialog>
 <dialog id="capDlg">
   <div class="edhead"><h3>Captured VMU screens</h3><span class="mono">Click the picture each game should use</span></div>
   <div class="dbody" id="capList"></div>
@@ -843,6 +901,7 @@ html.i18n-pending body{visibility:hidden}
     <div class="abupd">
       <label class="ablang">Language <select id="abLang"><option value="auto">Same as the system</option><option value="en">English</option><option value="de">Deutsch</option><option value="fr">Français</option><option value="es">Español</option><option value="it">Italiano</option><option value="pt">Português</option></select></label>
       <button class="btn" id="abUpd">Check for updates</button>
+      <button class="btn" id="abNews">What's new</button>
       <span class="msg" id="abUpdMsg"></span>
       <label><input type="checkbox" id="abAuto"> Check automatically once a day</label>
       <label title="Previews are test versions of what's coming next. They are only installed if you choose to."><input type="checkbox" id="abPrev"> Tell me about preview versions</label>
@@ -861,7 +920,9 @@ html.i18n-pending body{visibility:hidden}
 
       <section class="abcard"><h4><svg><use href="#i-info"/></svg>Keyboard shortcuts</h4><dl>
         <dt><kbd>F1</kbd></dt><dd>This window</dd>
-        <dt><kbd>Ctrl</kbd> <kbd>F</kbd></dt><dd>Find a game</dd>
+        <dt><kbd>Ctrl</kbd> <kbd>F</kbd></dt><dd>Find a game (<kbd>Esc</kbd> clears the search)</dd>
+        <dt><kbd>Ctrl</kbd> <kbd>U</kbd></dt><dd>Update SWIRL</dd>
+        <dt><kbd>Ctrl</kbd> <kbd>1</kbd> to <kbd>9</kbd></dt><dd>Jump to a section</dd>
         <dt><kbd>F5</kbd></dt><dd>Read the card again</dd>
         <dt><kbd>Enter</kbd></dt><dd>In a folder box: open that folder</dd>
         <dt><kbd>Esc</kbd></dt><dd>Close a window</dd>
@@ -932,6 +993,26 @@ html.i18n-pending body{visibility:hidden}
   </div>
   <div class="edfoot"><span class="msg" id="abMsg"></span><button class="btn" id="abCopy">Copy details</button><button class="btn primary" id="abClose" autofocus>Close</button></div>
 </dialog>
+<dialog id="batchDlg">
+  <div class="edhead"><h3>Edit games</h3><span class="mono" id="batchSub"></span></div>
+  <div class="dbody">
+    <p class="hint tight">Only what you set here changes. Names, art, descriptions and everything you leave on "Leave as is" stay as they are.</p>
+    <div class="fields">
+      <label>Region<select id="bRegion"><option value="">Leave as is</option><option value="USA">USA</option><option value="EUR">EUR</option><option value="JPN">JPN</option></select></label>
+      <label>VGA tag<select id="bVga"><option value="">Leave as is</option><option value="1">Show</option><option value="0">Hide</option></select></label>
+      <label>Players<select id="bPlayers"><option value="">Leave as is</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></label>
+      <label>Online<select id="bNet"><option value="">Leave as is</option><option value="0">None</option><option value="1">Modem</option><option value="2">Broadband adapter</option><option value="3">Modem or broadband</option></select></label>
+      <div class="wide lbl"><span class="lblrow">Genres <span class="count">(ticked ones are added)</span></span><div class="checks" id="bGenres"></div><label class="inline tiny"><input type="checkbox" id="bGenresClear"> Replace the genres instead of adding to them</label></div>
+      <div class="wide lbl"><span class="lblrow">Accessories <span class="count">(ticked ones are added)</span></span><div class="checks" id="bAcc"></div><label class="inline tiny"><input type="checkbox" id="bAccClear"> Replace the accessories instead of adding to them</label></div>
+    </div>
+  </div>
+  <div class="edfoot"><span class="msg" id="batchMsg"></span><button class="btn" id="batchCancel">Cancel</button><button class="btn primary" id="batchSave">Apply</button></div>
+</dialog>
+<dialog id="newsDlg" class="narrow">
+  <div class="edhead"><h3 id="newsTitle">What's new</h3><span class="mono" id="newsVer"></span></div>
+  <div class="dbody news" id="newsBody"></div>
+  <div class="edfoot"><span class="msg grow"></span><button class="btn primary" id="newsClose">Got it</button></div>
+</dialog>
 <dialog id="updDlg" class="narrow">
   <div class="edhead"><h3 id="updTitle">Update available</h3><span class="hint tight" id="updWhen"></span></div>
   <div class="dbody">
@@ -990,7 +1071,7 @@ html.i18n-pending body{visibility:hidden}
       <p class="wide fnote"><svg><use href="#i-info"/></svg><span>Region and VGA here only change what SWIRL shows. Every game boots region free and in VGA unless you change it on the Dreamcast (press <b>X</b> on a game for <b>Options</b>). A game with no VGA mode of its own needs a patch to show a picture over a VGA cable; when one is known, it is offered above.</span></p>
       <label class="wide">Genres<div class="checks" id="fGenres"></div></label>
       <label class="wide">Accessories<div class="checks" id="fAcc"></div></label>
-      <label class="wide">Description <span class="count" id="fDescCount"></span><textarea id="fDesc" maxlength="375"></textarea></label>
+      <label class="wide" for="fDesc"><span class="lblrow">Description <select id="fDescLang" class="inline-sel"><option value="en">English</option><option value="de">Deutsch</option><option value="fr">Fran&ccedil;ais</option><option value="es">Espa&ntilde;ol</option><option value="it">Italiano</option><option value="pt">Portugu&ecirc;s</option></select> <span class="count" id="fDescCount"></span></span><textarea id="fDesc" maxlength="375"></textarea><span class="fnote" id="fDescSrc" hidden><svg><use href="#i-info"/></svg><span id="fDescSrcText"></span></span></label>
     </div>
   </div>
   <div class="edfoot"><span class="msg" id="edMsg"></span><button class="btn" id="edCancel">Close</button><button class="btn primary" id="edSave">Save</button></div>
@@ -1068,7 +1149,31 @@ async function api(path, body) {
   const r = await fetch(path, opt);
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || r.statusText);
+  if (body && card && !NO_PENDING.test(path)) queuePending();
   return j;
+}
+// ---------- changes waiting for Update SWIRL ----------
+// SWIRL/menu.json on the card says what the Dreamcast's menu was built from; a scan compares. Any change the
+// window makes (a POST that is not a setting of the window itself) asks the card again, a moment later.
+const NO_PENDING = /^\/api\/(uiprefs|job|remember|report|update|app|quit|bye|peek|checksource|dbdownload|shots\/online|vmucap)/;
+let pending = { known: false, sections: [] }, pendingTimer = 0;
+const PENDING_NAMES = { games: "Games", edits: "Game edits", art: "Box art and VMU screens", collections: "Collections", look: "Look and sound", extras: "CodeBreaker, screenshots or VMU captures", version: "A newer SWIRL" }; /* t("Games") t("Game edits") t("Box art and VMU screens") t("Collections") t("Look and sound") t("CodeBreaker, screenshots or VMU captures") t("A newer SWIRL") */
+function queuePending() { clearTimeout(pendingTimer); pendingTimer = setTimeout(refreshPending, 400); }
+async function refreshPending() {
+  if (!card) return;
+  try { pending = await api(`/api/pending?root=${encodeURIComponent(card.root)}`); } catch (e) { return; }
+  renderPending();
+}
+function renderPending() {
+  const b = $("install"), n = pending.sections.length;
+  let badge = b.querySelector(".nbadge");
+  if (!badge) { badge = document.createElement("span"); badge.className = "nbadge"; b.appendChild(badge); }
+  badge.textContent = n ? String(n) : ""; badge.hidden = !n;
+  b.classList.toggle("waiting", n > 0);
+  b.title = n ? t("Changes waiting for the Dreamcast:") + " " + pending.sections.map(k => t(PENDING_NAMES[k])).join(", ") : pending.known ? t("The Dreamcast has everything that is on this card. Update SWIRL rebuilds the menu anyway.") : t("Only folder 01 (the menu) is rebuilt. Game folders are never changed. The current menu is moved to SWIRL_BACKUP on the card first.");
+  document.querySelectorAll("[data-pend]").forEach(el => { el.hidden = !el.dataset.pend.split(",").some(k => pending.sections.includes(k)); });
+  const chip = $("cardChipInfo");
+  if (chip && chip.dataset.base) chip.textContent = chip.dataset.base + (n ? " · " + tn(n, "1 change waiting", "{n} changes waiting") : "");
 }
 
 // ---------- sections ----------
@@ -1103,9 +1208,9 @@ async function loadDrives() {
   const el = $("drives");
   if (!drives.length) { el.innerHTML = `<span class="hint tight">${t("No drives found. Type the card's drive below.")}</span>`; return; }
   const gb = b => b ? (b / 1e9).toFixed(b < 1e10 ? 1 : 0) + " GB" : "";
-  el.innerHTML = drives.map(d => `<button class="drive" data-path="${esc(d.path)}">
-      <b>${esc(d.path.replace(/\\$/, ""))}</b> ${esc(d.label || "")}
-      <small>${d.hasMenu ? t("GDEMU card") : d.removable ? t("Removable drive") : t("Drive")}${d.total ? " · " + gb(d.total) + (d.fs ? " " + esc(d.fs) : "") : ""}</small></button>`).join("");
+  el.innerHTML = drives.map(d => `<button class="drive${card && d.path === card.root ? " on" : ""}" data-path="${esc(d.path)}">
+      <b>${esc(d.path.replace(/\\$/, ""))}</b> ${esc(d.cardLabel || d.label || "")}
+      <small>${d.hasMenu ? (d.cardLabel && d.label ? t("GDEMU card") + " · " + esc(d.label) : t("GDEMU card")) : d.removable ? t("Removable drive") : t("Drive")}${d.total ? " · " + gb(d.total) + (d.fs ? " " + esc(d.fs) : "") : ""}</small></button>`).join("");
   el.querySelectorAll(".drive").forEach(b => b.onclick = () => { $("root").value = b.dataset.path; scan(); });
   const guess = drives.find(d => d.hasMenu);
   if (guess && !$("root").value) { $("root").value = guess.path; scan(); }
@@ -1133,7 +1238,7 @@ async function scan() {
   edits = {}; order = null;
   try {
     const r = await api("/api/scan?root=" + encodeURIComponent(root));
-    card = r.card; swirlVersion = r.swirlVersion; scanNo++;
+    card = r.card; swirlVersion = r.swirlVersion; scanNo++; pending = r.pending || { known: false, sections: [] };
     ["games", "warnings", "backups", "duplicates", "sets"].forEach(k => { if (!Array.isArray(card[k])) card[k] = []; });
   } catch (e) {
     card = null;
@@ -1156,6 +1261,7 @@ async function scan() {
       <div class="stat"><span>${t("Games")}</span><b>${titles}</b>${extraDiscs ? `<small class="sm"> ${t("on {d} discs", { d: c.games.length })}</small>` : ""}</div>
       <div class="stat"><span>${t("With box art")}</span><b>${art}</b></div>
       <div class="stat"><span>${t("With descriptions")}</span><b>${meta}</b></div>
+      <div class="stat label"><span>${t("Card name")}</span><b class="sm"><input type="text" id="cardLabel" maxlength="24" value="${esc(c.label || "")}" placeholder="${t("Name this card")}" title="${t("A name of your own for this card, kept on the card. Shown in the drive list and at the top of the window.")}"></b></div>
     </div>
     ${(c.warnings || []).map(w => `<div class="warn">${esc(w)}</div>`).join("")}
     ${c.gaps ? `<div class="row" style="margin-top:.5rem"><button class="btn small" id="closeGaps">${t("Close the gaps (renumber the folders)")}</button></div>` : ""}
@@ -1164,6 +1270,12 @@ async function scan() {
       <div class="row" style="margin-top:.5rem"><button class="btn small" id="dedupe">${t("Remove extra copies ({gb} GB)", { gb: (c.duplicates.reduce((a, d) => a + d.bytes, 0) / 1073741824).toFixed(1) })}</button></div></div>` : ""}
     ${!c.hasBox && !c.hasIcon && c.games.length ? `<div class="warn">${t("No box art files on the card yet. Add them in Art and info, or SWIRL will show colored placeholders.")}</div>` : ""}`;
   renderGames();
+  $("cardLabel").onchange = async () => {
+    const label = $("cardLabel").value.trim();
+    try { await api("/api/cardlabel", { root: card.root, label }); card.label = label; $("cardChipName").textContent = label || card.root; $("cardChip").title = label ? card.root : t("Choose the SD card"); loadDrives(); log(label ? t("This card is now called {name}.", { name: label }) : t("The card's name was removed."), "ok"); }
+    catch (e) { log(t("Error: {msg}", { msg: e.message }), "err"); }
+  };
+  $("cardLabel").onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); $("cardLabel").blur(); } };
   if ($("dedupe")) $("dedupe").onclick = dedupe;
   if ($("closeGaps")) $("closeGaps").onclick = () => { if (confirm(t("Renumber the game folders so there are no gaps, then rebuild the menu?"))) startJob(t("Closing the gaps"), "/api/health/gaps", { root: card.root }); };
   vgaAfterScan();
@@ -1171,14 +1283,18 @@ async function scan() {
   setCount("nGames", c.games.length);
   $("cardFlag").hidden = !warnCount;
   $("cardLed").className = "led " + (warnCount || c.menuType !== "SWIRL" ? "warn" : "ok");
-  $("cardChipName").textContent = c.root;
-  $("cardChipInfo").textContent = `${c.menuType === "SWIRL" ? "SWIRL" : c.menuType === "None" ? t("No menu") : c.menuType === "Game" ? t("Game in 01") : c.menuType === "Unknown" ? t("Unreadable image in 01") : c.menuType} · ${countText}`;
+  $("cardChipName").textContent = c.label ? c.label : c.root;
+  $("cardChip").title = c.label ? c.root : t("Choose the SD card");
+  $("cardChipInfo").dataset.base = `${c.menuType === "SWIRL" ? "SWIRL" : c.menuType === "None" ? t("No menu") : c.menuType === "Game" ? t("Game in 01") : c.menuType === "Unknown" ? t("Unreadable image in 01") : c.menuType} · ${countText}`;
+  $("cardChipInfo").textContent = $("cardChipInfo").dataset.base;
   $("gamesSub").textContent = `${countText} · ${t("{n} with box art", { n: art })} · ${t("{n} with descriptions", { n: meta })}. ${t("Folders 02 and up, in the order GDEMU and SWIRL list them.")}`;
   $("fillArt").disabled = !c.games.length;
   if (view === "card" && !warnCount) show("games");
   const blocked = c.menuType === "Game" || c.menuType === "Unknown" || (!c.games.length && c.menuType === "None");
   $("install").disabled = blocked;
   $("install").textContent = c.menuType === "SWIRL" ? t("Update SWIRL") : t("Install SWIRL");
+  renderPending();
+  $("eject").hidden = $("eject2").hidden = false;
   log(blocked ? t("This card can't be updated yet (see the notes under SD card).") : c.games.length ? t("Ready. {count} found on {root}", { count: countText, root: c.root }) : t("Ready. {root} has SWIRL but no games yet. Add them in Games.", { root: c.root }));
   renderBackups();
   loadDB();
@@ -1233,13 +1349,60 @@ const langReady = api("/api/uiprefs").then(p => { uip = p; }).catch(() => {}).th
   translateDOM(document.body);
   document.documentElement.classList.remove("i18n-pending");
   syncOut(); if (card && view === "games") renderGames(); setTimeout(() => checkUpdates(false), 1500);
+  if (uip.lastRun !== "__VERSION__") setTimeout(() => showNews(true), 600);
 });
+// ---------- safe eject ----------
+async function ejectCard() {
+  if (!card) return;
+  if (busyJob()) { log(t("Wait for the current task to finish before ejecting."), "err"); return; }
+  const root = card.root, name = card.label || root;
+  $("eject").disabled = $("eject2").disabled = true;
+  log(t("Ejecting {name} ...", { name }));
+  try {
+    await api("/api/eject", { root });
+    card = null; order = null;
+    $("install").disabled = true; setNav(false); show("card");
+    $("cardLed").className = "led"; $("cardChipName").textContent = t("No card"); $("cardChipInfo").textContent = t("Choose your GDEMU SD card"); $("cardChipInfo").dataset.base = "";
+    $("cardInfo").innerHTML = `<div class="panel"><h3>${t("Safe to remove")}</h3><p class="hint tight">${esc(t("{name} was released. Take the card out of the reader and put it back in your GDEMU.", { name }))}</p></div>`;
+    $("games").innerHTML = ""; $("root").value = "";
+    $("eject").hidden = $("eject2").hidden = true;
+    document.querySelectorAll(".drive").forEach(b => b.classList.remove("on"));
+    log(t("{name} is safe to take out.", { name }), "ok");
+    setTimeout(loadDrives, 1500);
+  } catch (e) { log(t("Could not eject: {msg}", { msg: e.message }), "err"); }
+  $("eject").disabled = $("eject2").disabled = false;
+}
+$("eject").onclick = $("eject2").onclick = ejectCard;
+// ---------- what's new ----------
+// Shown once after an update (the version whose note was seen is kept in the window's preferences), and
+// from About at any time. The note is assets/whatsnew.txt: "# " headings, "- " points, "Name." in bold.
+async function showNews(auto) {
+  let n; try { n = await api("/api/whatsnew"); } catch (e) { return; }
+  if (!n.text || !n.text.trim()) { if (!auto) log(t("There is no note for this version.")); return; }
+  if (auto && document.querySelector("dialog[open]")) return;
+  const html = []; let list = [];
+  const flush = () => { if (list.length) { html.push("<ul>" + list.join("") + "</ul>"); list = []; } };
+  for (const raw of n.text.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line.startsWith("# ")) { flush(); html.push(`<h4>${esc(line.slice(2))}</h4>`); continue; }
+    const pt = line.replace(/^- /, ""); const m = pt.match(/^([^.]{2,60}\.)\s(.*)$/);
+    list.push(`<li>${m ? `<b>${esc(m[1])}</b> ${esc(m[2])}` : esc(pt)}</li>`);
+  }
+  flush();
+  $("newsBody").innerHTML = html.join(""); $("newsVer").textContent = "v" + n.version;
+  uip.lastRun = "__VERSION__"; saveUIP();
+  $("newsDlg").showModal();
+}
+$("newsClose").onclick = () => $("newsDlg").close();
+$("abNews").onclick = () => showNews(false);
 function saveUIP() { api("/api/uiprefs", uip).catch(() => {}); }
 function renderGames() {
   const c = card;
   const tools = `<div class="toolbar">
       <button class="btn small accent" id="addGames">${t("Add games")}</button>
       <button class="btn small" id="rmGames" disabled>${t("Remove selected")}</button>
+      <button class="btn small" id="batchEdit" disabled>${t("Edit selected")}</button>
       <button class="btn small accent" id="saveOrder" hidden>${t("Save new order")}</button>
       <button class="btn small" id="undoOrder" hidden>${t("Undo order")}</button>
       <button class="btn small" id="tidyNames" hidden>${t("Tidy names")}</button>
@@ -1257,7 +1420,7 @@ function renderGames() {
     wireTools();
     $("addGames2").onclick = () => $("addGames").onclick();
     $("games").querySelector(".seg").hidden = $("gSize").hidden = true;
-    ["rmGames", "saveOrder", "undoOrder", "tidyNames", "arrangeDiscs", "fixVga"].forEach(id => { if ($(id)) $(id).hidden = id !== "rmGames" ? true : $(id).hidden; });
+    ["rmGames", "batchEdit", "saveOrder", "undoOrder", "tidyNames", "arrangeDiscs", "fixVga"].forEach(id => { if ($(id)) $(id).hidden = id !== "rmGames" && id !== "batchEdit" ? true : $(id).hidden; });
     return;
   }
   if (!order) order = c.games.map(g => g.folder);
@@ -1357,8 +1520,10 @@ function renderGames() {
   $("arrangeDiscs").title = apart.map(s => s.name).join(", ");
   $("arrangeDiscs").onclick = () => startJob(t("Putting discs together"), "/api/games/arrange", { root: card.root });
   const sels = () => [...$("games").querySelectorAll(".sel:checked")].map(x => x.value);
-  $("games").querySelectorAll(".sel").forEach(x => x.onchange = () => { $("rmGames").disabled = !sels().length; });
-  if ($("selAll")) $("selAll").onchange = e => { $("games").querySelectorAll(".sel").forEach(x => x.checked = e.target.checked); $("rmGames").disabled = !sels().length; };
+  const selChanged = () => { const n = sels().length; $("rmGames").disabled = !n; $("batchEdit").disabled = !n || changed; $("batchEdit").textContent = n > 1 ? t("Edit {n} games", { n }) : t("Edit selected"); };
+  $("games").querySelectorAll(".sel").forEach(x => x.onchange = selChanged);
+  if ($("selAll")) $("selAll").onchange = e => { $("games").querySelectorAll(".sel").forEach(x => { x.checked = e.target.checked; const tile = x.closest(".gtile"); if (tile) tile.classList.toggle("sel", x.checked); }); selChanged(); };
+  $("batchEdit").onclick = () => openBatch(sels());
   $("rmGames").onclick = () => {
     const list = sels();
     const names = list.map(f => `${f}  ${byFolder[f].name}`).join("\n");
@@ -1390,6 +1555,32 @@ function renderGames() {
   });
   wireTools();
 }
+// ---------- batch edit ----------
+let batchFolders = [];
+function openBatch(folders) {
+  batchFolders = folders;
+  const byFolder = Object.fromEntries(card.games.map(g => [g.folder, g]));
+  $("batchSub").textContent = tn(folders.length, "1 game", "{n} games") + ": " + folders.slice(0, 4).map(f => (byFolder[f] || {}).name || f).join(", ") + (folders.length > 4 ? ", ..." : "");
+  ["bRegion", "bVga", "bPlayers", "bNet"].forEach(id => $(id).value = "");
+  checks($("bGenres"), GENRES, 0, "bg"); checks($("bAcc"), ACCS, 0, "ba");
+  $("bGenresClear").checked = $("bAccClear").checked = false; $("batchMsg").textContent = "";
+  $("batchDlg").showModal();
+}
+$("batchCancel").onclick = () => $("batchDlg").close();
+$("batchSave").onclick = async () => {
+  const body = { root: card.root, folders: batchFolders, region: $("bRegion").value, genres: readBits(GENRES, "bg"), acc: readBits(ACCS, "ba"), clearGenres: $("bGenresClear").checked, clearAcc: $("bAccClear").checked };
+  if ($("bVga").value !== "") body.vga = $("bVga").value === "1";
+  if ($("bPlayers").value !== "") body.players = +$("bPlayers").value;
+  if ($("bNet").value !== "") body.network = +$("bNet").value;
+  if (!body.region && body.vga === undefined && body.players === undefined && body.network === undefined && !body.genres && !body.acc && !body.clearGenres && !body.clearAcc) { $("batchMsg").textContent = t("Set at least one thing to change."); return; }
+  $("batchSave").disabled = true; $("batchMsg").textContent = t("Saving...");
+  try {
+    const r = await api("/api/games/batch", body);
+    $("batchDlg").close(); await scan();
+    log(tn(r.changed, "Changed 1 game. Click Update SWIRL to put it on the Dreamcast.", "Changed {n} games. Click Update SWIRL to put them on the Dreamcast."), "ok");
+  } catch (e) { $("batchMsg").textContent = t("Error: {msg}", { msg: e.message }); }
+  $("batchSave").disabled = false;
+};
 // ---------- tidy names ----------
 function openTidy() {
   const list = card.games.filter(g => g.suggested);
@@ -1416,6 +1607,59 @@ function wireTools() {
     startJob(t("Adding games"), "/api/games/add", { root: card.root, sources: paths, dats: $("dats").value.trim() });
   });
 }
+
+// ---------- games dropped onto the window ----------
+// The browser never tells a page where a dropped file lives, so the files are streamed to Card Manager's
+// staging folder and the normal Add games run takes them from there (dropadd.go).
+const DROP_LOOSE = /\.(cdi|zip|7z|rar)$/i, DROP_FOLDER_ONLY = /\.(gdi|mds|mdf|ccd|img|sub|cue|bin|raw|iso)$/i;
+let dropDepth = 0, dropAbort = null;
+function dropAllowed() { return !!card && !busyJob() && !document.querySelector("dialog[open]") && !$("install").disabled; }
+window.addEventListener("dragenter", e => { if (!dropAllowed() || ![...e.dataTransfer.types].includes("Files")) return; e.preventDefault(); dropDepth++; $("dropZone").hidden = false; });
+window.addEventListener("dragover", e => { if (!$("dropZone").hidden) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; } });
+window.addEventListener("dragleave", e => { if ($("dropZone").hidden) return; if (--dropDepth <= 0) { dropDepth = 0; $("dropZone").hidden = true; } });
+window.addEventListener("drop", async e => {
+  if ($("dropZone").hidden) return;
+  e.preventDefault(); dropDepth = 0; $("dropZone").hidden = true;
+  const items = [...e.dataTransfer.items].map(i => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+  if (!items.length) return;
+  const files = []; // { rel, file }
+  const walk = (entry, prefix) => new Promise(res => {
+    if (entry.isFile) { entry.file(f => { files.push({ rel: prefix + entry.name, file: f }); res(); }, () => res()); return; }
+    const reader = entry.createReader(), all = [];
+    const next = () => reader.readEntries(async ents => { if (!ents.length) { for (const en of all) await walk(en, prefix + entry.name + "/"); res(); return; } all.push(...ents); next(); }, () => res());
+    next();
+  });
+  for (const it of items) await walk(it, "");
+  const loose = files.filter(f => !f.rel.includes("/"));
+  const badLoose = loose.filter(f => DROP_FOLDER_ONLY.test(f.rel) || !DROP_LOOSE.test(f.rel));
+  if (badLoose.length) { log(t("Drop a game's whole folder (so a .gdi comes with its tracks), a .cdi disc, or a .zip, .7z or .rar archive. Not added: {names}", { names: badLoose.slice(0, 5).map(f => f.rel).join(", ") }), "err"); if (badLoose.length === files.length) return; }
+  const send = files.filter(f => !badLoose.includes(f));
+  const total = send.reduce((a, f) => a + f.file.size, 0);
+  let id;
+  try { id = (await api("/api/drop/open", {})).id; } catch (err) { log(t("Error: {msg}", { msg: err.message }), "err"); return; }
+  $("jobTitle").textContent = t("Adding games"); $("jobStage").textContent = t("Receiving the dropped files"); $("jobBar").style.width = "0";
+  $("jobLog").innerHTML = `<div>${esc(tn(send.length, "1 file, {gb}", "{n} files, {gb}", { gb: fmtSize(total) }))}</div><div class="hint">${esc(t("A drop is copied to this PC first and then onto the card. For a very large game, Add games from its folder is quicker."))}</div>`;
+  $("jobClose").disabled = true; $("jobCancel").hidden = false; $("jobMsg").textContent = t("Keep the card in the reader until this finishes.");
+  jobKind = "drop"; dropAbort = new AbortController();
+  $("jobDlg").showModal();
+  let done = 0;
+  try {
+    for (const f of send) {
+      const r = await fetch(`/api/drop/file?id=${id}&path=${encodeURIComponent(f.rel)}`, { method: "PUT", body: f.file, headers: { "X-Swirl-Token": TOKEN }, signal: dropAbort.signal });
+      if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || r.statusText); }
+      done += f.file.size; $("jobBar").style.width = Math.round(100 * done / Math.max(1, total)) + "%";
+      $("jobStage").textContent = t("Receiving the dropped files ({pct}%)", { pct: Math.round(100 * done / Math.max(1, total)) });
+    }
+  } catch (err) {
+    dropAbort = null; api("/api/drop/discard", { id }).catch(() => {});
+    $("jobStage").textContent = err.name === "AbortError" ? t("Stopped") : t("Stopped"); $("jobLog").innerHTML += `<div class="err">${esc(err.name === "AbortError" ? t("The drop was cancelled. Nothing was changed.") : t("Error: {msg}", { msg: err.message }))}</div>`;
+    $("jobCancel").hidden = true; $("jobClose").disabled = false; $("jobMsg").textContent = t("Nothing else was changed.");
+    return;
+  }
+  dropAbort = null;
+  $("jobDlg").close();
+  startJob(t("Adding games"), "/api/drop/add", { root: card.root, id, dats: $("dats").value.trim() });
+});
 
 // ---------- background tasks ----------
 let jobPoll = null;
@@ -1445,12 +1689,13 @@ $("jobClose").onclick = async () => {
   if (wasCapture && caps.length) { renderCaps(); $("capDlg").showModal(); }
 };
 $("jobCancel").onclick = async () => {
+  if (dropAbort) { dropAbort.abort(); return; }
   if (!confirm(t("Stop the backup? What was copied so far is kept, and running it again with Update finishes it."))) return;
   $("jobCancel").disabled = true; $("jobStage").textContent = t("Stopping");
   try { await api("/api/job/cancel", {}); } catch (e) {}
   setTimeout(() => $("jobCancel").disabled = false, 1500);
 };
-$("jobDlg").addEventListener("cancel", e => { if (jobPoll) e.preventDefault(); });
+$("jobDlg").addEventListener("cancel", e => { if (jobPoll || dropAbort) e.preventDefault(); });
 
 // ---------- file browser ----------
 const IC = {
@@ -1668,10 +1913,15 @@ async function loadExtras() {
   ["healthGo", "previewGo", "colNew", "musicPick", "cbPick", "shotGo"].forEach(id => $(id).disabled = false);
   try { colls = await api("/api/collections?root=" + encodeURIComponent(card.root)) || []; } catch (e) { colls = []; }
   $("colList").className = "";
-  $("colList").innerHTML = colls.length ? colls.map((c, i) => `<div class="colrow"><span>${esc(c.name)} <span class="count">${tn((c.products || []).length, "1 game", "{n} games")}</span></span><button class="btn small" data-ce="${i}">${t("Edit")}</button><button class="btn small" data-cd="${i}">${t("Delete")}</button></div>`).join("")
-    : `<p class="hint tight">${t("No collections yet. Click New collection to make one.")}</p>`;
+  $("colList").innerHTML = colls.length ? colls.map((c, i) => `<div class="colrow"><span>${esc(c.name)} <span class="count">${tn((c.products || []).length, "1 game", "{n} games")}${c.rule && !ruleEmpty(c.rule) ? ` · ${t("rule:")} ${esc(ruleSummary(c.rule))}` : ""}</span></span><button class="btn small" data-ce="${i}">${t("Edit")}</button><button class="btn small" data-cd="${i}">${t("Delete")}</button></div>`).join("")
+    : `<div class="teach"><b>${t("No collections yet")}</b><span>${t("A collection is a tab of its own in SWIRL. Pick games by hand, or give it a rule and new games sort themselves in. Try one:")}</span>
+      <div class="row" style="margin-top:.5rem;flex-wrap:wrap;gap:.5rem"><button class="btn small accent" data-cex="coop">${t("Couch co-op (2 or more players)")}</button><button class="btn small accent" data-cex="racing">${t("Racing")}</button><button class="btn small accent" data-cex="online">${t("Online play")}</button><button class="btn small" data-cex="blank">${t("Start from scratch")}</button></div></div>`;
   setCount("nColl", colls.length);
   $("colList").querySelectorAll("[data-ce]").forEach(b => b.onclick = () => openCollection(+b.dataset.ce));
+  $("colList").querySelectorAll("[data-cex]").forEach(b => b.onclick = () => {
+    const ex = { coop: { name: t("Couch co-op"), rule: { minPlayers: 2 } }, racing: { name: t("Racing"), rule: { genres: 1 << 1 } }, online: { name: t("Online play"), rule: { online: true } }, blank: { name: "" } }[b.dataset.cex];
+    openCollection(-1, ex);
+  });
   $("colList").querySelectorAll("[data-cd]").forEach(b => b.onclick = async () => {
     if (!confirm(t("Delete the collection {name}? The games stay on the card.", { name: colls[+b.dataset.cd].name }))) return;
     const next = colls.filter((_, i) => i !== +b.dataset.cd);
@@ -1705,31 +1955,70 @@ async function loadExtras() {
   const withShots = card.games.filter(g => g.shots).length;
   $("shotInfo").textContent = t("{n} of {total} games have screenshots. They show on each game's detail screen in SWIRL.", { n: withShots, total: card.games.length });
 }
-function openCollection(i) {
+// a collection holds the games you tick and, since 2.17, the games its rule finds (smartcol.go)
+let colRuleHits = new Set(), colRuleTimer = 0, colRuleGen = 0;
+function readRule() {
+  return { genres: readBits(GENRES, "cg"), minPlayers: +$("crPlayers").value, online: $("crOnline").checked, accessories: readBits(ACCS, "ca"),
+    regions: [...$("crRegions").querySelectorAll("input:checked")].map(x => x.value) };
+}
+function ruleEmpty(r) { return !r || (!r.genres && !r.minPlayers && !r.online && !r.accessories && !(r.regions || []).length); }
+function ruleSummary(r) {
+  if (ruleEmpty(r)) return "";
+  const parts = [];
+  if (r.genres) parts.push(GENRES.filter((_, i) => r.genres & (1 << i)).map(x => t(x)).join(", "));
+  if (r.minPlayers) parts.push(r.minPlayers === 4 ? t("4 players") : t("{n} or more players", { n: r.minPlayers }));
+  if (r.online) parts.push(t("online"));
+  if (r.accessories) parts.push(ACCS.filter((_, i) => r.accessories & (1 << i)).map(x => t(x)).join(", "));
+  if ((r.regions || []).length) parts.push(r.regions.join("/"));
+  return parts.join(" · ");
+}
+function openCollection(i, preset) {
   colEdit = i;
-  const c = i >= 0 ? colls[i] : { name: "", products: [] };
-  colPick = new Set(c.products || []);
+  const c = i >= 0 ? colls[i] : Object.assign({ name: "", products: [] }, preset || {});
+  colPick = new Set(c.products || []); colRuleHits = new Set();
   $("colTitle").textContent = i >= 0 ? t("Edit collection") : t("New collection");
   $("colName").value = c.name; $("colFilter").value = ""; $("colMsg").textContent = "";
+  const r = c.rule || {};
+  checks($("crGenres"), GENRES, r.genres || 0, "cg"); checks($("crAcc"), ACCS, r.accessories || 0, "ca");
+  $("crPlayers").value = String(r.minPlayers || 0); $("crOnline").checked = !!r.online;
+  $("crRegions").querySelectorAll("input").forEach(x => x.checked = (r.regions || []).includes(x.value));
+  $("colRuleBox").open = !ruleEmpty(r);
+  $("colRuleBox").querySelectorAll("input,select").forEach(x => x.onchange = ruleChanged);
   renderColGames();
+  ruleChanged();
   $("colDlg").showModal();
+}
+function ruleChanged() {
+  const r = readRule(); $("colRuleSum").textContent = ruleSummary(r);
+  clearTimeout(colRuleTimer);
+  if (ruleEmpty(r)) { colRuleHits = new Set(); renderColGames(); return; }
+  const gen = ++colRuleGen;
+  colRuleTimer = setTimeout(async () => {
+    try { const res = await api("/api/collections/preview", { root: card.root, rule: r }); if (gen !== colRuleGen) return; colRuleHits = new Set(res.products || []); }
+    catch (e) { colRuleHits = new Set(); }
+    renderColGames();
+  }, 250);
 }
 function renderColGames() {
   const f = $("colFilter").value.trim().toLowerCase();
   const seen = new Set();
   const games = card.games.filter(g => g.product && !seen.has(g.product) && seen.add(g.product)).sort((a, b) => a.name.localeCompare(b.name));
-  $("colGames").innerHTML = games.filter(g => !f || g.name.toLowerCase().includes(f)).map(g => `<div data-p="${esc(g.product)}"><input type="checkbox" ${colPick.has(g.product) ? "checked" : ""}><span>${esc(g.name)}</span><span class="side">${esc(g.product)}</span></div>`).join("");
-  $("colGames").querySelectorAll("div[data-p]").forEach(d => d.onclick = () => {
+  $("colGames").innerHTML = games.filter(g => !f || g.name.toLowerCase().includes(f)).map(g => {
+    const byRule = colRuleHits.has(g.product) && !colPick.has(g.product);
+    return `<div data-p="${esc(g.product)}" class="${byRule ? "byrule" : ""}"><input type="checkbox" ${colPick.has(g.product) || byRule ? "checked" : ""} ${byRule ? "disabled" : ""}><span>${esc(g.name)}</span><span class="side">${byRule ? t("by rule") : esc(g.product)}</span></div>`; }).join("");
+  $("colGames").querySelectorAll("div[data-p]:not(.byrule)").forEach(d => d.onclick = () => {
     const p = d.dataset.p; colPick.has(p) ? colPick.delete(p) : colPick.add(p); renderColGames();
   });
-  $("colCount").textContent = t("{n} games picked", { n: colPick.size });
+  const byRule = [...colRuleHits].filter(p => !colPick.has(p)).length;
+  $("colCount").textContent = byRule ? t("{n} games picked, {m} more by the rule", { n: colPick.size, m: byRule }) : t("{n} games picked", { n: colPick.size });
 }
 $("colFilter").oninput = renderColGames;
 $("colNew").onclick = () => openCollection(-1);
 $("colCancel").onclick = () => $("colDlg").close();
 $("colSave").onclick = async () => {
   const next = colls.slice();
-  const c = { name: $("colName").value.trim(), products: [...colPick] };
+  const r = readRule();
+  const c = { name: $("colName").value.trim(), products: [...colPick], rule: ruleEmpty(r) ? undefined : r };
   if (colEdit >= 0) next[colEdit] = c; else next.push(c);
   try { colls = await api("/api/collections", { root: card.root, collections: next }); $("colDlg").close(); loadExtras(); log(t("Collection saved. Click Update SWIRL to put it on the Dreamcast."), "ok"); }
   catch (e) { $("colMsg").textContent = t("Error: {msg}", { msg: e.message }); }
@@ -1820,7 +2109,7 @@ async function loadBg() {
   if (!card) return;
   let list = [];
   try { list = (await api("/api/bg?root=" + encodeURIComponent(card.root))).pictures || []; } catch (e) {}
-  $("bgList").innerHTML = list.map(p => `<div class="bgitem"><img src="/api/bg/thumb?root=${encodeURIComponent(card.root)}&n=${p.n}&t=${TOKEN}&v=${Date.now()}" alt=""><div class="nm">${esc(p.name)}</div><div class="sub">${t("Dim {n} of 10", { n: p.dim })}</div>
+  $("bgList").innerHTML = !list.length ? `<div class="teach"><b>${t("No pictures yet")}</b><span>${t("A photo or a wallpaper of yours behind the menu. Pick Add a picture, frame it, and choose how much SWIRL darkens it so the text stays readable. 640 x 480 or larger looks best on the TV.")}</span></div>` : list.map(p => `<div class="bgitem"><img src="/api/bg/thumb?root=${encodeURIComponent(card.root)}&n=${p.n}&t=${TOKEN}&v=${Date.now()}" alt=""><div class="nm">${esc(p.name)}</div><div class="sub">${t("Dim {n} of 10", { n: p.dim })}</div>
     <div class="acts"><button class="btn small" data-bgedit="${p.n}">${t("Replace")}</button><button class="btn small" data-bgrm="${p.n}">${t("Remove")}</button></div></div>`).join("");
   $("bgAddBtn").classList.toggle("disabled", list.length >= 8);
   $("bgFile").disabled = list.length >= 8;
@@ -2048,7 +2337,7 @@ function renderBackups() {
   const list = Array.isArray(card?.backupList) && card.backupList.length ? card.backupList
     : (card?.backups || []).map(b => ({ name: b, kind: b.startsWith("removed_") ? "removed" : "menu", label: "", pinned: false }));
   setCount("nBackups", list.length);
-  if (!list.length) { $("backups").innerHTML = `<div class="empty">${t("No backups yet")}</div>`; return; }
+  if (!list.length) { $("backups").className = ""; $("backups").innerHTML = `<div class="teach"><b>${t("Nothing kept yet")}</b><span>${t("Every Update SWIRL keeps the menu it replaces here, so you can go back. Games you remove wait here too, until you delete them to free the space.")}</span></div>`; return; }
   $("backups").className = "";
   $("backups").innerHTML = list.map(b => {
     const note = b.note ? `<br><small style="color:var(--yellow)">${t("Cannot be restored: {why}", { why: esc(b.note) })}</small>` : "";
@@ -2118,7 +2407,9 @@ async function openEditor(folder) {
   }
   $("fPlayers").value = String(Math.min(4, m.players || 0)); $("fVmu").value = m.vmuBlocks || 0; $("fNet").value = String(m.network || 0);
   checks($("fGenres"), GENRES, m.genre || 0, "g"); checks($("fAcc"), ACCS, m.accessories || 0, "a");
-  $("fDesc").value = m.description || ""; $("fDescCount").textContent = `${$("fDesc").value.length} / 375`;
+  ed.descs = { en: m.description || "" }; ed.descPack = (d.descs && d.descs.pack) || {}; ed.descLang = "en";
+  for (const l of DESC_LANGS) ed.descs[l] = (d.descs && d.descs.own && d.descs.own[l]) || "";
+  $("fDescLang").value = "en"; showDescLang();
   $("edBoxDisc").hidden = !d.hasDiscArt;
   $("edMsg").textContent = d.metaFound ? "" : t("No info in META.DAT for this serial yet. Anything you enter here will be added.");
   showImg($("edBox"), artURL("box"), d.hasDiscArt ? t("No box art. Try Use disc artwork.") : t("No box art"));
@@ -2128,8 +2419,85 @@ async function openEditor(folder) {
 }
 $("fVgaApply").onclick = async () => { $("fVgaApply").disabled = true; try { const r = await api("/api/vga/patch", { root: card.root, folder: ed.folder }); log(t("{name}: VGA patch applied ({n} sectors, undo saved).", { name: $("edTitle").textContent, n: r.sectors }), "ok"); $("editor").close(); scan(); } catch (e) { log("VGA patch: " + e.message, "err"); } $("fVgaApply").disabled = false; };
 $("fVgaRemove").onclick = async () => { $("fVgaRemove").disabled = true; try { await api("/api/vga/unpatch", { root: card.root, folder: ed.folder }); log(t("{name}: VGA patch removed, original bytes restored.", { name: $("edTitle").textContent }), "ok"); $("editor").close(); scan(); } catch (e) { log("VGA patch: " + e.message, "err"); } $("fVgaRemove").disabled = false; };
-$("fDesc").oninput = () => { $("fDescCount").textContent = `${$("fDesc").value.length} / 375`; };
-$("edBoxFile").onchange = async () => { const u = await readFile($("edBoxFile")); if (!u) return; ed.box = u; ed.boxDisc = false; ed.clearBox = false; showImg($("edBox"), u, ""); $("edMsg").textContent = t("New box art will be saved."); };
+const DESC_LANGS = ["de", "fr", "es", "it", "pt"];
+// The description box holds one language at a time: English is META.DAT, the others are the owner's own text
+// or, shown greyed as a placeholder, the translation pack built into Card Manager.
+function descBytes(v) { return new TextEncoder().encode(v).length; }
+function showDescLang() {
+  const l = ed.descLang, own = ed.descs[l] || "", pack = l === "en" ? "" : (ed.descPack[l] || "");
+  $("fDesc").value = own;
+  $("fDesc").placeholder = pack || (l === "en" ? "" : t("No translation yet; SWIRL shows the English for this game."));
+  $("fDescSrc").hidden = l === "en";
+  $("fDescSrcText").textContent = own ? t("Your own text for this language. Clear it to go back to the built in translation.") : (pack ? t("Built in translation, shown unless you write your own here.") : t("Write a description in this language to show it in SWIRL."));
+  descCount();
+}
+function descCount() {
+  const v = $("fDesc").value, n = ed.descLang === "en" ? v.length : descBytes(v);
+  $("fDescCount").textContent = `${n} / 375`; $("fDescCount").classList.toggle("over", n > 375);
+}
+$("fDescLang").onchange = () => { ed.descLang = $("fDescLang").value; showDescLang(); };
+$("fDesc").oninput = () => { ed.descs[ed.descLang] = $("fDesc").value; descCount(); if (ed.descLang !== "en") showDescSrc(); };
+function showDescSrc() { const own = ed.descs[ed.descLang]; $("fDescSrcText").textContent = own ? t("Your own text for this language. Clear it to go back to the built in translation.") : (ed.descPack[ed.descLang] ? t("Built in translation, shown unless you write your own here.") : t("Write a description in this language to show it in SWIRL.")); }
+$("edBoxFile").onchange = async () => { const u = await readFile($("edBoxFile")); $("edBoxFile").value = ""; if (!u) return; openArtFrame(u); };
+// ---------- framing box art ----------
+// A scan or a photo is rarely square; the Dreamcast shows a square. The owner frames it here instead of
+// getting it squashed.
+let artSrc = null, artOff = { x: 0, y: 0 }, artDrag = null;
+function openArtFrame(u) {
+  const img = new Image();
+  img.onload = () => {
+    artSrc = img; artOff = { x: 0, y: 0 }; $("artZoom").value = 100; $("artMsg").textContent = "";
+    const ratio = img.width / img.height;
+    $("artMode").value = ratio > 1.25 || ratio < 0.8 ? "fit" : "fill";
+    if (img.width < 256 || img.height < 256) $("artMsg").textContent = t("This picture is smaller than 256 x 256, so it will look soft on the TV.");
+    $("artDlg").showModal(); artDraw();
+  };
+  img.onerror = () => log(t("SWIRL can't read this picture."), "err");
+  img.src = u;
+}
+function artBarColour() {
+  const v = document.querySelector("input[name=artBar]:checked").value;
+  if (v !== "auto") return v;
+  const c = document.createElement("canvas"); c.width = c.height = 8; const g = c.getContext("2d");
+  g.drawImage(artSrc, 0, 0, 8, 8); const d = g.getImageData(0, 0, 8, 8).data; let r = 0, gg = 0, b = 0, n = 0;
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) { if (x > 0 && x < 7 && y > 0 && y < 7) continue; const i = (y * 8 + x) * 4; r += d[i]; gg += d[i + 1]; b += d[i + 2]; n++; }
+  return `rgb(${Math.round(r / n)},${Math.round(gg / n)},${Math.round(b / n)})`;
+}
+// draws the framed picture at size px into a square canvas
+function artRender(size) {
+  const c = document.createElement("canvas"); c.width = c.height = size; const g = c.getContext("2d");
+  const z = +$("artZoom").value / 100, iw = artSrc.width, ih = artSrc.height;
+  g.fillStyle = artBarColour(); g.fillRect(0, 0, size, size);
+  if ($("artMode").value === "fit") {
+    const s = Math.min(size / iw, size / ih) * z, w = iw * s, h = ih * s;
+    const x = Math.max(Math.min((size - w) / 2 - artOff.x * s, 0), size - w), y = Math.max(Math.min((size - h) / 2 - artOff.y * s, 0), size - h);
+    g.drawImage(artSrc, w <= size ? (size - w) / 2 : x, h <= size ? (size - h) / 2 : y, w, h);
+  } else {
+    const side = Math.min(iw, ih) / z;
+    const x = Math.max(0, Math.min(iw - side, (iw - side) / 2 + artOff.x)), y = Math.max(0, Math.min(ih - side, (ih - side) / 2 + artOff.y));
+    g.drawImage(artSrc, x, y, side, side, 0, 0, size, size);
+  }
+  return c;
+}
+function artDraw() { if (!artSrc) return; const g = $("artCropC").getContext("2d"); g.clearRect(0, 0, 400, 400); g.drawImage(artRender(400), 0, 0); }
+["artZoom", "artMode"].forEach(id => $(id).oninput = artDraw);
+document.querySelectorAll("input[name=artBar]").forEach(r => r.onchange = artDraw);
+$("artCrop").onpointerdown = e => { artDrag = { x: e.clientX, y: e.clientY, ox: artOff.x, oy: artOff.y }; $("artCrop").setPointerCapture(e.pointerId); };
+$("artCrop").onpointermove = e => {
+  if (!artDrag || !artSrc) return;
+  const z = +$("artZoom").value / 100, k = ($("artMode").value === "fit" ? Math.max(artSrc.width, artSrc.height) : Math.min(artSrc.width, artSrc.height)) / z / $("artCrop").clientWidth;
+  artOff = { x: artDrag.ox - (e.clientX - artDrag.x) * k, y: artDrag.oy - (e.clientY - artDrag.y) * k };
+  artDraw();
+};
+$("artCrop").onpointerup = $("artCrop").onpointercancel = () => { artDrag = null; };
+$("artCrop").onwheel = e => { e.preventDefault(); $("artZoom").value = Math.max(100, Math.min(300, +$("artZoom").value - Math.sign(e.deltaY) * 10)); artDraw(); };
+$("artCancel").onclick = () => $("artDlg").close();
+$("artUse").onclick = () => {
+  if (!artSrc || !ed) return;
+  const u = artRender(512).toDataURL("image/png");
+  ed.box = u; ed.boxDisc = false; ed.clearBox = false; showImg($("edBox"), u, ""); $("edMsg").textContent = t("New box art will be saved.");
+  $("artDlg").close();
+};
 $("edBoxDisc").onclick = () => { ed.boxDisc = true; ed.box = null; ed.clearBox = false; showImg($("edBox"), artURL("disc"), t("Disc artwork unreadable")); $("edMsg").textContent = t("The disc artwork will be used."); };
 $("edBoxClear").onclick = () => { ed.clearBox = true; ed.box = null; ed.boxDisc = false; $("edBox").textContent = t("Box art edit removed"); $("edMsg").textContent = t("Your box art edit will be removed."); };
 $("edVmuArt").onclick = () => { ed.vmuArt = true; ed.vmu = null; ed.clearVmu = false; $("edVmu").textContent = t("Made from box art when you save"); };
@@ -2140,7 +2508,8 @@ $("edCancel").onclick = () => { $("editor").close(); scan(); };
 $("edSave").onclick = async () => {
   const body = { root: card.root, folder: ed.folder, name: $("fName").value, serial: $("fSerial").value, region: $("fRegion").value,
     vga: $("fVga").checked, date: $("fDate").value,
-    meta: { players: +$("fPlayers").value, vmuBlocks: +$("fVmu").value, network: +$("fNet").value, genre: readBits(GENRES, "g"), accessories: readBits(ACCS, "a"), description: $("fDesc").value },
+    meta: { players: +$("fPlayers").value, vmuBlocks: +$("fVmu").value, network: +$("fNet").value, genre: readBits(GENRES, "g"), accessories: readBits(ACCS, "a"), description: ed.descs.en || "" },
+    desc: Object.fromEntries(DESC_LANGS.map(l => [l, ed.descs[l] || ""])),
     box: ed.box || "", boxDisc: ed.boxDisc, clearBox: ed.clearBox, vmu: ed.vmu || "", vmuArt: ed.vmuArt, clearVmu: ed.clearVmu };
   $("edSave").disabled = true; $("edMsg").textContent = t("Saving...");
   try {
@@ -2448,7 +2817,18 @@ document.addEventListener("keydown", e => {
     e.preventDefault();
     if (view !== "games") show("games");
     setTimeout(() => { const f = $("gFilter"); if (f) { f.focus(); f.select(); } }, 30);
+    return;
   }
+  if (document.querySelector("dialog[open]")) return;
+  // Ctrl+U: Update SWIRL (the button's own checks and confirmation apply); Ctrl+1 to Ctrl+9: the sections
+  if ((e.ctrlKey || e.metaKey) && (e.key === "u" || e.key === "U")) { e.preventDefault(); if (!$("install").disabled) $("install").click(); return; }
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key >= "1" && e.key <= "9") {
+    const btns = [...document.querySelectorAll("#nav button[data-view]")], b = btns[+e.key - 1];
+    if (b && !b.disabled) { e.preventDefault(); show(b.dataset.view); }
+    return;
+  }
+  // Escape in the Find box clears it
+  if (e.key === "Escape" && document.activeElement && document.activeElement.id === "gFilter" && gFilter) { gFilter = ""; renderGames(); setTimeout(() => $("gFilter").focus(), 30); }
 });
 
 // ---------- updates ----------

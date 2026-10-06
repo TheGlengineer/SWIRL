@@ -14,6 +14,11 @@
 
 int db_load_DAT(void);
 int db_get_meta(const char *id, struct db_item **item);
+/* SWIRL 2.17: the description file of a language (META_DE.DAT ...), kept beside the English database.
+   db_load_lang(NULL or "") unloads; 0 loaded (or already loaded), -1 no such file, -2 unusable (W22). */
+int db_load_lang(const char *name);
+void db_unload_lang(void);
+const char *db_get_desc_lang(const char *id); /* the description in the loaded language, NULL when none */
 
 const char *db_format_nplayers_str(int nplayers);
 const char *db_format_vmu_blocks_str(int num_blocks);
