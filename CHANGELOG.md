@@ -3,6 +3,20 @@
 SWIRL (the menu) and SWIRL Card Manager share one version number. Card Manager patch releases (2.11.1)
 may ship without menu changes; the menu then keeps its major.minor version (2.11).
 
+## [2.17.0]
+
+Backdrops, descriptions in your language, and a Card Manager batch. This release is 2.17.0-beta.2 as it stood on the preview channel for three and a half weeks with no reports, plus this entry; the two beta entries below say what changed and how it was tested. In short: eight backdrops behind the menu (Seasonal follows the clock and the month, your own pictures come from Card Manager), game descriptions in German, French, Spanish, Italian and Portuguese that follow System > Language, and in Card Manager: changes waiting on the Update SWIRL button, drag and drop of games, smart collections, Edit selected, box art framing, card names, safe eject, What's new and more keyboard shortcuts.
+
+**Tested on:** Glen's Dreamcast (Retro PSU, GDEMU 5.20.5, VGA, stock Sega VMU and VMU Pro) and his Windows 11 PC on both betas; the emulator harness and the Go suite as listed under each beta; the preview channel from 2026-10-05 to 2026-10-30. Windows is the release; macOS and Linux Card Manager are betas until each has had a run on a real machine.
+
+### Known limits
+
+- The UI and description translations are Claude's and await native speakers; corrections are welcome in `swirl/lang` and `swirl/cardmanager/web/lang`, and any single description can be overwritten in the Edit window.
+- A CRT may show shimmer on Horizon's moving lines or Starfield's smallest stars; no report came in during the beta.
+- A picture's readability scrim is baked in at the Darken value chosen in Card Manager (less two); lowering Picture dim far below that on the console can make a bright picture harder to read behind the text.
+- Eject on a Mac or Linux PC has not had a real machine run.
+- Titles outside the 483 title pack have only the description text you type; a Card Manager older than 2.17 drops that text if it rewrites a game's edit.
+
 ## [2.17.0-beta.2]
 
 Descriptions in your language, and a Card Manager batch. The menu's game descriptions now follow System > Language, with a translation pack of 483 titles built into Card Manager and your own words per language in the Edit window. Card Manager gains Changes waiting on the Update SWIRL button, drag and drop of games onto the window, smart collections, batch edit, box art framing, card names, safe eject, What's new, more keyboard shortcuts and teaching empty pages. Everything on the card is additive: META.DAT, OPENMENU.INI and the game folders are written exactly as before, so a card from this beta still reads in 2.16 and in other tools.

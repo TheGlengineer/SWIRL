@@ -1,5 +1,5 @@
 > [!NOTE]
-> **2.16.0** was tested on my own Dreamcast: a Retro PSU, GDEMU firmware 5.20.5, a stock Sega VMU and a VMU Pro, a
+> **2.17.0** was tested on my own Dreamcast: a Retro PSU, GDEMU firmware 5.20.5, a stock Sega VMU and a VMU Pro, a
 > VGA cable to a monitor, and a 64 GB card that came from the openMenu Virtual Folder Bundle with 52 discs. Everything else was
 > proven in the emulator harness and the automated tests, not on a console. Read the
 > [known limits](CHANGELOG.md#known-limits) before you report something; if it is not there, use
@@ -59,6 +59,7 @@ from .zip, .7z and .rar), fixes their names, fetches art, backs the card up and 
 - Box art that loads sharp, with smooth cross fades and a cover coloured backdrop
 - Collections built from your library: favorites, recently played, most played, party games, every genre, plus your own
 - Game pages with description, screenshots, VMU preview, play count and a disc picker for multi disc games
+- Eight backdrops behind the menu, Seasonal following the clock and the month, plus your own pictures from Card Manager
 - Every game boots region free and in VGA, with per game launch options (region, video, boot screens)
 - Games start about seven seconds sooner than in 2.13, with the boot animation and SEGA screen
 - Menu music with a built in theme, navigation sounds, rumble and VMU pictures
@@ -66,7 +67,7 @@ from .zip, .7z and .rar), fixes their names, fetches art, backs the card up and 
 - Favorites, history and settings saved to your VMU, as two copies, so a card pulled mid save loses nothing; copy them to another VMU from System > VMU saves
 - A VM2 or VMU Pro switches to each game's own memory card when the game starts, and SWIRL keeps a card of its own on it
 - Diagnostics: the warnings since power on in plain words, and the whole report as QR codes for a bug report
-- Menus in English, German, French, Spanish, Italian or Portuguese, following the console's own language setting or your choice
+- Menus and game descriptions in English, German, French, Spanish, Italian or Portuguese, following the console's own language setting or your choice
 - Classic openMenu list, grid and GDMENU styles still one setting away
 
 **In SWIRL Card Manager (Windows, with macOS and Linux in beta)**
@@ -74,10 +75,12 @@ from .zip, .7z and .rar), fixes their names, fetches art, backs the card up and 
 - One exe on Windows, one app on the Mac (Apple Silicon and Intel) and one static Linux binary, with nothing else to install; it installs itself and removes itself cleanly
 - Add games from folders, disc images or archives (.zip, .7z, .rar, including multi part), unpacked straight onto the card
 - Duplicate detection, proper game names from the Redump list and automatic grouping of multi disc games
-- List or cover grid view, drag to reorder, and an Edit window for names, art, VMU screens, screenshots and details
+- List or cover grid view, drag to reorder, drop games onto the window, edit several at once, and an Edit window for names, art (with framing), VMU screens, screenshots, details and the description in each language
+- Changes waiting on the Update SWIRL button, so you always know what the Dreamcast has not got yet
+- Smart collections that fill themselves by genre, players, online play, accessories or region
 - Art and info from the openMenu databases, screenshots from libretro thumbnails, and VMU screens captured by booting each game in an emulator
 - VGA patches for the few games that have no VGA mode (Hydro Thunder is one), applied in place with an undo
-- Your own menu music and VMU logo, collections, GDEMU settings and a card health check
+- Your own menu music, VMU logo and backdrop pictures, collections, GDEMU settings, card names, safe eject and a card health check
 - New card from scratch (formats the card for GDEMU and fills it), full card backups to your PC, and restore
 - The menu that was on the card before SWIRL is kept, so going back to openMenu or GDMENU is always one click
 - Report a problem: paste the QR codes from the Dreamcast, or drop photos, and get a ready to paste GitHub issue
@@ -125,8 +128,9 @@ SWIRL and Card Manager speak English, German, French, Spanish, Italian and Portu
 **On the Dreamcast.** Out of the box SWIRL follows the language set in the console's own settings screen
 (Console setting); a Dreamcast set to Japanese, or to a language SWIRL does not have, shows English. To pick one
 yourself: open **System**, go down to **Language**, and press left or right until the language you want shows.
-It applies at once and is saved to your VMU with the rest of your settings. Game names and descriptions stay as
-they are on the card. The translations travel on the card, so a card last written by an older Card Manager
+It applies at once and is saved to your VMU with the rest of your settings. Game descriptions follow too, from
+a translation pack of 483 titles built into Card Manager or your own words in a game's Edit window; game names
+stay as they are on the card. The translations travel on the card, so a card last written by an older Card Manager
 offers them only after you run **Update SWIRL** once.
 
 **In Card Manager.** Open **About** (the last entry in the list on the left, or **F1**) and pick a language

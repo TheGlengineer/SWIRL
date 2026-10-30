@@ -1,4 +1,4 @@
-# What's new in 2.17.0 beta 2
+# What's new in 2.17.0
 - Descriptions in your language. Set System > Language on the Dreamcast and the game descriptions follow: 483 titles from the translation pack built into Card Manager, or your own words from a game's Edit window.
 - Changes waiting. The Update SWIRL button counts what the Dreamcast has not got yet, and each page says so.
 - Drop games onto the window. Folders, discs and archives, added like Add games.

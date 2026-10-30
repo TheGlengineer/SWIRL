@@ -31,7 +31,7 @@ var webFS embed.FS
 //go:embed assets/whatsnew.txt
 var whatsNew embed.FS
 
-const version = "2.17.0-beta.2"
+const version = "2.17.0"
 
 // lastScan keeps the most recent scan of each card root for /api/pending (root -> *Card)
 var lastScan sync.Map
