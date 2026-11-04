@@ -307,5 +307,9 @@
   "S_HINT_PIC_DAMAGED": "Cette image n'a pas pu être utilisée, la Couleur de jaquette est affichée",
   "S_HINT_MOTION_OFF": "Plus rien ne bouge dans le fond",
   "S_HINT_MOTION_ON": "Les fonds s'animent à nouveau",
-  "S_PIC_FAILED": "%s (inutilisable)"
+  "S_PIC_FAILED": "%s (inutilisable)",
+  "S_SYS_REFRESH": "Fréquence TV",
+  "S_REFRESH_60": "60 Hz",
+  "S_REFRESH_50": "50 Hz",
+  "S_HINT_REFRESH_50": "Prochain démarrage : 50 Hz. B à l'allumage pour 60 Hz"
 }

@@ -138,6 +138,7 @@
   X(S_SYS_SFX, "Navigation sounds") \
   X(S_SYS_SFX_VOL, "Sound volume") \
   X(S_SYS_RESUME, "Start on") \
+  X(S_SYS_REFRESH, "TV refresh") \
   X(S_SYS_CLOCK, "Clock") \
   X(S_SYS_RUMBLE, "Rumble on launch") \
   X(S_SYS_START, "Start games with") \
@@ -192,6 +193,8 @@
   X(S_LOGO_REGION_ORANGE, "By region: orange") \
   X(S_QUALITY_STANDARD, "Standard") \
   X(S_QUALITY_HIGH, "High") \
+  X(S_REFRESH_60, "60 Hz") \
+  X(S_REFRESH_50, "50 Hz") \
   X(S_NO_MUSIC, "No music on card") \
   X(S_N_OF_10, "%d / 10") \
   X(S_RESUME_LAST, "Last played game") \
@@ -235,6 +238,7 @@
   X(S_HINT_LOGO_UPDATE, "Update SWIRL from Card Manager 2.15 to choose") \
   X(S_HINT_LOGO_NONE, "No logo on this card") \
   X(S_HINT_NEXT_START, "Applies the next time SWIRL starts") \
+  X(S_HINT_REFRESH_50, "Next start: 50 Hz. Hold B at power on for 60 Hz") \
   X(S_HINT_ADD_MUSIC, "Add music with SWIRL Card Manager") \
   X(S_HINT_START_WITH, "The way the console starts a game") \
   X(S_HINT_GAME_START_WINS, "A game's own Start with setting still wins") \

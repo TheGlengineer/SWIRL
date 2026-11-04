@@ -307,5 +307,9 @@
   "S_HINT_PIC_DAMAGED": "Esta imagem não pôde ser usada, por isso é mostrada a Cor da capa",
   "S_HINT_MOTION_OFF": "Agora nada se move no fundo",
   "S_HINT_MOTION_ON": "Os fundos voltam a mover-se",
-  "S_PIC_FAILED": "%s (não utilizável)"
+  "S_PIC_FAILED": "%s (não utilizável)",
+  "S_SYS_REFRESH": "Frequência TV",
+  "S_REFRESH_60": "60 Hz",
+  "S_REFRESH_50": "50 Hz",
+  "S_HINT_REFRESH_50": "Próximo início: 50 Hz. Segure B ao ligar para 60 Hz"
 }

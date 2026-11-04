@@ -309,8 +309,24 @@ static int translate_input(void) {
 /* SWIRL picture quality, read from SWIRL.DAT on the VMU before the screen is set up:
    High = 32 bit frame buffer (smooth gradients) and horizontal anti-aliasing */
 extern int sw_lib_early_quality(void);
+extern int sw_lib_early_pal50(void);
 extern float om_xscale;
 void sw_fix_fsaa_clip(void);
+
+/* B on any controller, read a few times over a tenth of a second (the first reading can come before the
+   controller has reported) */
+static int b_held_at_start(void) {
+  for (int i = 0; i < 5; i++) {
+    maple_device_t *dev;
+    for (int n = 0; (dev = maple_enum_type(n, MAPLE_FUNC_CONTROLLER)); n++) {
+      cont_state_t *st = (cont_state_t *)maple_dev_status(dev);
+      if (st && (st->buttons & CONT_B))
+        return 1;
+    }
+    thd_sleep(20);
+  }
+  return 0;
+}
 
 static void init_gfx_pvr(void) {
   /* BlueCrab (c) 2014,
@@ -332,7 +348,19 @@ static void init_gfx_pvr(void) {
   const int pm = hq ? PM_RGB888P : PM_RGB565;
   int dm = DM_640x480;
   if (dc_region == FLASHROM_REGION_EUROPE && ct != CT_VGA) {
-    vid_set_mode(dm = DM_640x480_NTSC_IL, pm);
+    /* a European console on a TV cable: 60 Hz (PAL60) unless System > TV refresh says 50 Hz (2.17.1). Some TVs,
+       100 Hz CRTs among them, show PAL60 with weak colour (discussion #13), while 50 Hz is what every PAL TV
+       takes. The 640 x 480 picture then sits inside the 576 line frame with thin black bands. */
+    int pal50 = sw_lib_early_pal50();
+    if (pal50 && b_held_at_start()) {
+      /* B held at power on: back to 60 Hz, and the setting with it, for a screen that can't show 50 Hz */
+      sw_lib_prefs()->opts5 &= (uint8_t)~SW_OPT5_PAL50;
+      sw_lib_mark_dirty();
+      pal50 = 0;
+      sw_trace("B held at start: TV refresh back to 60 Hz");
+    }
+    sw_trace("video: %s", pal50 ? "50 Hz (PAL)" : "60 Hz (PAL60)");
+    vid_set_mode(dm = pal50 ? DM_640x480_PAL_IL : DM_640x480_NTSC_IL, pm);
   } else if (hq) {
     vid_set_mode(DM_640x480, pm); /* VGA or TV, whichever cable is plugged in */
   }

@@ -51,6 +51,12 @@ console can't read the menu. It isn't caused by SWIRL and happens with any menu.
 console is fully off (a few seconds), then switch on. If you just changed a setting, wait for "Saved to VMU"
 to disappear before switching off.
 
+**On a European Dreamcast the menu's colours look washed out, but games look fine.** SWIRL runs at 60 Hz
+(PAL60) on a TV cable, and some TVs, 100 Hz CRTs among them, show PAL60 with weak colour while games that run at
+50 Hz look right. Open **System**, set **TV refresh** to **50 Hz** and switch the Dreamcast off and on (2.17.1 or
+newer). If the screen stays dark at 50 Hz, hold **B** while the Dreamcast starts to go back to 60 Hz. On some TVs
+setting the AV input's colour system to PAL instead of Auto helps too.
+
 **GDEMU boots straight into a game.** Folder `01` has no menu. Run **Update SWIRL**, or check the card with
 **Health and preview > Run health check**.
 

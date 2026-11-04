@@ -307,5 +307,9 @@
   "S_HINT_PIC_DAMAGED": "No se pudo usar esta imagen, así que se muestra Color de la carátula",
   "S_HINT_MOTION_OFF": "Ahora nada se mueve en el fondo",
   "S_HINT_MOTION_ON": "Los fondos vuelven a moverse",
-  "S_PIC_FAILED": "%s (no utilizable)"
+  "S_PIC_FAILED": "%s (no utilizable)",
+  "S_SYS_REFRESH": "Frecuencia TV",
+  "S_REFRESH_60": "60 Hz",
+  "S_REFRESH_50": "50 Hz",
+  "S_HINT_REFRESH_50": "Próximo inicio: 50 Hz. Mantén B al encender para 60 Hz"
 }

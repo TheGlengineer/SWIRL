@@ -307,5 +307,9 @@
   "S_HINT_PIC_DAMAGED": "Impossibile usare questa immagine, viene mostrato Colore della copertina",
   "S_HINT_MOTION_OFF": "Ora nulla si muove nello sfondo",
   "S_HINT_MOTION_ON": "Gli sfondi tornano a muoversi",
-  "S_PIC_FAILED": "%s (non utilizzabile)"
+  "S_PIC_FAILED": "%s (non utilizzabile)",
+  "S_SYS_REFRESH": "Frequenza TV",
+  "S_REFRESH_60": "60 Hz",
+  "S_REFRESH_50": "50 Hz",
+  "S_HINT_REFRESH_50": "Prossimo avvio: 50 Hz. Tieni B all'accensione per 60 Hz"
 }

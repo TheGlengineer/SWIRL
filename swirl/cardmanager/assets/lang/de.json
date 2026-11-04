@@ -307,5 +307,9 @@
   "S_HINT_PIC_DAMAGED": "Dieses Bild konnte nicht verwendet werden, darum wird Cover-Farbe gezeigt",
   "S_HINT_MOTION_OFF": "Im Hintergrund bewegt sich jetzt nichts mehr",
   "S_HINT_MOTION_ON": "Hintergründe bewegen sich wieder",
-  "S_PIC_FAILED": "%s (nicht nutzbar)"
+  "S_PIC_FAILED": "%s (nicht nutzbar)",
+  "S_SYS_REFRESH": "TV-Bildrate",
+  "S_REFRESH_60": "60 Hz",
+  "S_REFRESH_50": "50 Hz",
+  "S_HINT_REFRESH_50": "Nächster Start: 50 Hz. B beim Einschalten halten für 60 Hz"
 }

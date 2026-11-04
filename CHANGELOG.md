@@ -3,6 +3,23 @@
 SWIRL (the menu) and SWIRL Card Manager share one version number. Card Manager patch releases (2.11.1)
 may ship without menu changes; the menu then keeps its major.minor version (2.11).
 
+## [2.17.1-preview.1]
+
+TV refresh for European consoles. On a European Dreamcast with a TV cable SWIRL has always run the menu at 60 Hz (PAL60). Some TVs show PAL60 with washed out colour while games at 50 Hz look right (discussion #13, a PAL Dreamcast on composite into a 100 Hz Philips CRT). System > TV refresh now offers 50 Hz. A preview: it goes to the preview channel so the owner who reported it can confirm the fix on his TV before it reaches everyone.
+
+**Tested on:** Flycast set up as a European Dreamcast on a composite cable, with a 60 Hz and a 50 Hz build side by side (the menu draws the same, the trace says "video: 50 Hz (PAL)", no warnings); the Go suite and the host checks, including the save files written by every released layout. Not on a PAL console: Glen's is American, so the row does not even show on it. The colour on a real PAL TV is what this preview is for.
+
+**What to test (European Dreamcast on a TV):** (1) System > TV refresh, set 50 Hz, switch off and on: are the menu's colours right now; (2) the menu at 50 Hz otherwise as before, with thin black bands at the top and bottom; (3) hold B while the Dreamcast starts: the menu comes back at 60 Hz and the row says 60 Hz; (4) a game started from the menu at each setting starts as it did before; (5) a power cycle keeps the setting.
+
+### Menu
+
+- **System > TV refresh**: 60 Hz (as before) or 50 Hz, shown only on a European console with a TV cable. Applies at the next start; the 640 x 480 menu sits inside the PAL frame. Holding **B** at power on goes back to 60 Hz and saves that. ([System](docs/USING_SWIRL.md#system), [Troubleshooting](docs/TROUBLESHOOTING.md#on-the-dreamcast))
+- The setting lives in the PRF5 block's fourth byte, reserved until now. A 2.17.0 menu reads the file as before and clears that byte, which puts the menu back at 60 Hz.
+
+### Known limits
+
+- At 50 Hz the menu's animations run about a sixth slower, since they count frames; music and the clock are not affected.
+
 ## [2.17.0]
 
 Backdrops, descriptions in your language, and a Card Manager batch. This release is 2.17.0-beta.2 as it stood on the preview channel for three and a half weeks with no reports, plus this entry; the two beta entries below say what changed and how it was tested. In short: eight backdrops behind the menu (Seasonal follows the clock and the month, your own pictures come from Card Manager), game descriptions in German, French, Spanish, Italian and Portuguese that follow System > Language, and in Card Manager: changes waiting on the Update SWIRL button, drag and drop of games, smart collections, Edit selected, box art framing, card names, safe eject, What's new and more keyboard shortcuts.

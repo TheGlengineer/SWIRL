@@ -44,6 +44,7 @@
 #include "swirl/sw_utf8.h"
 #include "swirl/sw_lang.h"
 #include <dc/flashrom.h>
+#include <dc/video.h>
 #include "swirl/sw_lib.h"
 #include "swirl/sw_vmu.h"
 #include "swirl/sw_version.h"
@@ -894,19 +895,24 @@ static void draw_collections(float slide) {
 
 /* ---------- SYSTEM ---------- */
 enum {
-  SYS_STYLE = 0, SYS_ACCENT, SYS_BACKDROP, SYS_MOTION, SYS_PIC_DIM, SYS_LOGO, SYS_QUALITY, SYS_MUSIC, SYS_MUSIC_VOL,
+  SYS_STYLE = 0, SYS_ACCENT, SYS_BACKDROP, SYS_MOTION, SYS_PIC_DIM, SYS_LOGO, SYS_QUALITY, SYS_REFRESH, SYS_MUSIC, SYS_MUSIC_VOL,
   SYS_SFX, SYS_SFX_VOL, SYS_RESUME, SYS_CLOCK, SYS_LANGUAGE, SYS_RUMBLE, SYS_START, SYS_VIDEO, SYS_BEEP, SYS_GAMEID, SYS_ATTRACT,
   SYS_SAVER_STYLE, SYS_SAVER_TIME, SYS_SAVER_TEST, SYS_VMU, SYS_SAVE, SYS_PADTEST, SYS_BIOS, SYS_DIAG, SYS_COUNT
 };
 #define SYS_ROWS 9
 static int sys_top;
-/* the rows shown: all of them, except Picture dim, which exists only while a picture is the backdrop */
+/* the rows shown: all of them, except Picture dim, which exists only while a picture is the backdrop, and TV
+   refresh (below) */
 static int sys_rows[SYS_COUNT], sys_nrows;
+/* TV refresh is offered only where there is a choice: a European console on a TV cable (the menu runs at
+   60 Hz everywhere else) */
+static int pal_tv = -1;
 static void sys_build_rows(void) {
   const int pic = sw_lib_prefs()->picture != 0;
+  if (pal_tv < 0) pal_tv = flashrom_get_region() == FLASHROM_REGION_EUROPE && vid_check_cable() != CT_VGA;
   sys_nrows = 0;
   for (int i = 0; i < SYS_COUNT; i++)
-    if (pic || i != SYS_PIC_DIM) sys_rows[sys_nrows++] = i;
+    if ((pic || i != SYS_PIC_DIM) && (pal_tv || i != SYS_REFRESH)) sys_rows[sys_nrows++] = i;
   if (sys_sel >= sys_nrows) sys_sel = sys_nrows - 1;
 }
 /* the Backdrop row cycles the built in backdrops, then the pictures on the disc by name */
@@ -966,6 +972,7 @@ static const char *sys_value(int i, char *buf, int len) {
         default: return logo_y ? T(S_LOGO_REGION_BLUE) : T(S_LOGO_REGION_ORANGE);
       }
     case SYS_QUALITY: return p->quality ? T(S_QUALITY_STANDARD) : T(S_QUALITY_HIGH);
+    case SYS_REFRESH: return sw_prefs_pal50(p) ? T(S_REFRESH_50) : T(S_REFRESH_60);
     case SYS_MUSIC: return !sw_audio_has_music() ? T(S_NO_MUSIC) : (p->music ? T(S_ON) : T(S_OFF));
     case SYS_MUSIC_VOL: snprintf(buf, len, T(S_N_OF_10), p->music_vol); return buf;
     case SYS_SFX: return p->sfx ? T(S_ON) : T(S_OFF);
@@ -1001,7 +1008,7 @@ static const char *sys_value(int i, char *buf, int len) {
 }
 
 static const int sys_names[SYS_COUNT] = {S_SYS_STYLE, S_SYS_ACCENT, S_SYS_BACKDROP, S_SYS_MOTION, S_SYS_PIC_DIM,
-                                           S_SYS_LOGO, S_SYS_QUALITY, S_SYS_MUSIC, S_SYS_MUSIC_VOL,
+                                           S_SYS_LOGO, S_SYS_QUALITY, S_SYS_REFRESH, S_SYS_MUSIC, S_SYS_MUSIC_VOL,
                                            S_SYS_SFX, S_SYS_SFX_VOL, S_SYS_RESUME, S_SYS_CLOCK, S_SYS_LANGUAGE,
                                            S_SYS_RUMBLE, S_SYS_START, S_SYS_VIDEO, S_SYS_BEEP, S_SYS_GAMEID, S_SYS_ATTRACT, S_SYS_SAVER_STYLE,
                                            S_SYS_SAVER_TIME, S_SYS_SAVER_TEST, S_SYS_VMU,
@@ -2091,6 +2098,10 @@ static void input_tabs(unsigned int btn, int pressed) {
           case SYS_SFX: p->sfx = !p->sfx; break;
           case SYS_SFX_VOL: p->sfx_vol = (uint8_t)((p->sfx_vol + d + 11) % 11); break;
           case SYS_RESUME: p->resume = !p->resume; break;
+          case SYS_REFRESH:
+            p->opts5 ^= SW_OPT5_PAL50;
+            show_toast(sw_prefs_pal50(p) ? T(S_HINT_REFRESH_50) : T(S_HINT_NEXT_START));
+            break;
           case SYS_CLOCK: p->clock24 = !p->clock24; break;
           case SYS_LANGUAGE:
             p->lang = (uint8_t)((p->lang + d + SW_LANG_COUNT) % SW_LANG_COUNT);

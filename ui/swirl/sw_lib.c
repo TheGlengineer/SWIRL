@@ -712,6 +712,13 @@ int sw_lib_early_quality(void) {
   return prefs.quality == 0;
 }
 
+int sw_lib_early_pal50(void) {
+#ifdef SW_TEST_PAL50
+  return 1; /* test build: the 50 Hz picture without a VMU that says so */
+#endif
+  return sw_prefs_pal50(&prefs);
+}
+
 int sw_lib_dirty(void) { return dirty || settings_dirty; }
 int sw_lib_blocks_short(void) { return blocks_short; }
 void sw_lib_retrying(int on) { retrying = on; }

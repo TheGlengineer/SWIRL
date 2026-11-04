@@ -96,8 +96,13 @@ typedef struct sw_prefs {
   uint8_t motion_off;  /* 1: backdrops hold still (System > Backdrop motion Off) */
   uint8_t picture;     /* 0: a built in backdrop; 1..SW_BG_MAX: that picture from BG.DAT is the backdrop */
   uint8_t pic_dim;     /* 0..10 darkening over the picture (4 when the save has no PRF5 block) */
-  uint8_t spare5;      /* zero; the fourth byte of the PRF5 block, kept for a later setting */
+  uint8_t opts5;       /* the fourth byte of the PRF5 block (zero before 2.17.1; a 2.17.0 menu clears it on read):
+                          bit 2 the menu at 50 Hz on a European TV (2.17.1); bits 0-1 are kept for a later
+                          setting */
 } sw_prefs;
+#define SW_OPT5_PAL50 0x04
+#define SW_OPT5_KNOWN 0x07 /* bits kept when the file is read; the rest are dropped */
+static inline int sw_prefs_pal50(const sw_prefs *p) { return (p->opts5 & SW_OPT5_PAL50) != 0; }
 #define SW_BG_MAX 8
 #define SW_BACKDROP_COUNT 8 /* cover colour, night, seasonal, tide, spiral, starfield, embers, horizon */
 enum { SW_START_BOTH = 0, SW_START_ANIMATION, SW_START_LICENSE, SW_START_NONE, SW_START_COUNT };
@@ -131,6 +136,7 @@ int sw_lib_last_played(void);
 /* views: fill out[] with game indices, return count */
 int sw_lib_view_all(int *out, int sort);
 int sw_lib_view_recent(int *out, int max);
+int sw_lib_early_pal50(void); /* after sw_lib_early_quality: the TV refresh setting from SWIRL.DAT (2.17.1) */
 int sw_lib_collections(sw_collection *out, int max);
 int sw_lib_view_collection(int id, int *out, int sort);
 

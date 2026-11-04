@@ -121,6 +121,7 @@ It saves straight away.
 | Picture dim | Only while one of your pictures is the backdrop: how much it is darkened, 0 to 10 |
 | Header logo | By region (blue on a European Dreamcast, orange elsewhere), Orange (USA, Japan), Blue (Europe). Needs a card updated by Card Manager 2.15 or newer; older cards have the orange logo only |
 | Picture quality | High, Standard |
+| TV refresh | 60 Hz, 50 Hz. Only on a European Dreamcast with a TV cable (composite, S-Video or RGB SCART): the menu runs at 60 Hz (PAL60) unless you pick 50 Hz, which some TVs show with better colour (100 Hz CRTs among them). Applies the next time SWIRL starts; at 50 Hz the menu has thin black bands at the top and bottom. Hold **B** while the Dreamcast starts to go back to 60 Hz. Games are not affected: each runs at the refresh it chooses |
 | Menu music, Music volume | On or off, 0 to 10 |
 | Navigation sounds, Sound volume | On or off, 0 to 10 |
 | Start on | Home, Last played game |
