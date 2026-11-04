@@ -66,6 +66,21 @@ static int check(const char *path) {
     printf("  written again, it does not read back the same\n");
     return 1;
   }
+  /* TV refresh (2.17.1): the 50 Hz bit survives a write and a read; bits no SWIRL knows yet are dropped */
+  {
+    sw_prefs q = p;
+    q.opts5 = SW_OPT5_PAL50 | 0x80;
+    uint8_t o2[4096];
+    const int l2 = sw_save_build(o2, &q, st, n, seq + 2);
+    sw_prefs q2;
+    sw_stat sq[SW_SAVE_MAX_STATS];
+    int nq = 0, lq = 0;
+    uint32_t sqn = 0;
+    if (sw_save_parse(o2, l2, &q2, sq, &nq, &lq, &sqn) != 0 || q2.opts5 != SW_OPT5_PAL50 || !sw_prefs_pal50(&q2)) {
+      printf("  the TV refresh setting does not survive a write and a read (%02x)\n", q2.opts5);
+      return 1;
+    }
+  }
   if (olen != sw_save_size(n)) {
     printf("  sw_save_size disagrees with sw_save_build\n");
     return 1;
