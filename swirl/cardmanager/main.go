@@ -31,7 +31,7 @@ var webFS embed.FS
 //go:embed assets/whatsnew.txt
 var whatsNew embed.FS
 
-const version = "2.17.1-preview.1"
+const version = "2.17.1-preview.2"
 
 // lastScan keeps the most recent scan of each card root for /api/pending (root -> *Card)
 var lastScan sync.Map
@@ -111,6 +111,25 @@ func serve() {
 		}
 		lastScan.Store(c.Root, c)
 		writeJSON(w, map[string]any{"card": c, "swirlVersion": swirlHash(swirlBinary), "pending": PendingChanges(c.Root, c)})
+	}))
+	// what the scan is doing, for the progress panel; and the text to paste into an issue when it goes wrong
+	mux.HandleFunc("/api/scan/status", guard(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, ScanStatus())
+	}))
+	mux.HandleFunc("/api/scan/report/save", guard(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Root string `json:"root"`
+		}
+		json.NewDecoder(r.Body).Decode(&req)
+		path, err := SaveScanReport(req.Root)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, map[string]string{"path": path})
+	}))
+	mux.HandleFunc("/api/scan/report", guard(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]any{"text": ScanReport(r.URL.Query().Get("root")), "path": scanLogPath()})
 	}))
 	// the window asks again after every change it makes; the card's game list is the one from the last scan
 	// (every change to the games themselves ends in a scan), so this never reads a few hundred disc headers

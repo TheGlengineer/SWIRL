@@ -110,6 +110,7 @@ input[type=checkbox]{accent-color:var(--orange);width:1rem;height:1rem;margin:0}
 .badge.swirl{background:#3a2410;color:#ffc58e}
 .badge.ok{background:#153222;color:#8fe3ad}
 .badge.warn{background:#3a2f10;color:#f2d27a}
+.scanprog{display:flex;flex-direction:column;gap:.5rem;padding:.6rem .8rem;border:1px solid var(--line);border-radius:.5rem;background:var(--panel2)}
 .warn{background:#2a2210;border:1px solid #5a4818;color:#f2d27a;border-radius:.5rem;padding:.6rem .8rem;font-size:.9rem}
 .danger{background:#2a1210;border:1px solid #6b2a20;color:#ffb3a8;border-radius:.5rem;padding:.65rem .8rem;font-size:.9rem}
 .log{background:var(--field);border:1px solid var(--line);border-radius:.5rem;padding:.6rem .75rem;font-family:Consolas,ui-monospace,monospace;font-size:.8rem;color:var(--dim);min-height:5.5rem;max-height:14rem;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
@@ -727,6 +728,12 @@ html.i18n-pending body{visibility:hidden}
             <div class="row"><span class="msg grow" id="rpCopyMsg"></span><a class="btn small" id="rpIssues" href="https://github.com/TheGlengineer/SWIRL/issues/new/choose" target="_blank" rel="noopener">Open GitHub issues</a><button class="btn primary" id="rpCopy">Copy for GitHub</button></div>
             <p class="hint tight">Copy for GitHub puts a ready to paste issue on the clipboard: the report in plain words, the raw text, this Card Manager's version and, when a card is open, what is on it. Say what you were doing at the top, then paste it into a new issue on GitHub.</p>
           </div>
+          <div class="panel stack">
+            <h3>Card Manager's own scan log</h3>
+            <p class="hint tight">When Card Manager cannot read a card, sits on Reading, or skips a game, the log of the last scan says what it was doing, folder by folder, and how long each took. The report holds that log, the card's drive and this Card Manager's version, nothing else.</p>
+            <div class="log" id="rpScanLog" style="max-height:12rem"></div>
+            <div class="row"><span class="msg grow" id="rpScanMsg"></span><button class="btn small" id="rpScanRefresh">Show the last scan</button><button class="btn small" data-scanreport="copy">Copy scan report</button><button class="btn small" data-scanreport="save">Save scan report</button></div>
+          </div>
         </div>
       </section>
     </div>
@@ -1187,6 +1194,7 @@ function show(v) {
   $("views").scrollTop = 0;
   const on = document.querySelector(`#nav button[data-view="${v}"]`);
   if (on && on.scrollIntoView) on.scrollIntoView({ block: "nearest", inline: "nearest" });
+  if (v === "report") rpScanLog();
 }
 document.querySelectorAll("#nav button[data-view]").forEach(b => b.onclick = () => show(b.dataset.view));
 $("cardChip").onclick = () => show("card");
@@ -1230,25 +1238,97 @@ function menuBadge(c) {
   return `<span class="badge warn">${esc(c.menuType)}</span>`;
 }
 
+// ---------- reading a card: progress as it goes, and a report when it goes wrong ----------
+// /api/scan/status says which step and which folder the scan is on; the panel shows it with the scan log,
+// line by line. After scanLongMs with no end in sight the panel says so and offers the report, since a read
+// the card never answers is the one thing the scan itself cannot report on.
+const scanLongMs = 20000;
+let scanPoll = null;
+function scanLogHtml(st) {
+  return (st.log || []).map(l => `<div class="${/SKIPPED|cannot read|Stopped|unexpected problem/.test(l) ? "err" : ""}">${esc(l)}</div>`).join("");
+}
+function scanProgressHtml(root) {
+  return `<div class="scanprog" id="scanProg">
+    <div class="row"><b class="grow" id="spStage">${t("Reading {path} ...", { path: esc(root) })}</b><span class="msg" id="spCount"></span><span class="msg mono" id="spTime"></span></div>
+    <div class="bar"><i id="spBar"></i></div>
+    <div class="log" id="spLog" style="min-height:3rem;max-height:9rem"></div>
+    <div class="row" id="spLong" hidden><span class="hint tight grow">${t("This is taking longer than usual. The log above names the folder it is on. If it never finishes, save the report, close Card Manager and send the report with a GitHub issue.")}</span>${scanReportButtons()}</div>
+  </div>`;
+}
+function scanReportButtons() {
+  return `<button class="btn small" data-scanreport="copy">${t("Copy scan report")}</button><button class="btn small" data-scanreport="save">${t("Save scan report")}</button>`;
+}
+function renderScanStatus(st) {
+  const prog = $("scanProg");
+  if (!prog) return;
+  const stageEl = $("spStage");
+  if (st.stage && st.stage !== "Starting") stageEl.textContent = scanStageText(st.stage) + (st.folder ? ": " + t("folder {n}", { n: st.folder }) : "");
+  $("spCount").textContent = st.total ? t("{done} of {total} folders", { done: st.done, total: st.total }) : "";
+  $("spTime").textContent = (st.ms / 1000).toFixed(1) + " s";
+  $("spBar").style.width = Math.round((st.pct || 0) * 100) + "%";
+  const log = $("spLog");
+  const atEnd = log.scrollTop + log.clientHeight >= log.scrollHeight - 8;
+  log.innerHTML = scanLogHtml(st);
+  if (atEnd) log.scrollTop = 1e9;
+  $("spLong").hidden = !(st.running && st.ms > scanLongMs);
+}
+// the scan's step names come from the program in English; the ones the window shows get translated here
+function scanStageText(stage) {
+  const m = /^Reading (\d+) game folders$/.exec(stage);
+  if (m) return t("Reading {n} game folders", { n: m[1] });
+  const known = { "Checking the card's folder": t("Checking the card's folder"), "Finishing an interrupted change": t("Finishing an interrupted change"), "Reading the card's own files": t("Reading the card's own files"), "Reading the menu in folder 01": t("Reading the menu in folder 01"), "Listing the game folders": t("Listing the game folders"), "Checking disc sets and duplicates": t("Checking disc sets and duplicates"), "Done": t("Done"), "Stopped": t("Stopped") };
+  return known[stage] || stage;
+}
+async function scanReportAction(kind, root, msgEl) {
+  try {
+    if (kind === "copy") {
+      const r = await api("/api/scan/report?root=" + encodeURIComponent(root));
+      try { await navigator.clipboard.writeText(r.text); if (msgEl) msgEl.textContent = t("Copied. Paste it into a new issue on GitHub and say what you were doing."); }
+      catch (e) { if (msgEl) msgEl.textContent = t("Could not copy here. The text is in the box below."); const ta = document.createElement("textarea"); ta.value = r.text; ta.style.cssText = "width:100%;min-height:12rem"; (msgEl || $("cardInfo")).after(ta); }
+    } else {
+      const r = await api("/api/scan/report/save", { root });
+      if (msgEl) msgEl.textContent = t("Saved as {path}", { path: r.path });
+    }
+  } catch (e) { if (msgEl) msgEl.textContent = e.message; }
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-scanreport]");
+  if (!b) return;
+  const root = (card && card.root) || $("root").value.trim();
+  let msg = b.parentElement.querySelector(".msg, .hint");
+  if (!msg) { msg = document.createElement("span"); msg.className = "msg"; b.parentElement.append(msg); }
+  scanReportAction(b.dataset.scanreport, root, msg);
+});
 async function scan() {
   const root = $("root").value.trim();
   if (!root) return;
   document.querySelectorAll(".drive").forEach(b => b.classList.toggle("on", b.dataset.path === root));
-  $("cardInfo").innerHTML = `<p class="hint tight">${t("Reading {path} ...", { path: esc(root) })}</p>`;
+  $("cardInfo").innerHTML = scanProgressHtml(root);
   $("games").innerHTML = "";
   edits = {}; order = null;
+  clearInterval(scanPoll);
+  scanPoll = setInterval(async () => { try { renderScanStatus(await api("/api/scan/status")); } catch (e) {} }, 400);
+  let r;
   try {
-    const r = await api("/api/scan?root=" + encodeURIComponent(root));
-    card = r.card; swirlVersion = r.swirlVersion; scanNo++; pending = r.pending || { known: false, sections: [] };
-    ["games", "warnings", "backups", "duplicates", "sets"].forEach(k => { if (!Array.isArray(card[k])) card[k] = []; });
+    r = await api("/api/scan?root=" + encodeURIComponent(root));
   } catch (e) {
+    clearInterval(scanPoll); scanPoll = null;
     card = null;
-    $("cardInfo").innerHTML = `<div class="warn">${esc(e.message)}</div>`;
+    let st = { log: [] };
+    try { st = await api("/api/scan/status"); } catch (e2) {}
+    $("cardInfo").innerHTML = `<div class="warn">${esc(e.message)}</div>
+      <p class="hint tight">${t("What Card Manager did while reading the card, step by step:")}</p>
+      <div class="log" style="max-height:12rem">${scanLogHtml(st) || esc(t("No scan log."))}</div>
+      <div class="row" style="margin-top:.5rem"><span class="msg grow"></span>${scanReportButtons()}</div>
+      <p class="hint tight">${t("The report holds this log, the card's drive and this Card Manager's version, nothing else. Paste it into a GitHub issue, or save it to your Desktop and attach it.")}</p>`;
     $("install").disabled = true;
     setNav(false); show("card");
     $("cardLed").className = "led warn"; $("cardChipName").textContent = root; $("cardChipInfo").textContent = t("Could not read this card");
     return;
   }
+  clearInterval(scanPoll); scanPoll = null;
+  card = r.card; swirlVersion = r.swirlVersion; scanNo++; pending = r.pending || { known: false, sections: [] };
+  ["games", "warnings", "backups", "duplicates", "sets"].forEach(k => { if (!Array.isArray(card[k])) card[k] = []; });
   const c = card;
   const art = c.games.filter(g => g.hasArt).length, meta = c.games.filter(g => g.hasMeta).length;
   // SWIRL counts titles: the discs of a multi disc game are one entry there, so say both numbers when they differ
@@ -2987,6 +3067,14 @@ $("rpClear").onclick = () => { $("rpText").value = ""; rpParts.clear(); rpReport
 let rpTimer = 0;
 $("rpText").oninput = () => { clearTimeout(rpTimer); rpTimer = setTimeout(() => rpDecode(), 600); };
 $("rpText").onpaste = () => { clearTimeout(rpTimer); rpTimer = setTimeout(() => rpDecode(), 100); };
+async function rpScanLog() {
+  try {
+    const st = await api("/api/scan/status");
+    $("rpScanLog").innerHTML = scanLogHtml(st) || esc(t("No card has been read yet."));
+    $("rpScanLog").scrollTop = 1e9;
+  } catch (e) { $("rpScanLog").textContent = e.message; }
+}
+$("rpScanRefresh").onclick = rpScanLog;
 $("rpCopy").onclick = async () => {
   if (!rpIssue) return;
   try { await navigator.clipboard.writeText(rpIssue); $("rpCopyMsg").textContent = t("Copied. Paste it into a new issue on GitHub and say what you were doing."); }

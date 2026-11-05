@@ -3,6 +3,22 @@
 SWIRL (the menu) and SWIRL Card Manager share one version number. Card Manager patch releases (2.11.1)
 may ship without menu changes; the menu then keeps its major.minor version (2.11).
 
+## [2.17.1-preview.2]
+
+Card Manager says what it is doing while it reads a card, and tells on itself when it cannot. A report on r/dreamcast had Card Manager 2.16.1 and the 2.17 preview sitting at "Scanning" on a card that GDMENU Card Manager and Explorer read fine, with no way to see why. Now the SD card page shows a progress bar, the folder being read and a log line per folder with the time it took; a disc that cannot be read in 30 seconds is skipped with a warning naming it instead of holding the whole card; a scan that fails shows its log with **Copy scan report** and **Save scan report**; and the Report a problem page keeps the last scan's log. The scan log is also written to `scan.log` in the app's data folder as it goes, so a scan that never finishes still leaves a trace of the folder it stopped on. Preview 1's TV refresh setting is unchanged.
+
+**Tested on:** the Go suite, including the new checks (a scan's log and report, a folder that never answers is skipped after the limit and the other games come through, a panic while reading a folder comes back as an error with the log, a root that is not a folder); the window driven headless through a 26 game card with one folder that blocks, the skip warning, the failure view with Copy and Save, and the Report a problem page. Not on a card that really stalls: that is what this preview is for.
+
+**What to test (Card Manager):** (1) open a card: the progress panel shows the folders as they are read, then the card as before; (2) **Report a problem** > Card Manager's own scan log shows that scan, **Copy scan report** puts the text on the clipboard, **Save scan report** writes a text file on the Desktop; (3) if a card sits on Reading, what the panel says after 20 seconds, and the report; (4) the menu's TV refresh setting from preview 1, for European consoles on a TV.
+
+### Card Manager
+
+- **Progress while a card is read**: the step it is on, the folder, how many of how many, the time, and a log with one line per folder (name, disc format, milliseconds; slow, cannot read or skipped marked). After 20 seconds with no end the panel says so and offers the report. ([Troubleshooting](docs/TROUBLESHOOTING.md#swirl-card-manager))
+- **A folder that cannot be read in time is skipped**, not waited for: after 30 seconds the game is listed with an error, a warning names the folder and the rest of the card opens. The game is still on the card; the next scan tries it again.
+- **A scan that fails shows its log**, step by step, with **Copy scan report** and **Save scan report** (a text file on the Desktop). A fault inside the scan that would have taken the program down is caught and reported the same way, naming the folder.
+- **Report a problem** has the last scan's log with the same two buttons. The report holds the log, the card's drive (type, file system, size) and the Card Manager version, nothing else. 21 new window strings in five languages.
+- `scan.log` in the app's data folder (About > Copy details shows where) is written as the scan goes.
+
 ## [2.17.1-preview.1]
 
 TV refresh for European consoles. On a European Dreamcast with a TV cable SWIRL has always run the menu at 60 Hz (PAL60). Some TVs show PAL60 with washed out colour while games at 50 Hz look right (discussion #13, a PAL Dreamcast on composite into a 100 Hz Philips CRT). System > TV refresh now offers 50 Hz. A preview: it goes to the preview channel so the owner who reported it can confirm the fix on his TV before it reaches everyone.

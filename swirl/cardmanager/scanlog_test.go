@@ -1,0 +1,177 @@
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"syscall"
+	"testing"
+	"time"
+)
+
+func scanTestEnv(t *testing.T) string {
+	t.Setenv("LOCALAPPDATA", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", os.Getenv("LOCALAPPDATA"))
+	t.Setenv("HOME", os.Getenv("LOCALAPPDATA"))
+	card := t.TempDir()
+	writeTestCDI(t, filepath.Join(card, "02", "disc.cdi"), "FIRST GAME", "T-00001N")
+	writeTestCDI(t, filepath.Join(card, "03", "disc.cdi"), "SECOND GAME", "T-00002N")
+	return card
+}
+
+// A scan tells its story: the steps, one line per folder with its time, the result, and the same on disk.
+func TestScanLogLines(t *testing.T) {
+	card := scanTestEnv(t)
+	c, err := ScanCard(card)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Games) != 2 {
+		t.Fatalf("%d games", len(c.Games))
+	}
+	st := ScanStatus()
+	if st.Running || !st.Finished || st.Error != "" || st.Done != 2 || st.Total != 2 || st.Pct != 1 || st.Root != card {
+		t.Fatalf("status %+v", st)
+	}
+	text := strings.Join(st.Log, "\n")
+	for _, want := range []string{"Reading the menu in folder 01", "01  no menu disc", "Reading 2 game folders", "02  FIRST GAME  CDI  ", "03  SECOND GAME  CDI  ", "Done in "} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("log lacks %q:\n%s", want, text)
+		}
+	}
+	if len(st.Slowest) != 2 || st.Slowest[0].Ms < st.Slowest[1].Ms {
+		t.Fatalf("slowest %+v", st.Slowest)
+	}
+	b, err := os.ReadFile(scanLogPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	disk := string(b)
+	if !strings.HasPrefix(disk, "SWIRL Card Manager "+version+" scan log") || !strings.Contains(disk, "card: "+card) || !strings.Contains(disk, "03  SECOND GAME") || !strings.Contains(disk, "Done in ") {
+		t.Fatalf("scan.log:\n%s", disk)
+	}
+	rep := ScanReport(card)
+	for _, want := range []string{"SWIRL Card Manager " + version, "Card: " + card, "Scan finished in ", "2 folders", "Slowest folders:", "Scan log (" + scanLogPath() + ")", "  03  SECOND GAME"} {
+		if !strings.Contains(rep, want) {
+			t.Fatalf("report lacks %q:\n%s", want, rep)
+		}
+	}
+	path, err := SaveScanReport(card)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b, err := os.ReadFile(path); err != nil || string(b) != rep {
+		t.Fatalf("saved report differs (%v)", err)
+	}
+}
+
+// One folder the card never answers for (a disc image that blocks on open) is skipped after the time
+// limit with a warning naming it; the other games still come through, and the log says which was skipped.
+func TestScanFolderTimeout(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses a named pipe to make a read block")
+	}
+	card := scanTestEnv(t)
+	stuck := filepath.Join(card, "04")
+	os.MkdirAll(stuck, 0o755)
+	fifo := filepath.Join(stuck, "disc.cdi")
+	if err := syscall.Mkfifo(fifo, 0o644); err != nil {
+		t.Skip("no fifo here:", err)
+	}
+	old := scanFolderLimit
+	scanFolderLimit = 300 * time.Millisecond
+	defer func() { scanFolderLimit = old }()
+	// the read blocks on open until a writer comes; it is let go at the end so the test leaves no goroutine
+	defer func() {
+		if w, err := os.OpenFile(fifo, os.O_WRONLY, 0); err == nil {
+			w.Close()
+		}
+	}()
+	began := time.Now()
+	c, err := ScanCard(card)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if time.Since(began) > 5*time.Second {
+		t.Fatal("the scan waited for the stuck folder")
+	}
+	if len(c.Games) != 3 {
+		t.Fatalf("%d games", len(c.Games))
+	}
+	g := c.Games[2]
+	if g.Folder != "04" || !strings.Contains(g.Error, "took more than") || g.Name != "Folder 04" {
+		t.Fatalf("stuck game %+v", g)
+	}
+	if c.Games[0].Error != "" || c.Games[1].Error != "" {
+		t.Fatalf("the other games were touched: %+v", c.Games[:2])
+	}
+	found := false
+	for _, w := range c.Warnings {
+		if strings.Contains(w, "Folder 04 took more than") && strings.Contains(w, "skipped this time") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("no warning names the folder: %v", c.Warnings)
+	}
+	st := ScanStatus()
+	if len(st.Skipped) != 1 || st.Skipped[0] != "04" || !strings.Contains(strings.Join(st.Log, "\n"), "04  Folder 04  no disc image") || !strings.Contains(strings.Join(st.Log, "\n"), "SKIPPED") {
+		t.Fatalf("status %+v", st)
+	}
+	if rep := ScanReport(card); !strings.Contains(rep, "Folders skipped for taking more than") || !strings.Contains(rep, ": 04") {
+		t.Fatalf("report:\n%s", rep)
+	}
+}
+
+// A panic while a folder is read comes back as an error that names the folder, with the log kept, instead
+// of a window that sits on "Reading".
+func TestScanPanicRecovered(t *testing.T) {
+	card := scanTestEnv(t)
+	scanTestHook = func(folder string) {
+		if folder == "03" {
+			var m map[string]int
+			m["x"] = 1 // nil map write, the kind of slip that would otherwise take the server down
+		}
+	}
+	defer func() { scanTestHook = nil }()
+	c, err := ScanCard(card)
+	if err == nil || c != nil {
+		t.Fatalf("no error (%v)", c)
+	}
+	if !strings.Contains(err.Error(), "unexpected problem") || !strings.Contains(err.Error(), "folder 03") || !strings.Contains(err.Error(), "Report a problem") {
+		t.Fatalf("error %q", err)
+	}
+	st := ScanStatus()
+	text := strings.Join(st.Log, "\n")
+	if st.Running || !st.Finished || st.Error == "" || st.Stage != "Stopped" || !strings.Contains(text, "02  FIRST GAME") || !strings.Contains(text, "assignment to entry in nil map") || !strings.Contains(text, "Stopped after") {
+		t.Fatalf("status %+v", st)
+	}
+	// the next scan is a new story
+	scanTestHook = nil
+	if _, err := ScanCard(card); err != nil {
+		t.Fatal(err)
+	}
+	if st := ScanStatus(); st.Error != "" || st.Done != 2 {
+		t.Fatalf("status after %+v", st)
+	}
+	if rep := ScanReport(card); strings.Contains(rep, "unexpected problem") {
+		t.Fatal("the report still carries the old scan")
+	}
+}
+
+// A root that is not a folder fails at once, with the reason and the step it failed at in the log.
+func TestScanBadRoot(t *testing.T) {
+	scanTestEnv(t)
+	missing := filepath.Join(t.TempDir(), "gone")
+	if _, err := ScanCard(missing); err == nil || !strings.Contains(err.Error(), "is not a folder") {
+		t.Fatalf("error %v", err)
+	}
+	st := ScanStatus()
+	if st.Error == "" || !strings.Contains(strings.Join(st.Log, "\n"), "Checking the card's folder") {
+		t.Fatalf("status %+v", st)
+	}
+	if rep := ScanReport(missing); !strings.Contains(rep, "Scan stopped after") {
+		t.Fatalf("report:\n%s", rep)
+	}
+}

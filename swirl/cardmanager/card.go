@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -152,10 +153,38 @@ func listBackups(root string) []string {
 	return out
 }
 
-func ScanCard(root string) (*Card, error) {
+// folderRead is what reading one game folder gives (see readFolderInTime).
+type folderRead struct {
+	ip     *ipInfo
+	format string
+	err    error
+	psx    string
+	isPSX  bool
+}
+
+// scanTestHook, set by a test, runs before each game folder is read (to make one fail the way a card can).
+var scanTestHook func(folder string)
+
+// scanSerial runs one scan at a time, so the scan log (scanlog.go) is one scan's story.
+var scanSerial sync.Mutex
+
+// ScanCard reads a card: the menu in 01, every game folder, backups, duplicates. What it does goes to the
+// scan log as it goes (scanlog.go); one folder that cannot be read in time is skipped with a warning,
+// and a panic inside the scan comes back as an error, both with the log attached.
+func ScanCard(root string) (c *Card, err error) {
+	scanSerial.Lock()
+	defer scanSerial.Unlock()
+	l := newScanLog(root)
+	defer func() { l.finish(c, err) }()
+	defer scanRecover(l, &err)
+	return scanCard(root, l)
+}
+
+func scanCard(root string, l *scanLog) (*Card, error) {
 	if msg := cardRootErr(root); msg != "" {
 		return nil, errors.New(msg)
 	}
+	l.stage("Checking the card's folder")
 	st, err := os.Stat(root)
 	if err != nil || !st.IsDir() {
 		return nil, fmt.Errorf("%s is not a folder", root)
@@ -163,6 +192,7 @@ func ScanCard(root string) (*Card, error) {
 	tidyMacFiles(root)
 	var fixed []string
 	if fileExists(recoverPath(root)) || fileExists(stagePath(root)) || fileExists(journalPath(root)) || len(partFolders(root)) > 0 {
+		l.stage("Finishing an interrupted change")
 		if unlock, ok := tryLockCard(root, "Scan"); ok { // never while the card is being written
 			fixed = append(recoverRenumber(root), recoverMenu(root)...)
 			fixed = append(fixed, recoverParts(root)...)
@@ -170,11 +200,13 @@ func ScanCard(root string) (*Card, error) {
 		}
 	}
 	fixed = append(fixed, hiddenFolderWarnings(root)...)
+	l.stage("Reading the card's own files")
 	c := &Card{Root: root, MenuType: "None", Label: CardLabel(root), Backups: listBackups(root), BackupList: listBackupItems(root), Warnings: fixed}
 	var boxIDs, iconIDs, metaIDs, vmuIDs map[string]bool
 	edits := loadEdits(root)
 
 	// menu disc in 01: any image is looked at, so a game or an unknown menu is named for what it is
+	l.stage("Reading the menu in folder 01")
 	menuDir := filepath.Join(root, "01")
 	if img := menuImageIn01(menuDir); img != "" {
 		c.MenuImage, c.MenuFormat = img, imageFormat(img)
@@ -231,6 +263,11 @@ func ScanCard(root string) (*Card, error) {
 		}
 	}
 	c.Warnings = append(c.Warnings, c.DatIssues...)
+	if c.MenuImage != "" {
+		l.line("01  %s  %s  %s", c.MenuType, c.MenuTitle, c.MenuImage)
+	} else {
+		l.line("01  no menu disc")
+	}
 	switch c.MenuType {
 	case "Game":
 		c.Warnings = append(c.Warnings, fmt.Sprintf("Folder 01 holds a game, not a menu: %s (%s). Move it to a later folder first.", c.MenuTitle, c.MenuImage))
@@ -238,6 +275,7 @@ func ScanCard(root string) (*Card, error) {
 		c.Warnings = append(c.Warnings, fmt.Sprintf("Folder 01 holds a menu SWIRL does not know, %s (%s). Installing SWIRL keeps it in Backups.", c.MenuTitle, c.MenuImage))
 	}
 
+	l.stage("Listing the game folders")
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return nil, err
@@ -262,15 +300,41 @@ func ScanCard(root string) (*Card, error) {
 		nums = append(nums, n)
 	}
 	sort.Ints(nums)
+	l.total(len(nums))
+	l.stage(fmt.Sprintf("Reading %d game folders", len(nums)))
 	gapWarned := false
+	var skipped []string
 	for i, n := range nums {
 		folder := byNum[n]
+		l.folder(folder, i)
+		if scanTestHook != nil {
+			scanTestHook(folder)
+		}
+		began := time.Now()
 		g := Game{Folder: folder, Slot: n, Disc: "1/1", Region: "JUE", Version: "V1.000", Date: "20000101", VGA: true}
 		dir := filepath.Join(root, folder)
-		ip, format, err := readImageIP(dir)
+		// the disc header, within the time limit: a read the card never answers must not hold the whole scan
+		// (the read keeps its own result, so a late answer touches nothing the scan still uses)
+		res := new(folderRead)
+		timedOut := readFolderInTime(func() {
+			res.ip, res.format, res.err = readImageIP(dir)
+			if res.ip == nil {
+				res.psx, res.isPSX = detectPSX(dir)
+			}
+		})
+		var ip *ipInfo
+		var format, psxSerial string
+		var isPSX bool
+		var rerr error
+		if timedOut {
+			rerr = fmt.Errorf("reading this folder's disc image took more than %.0f s, so it was skipped this time; the game is still on the card", scanFolderLimit.Seconds())
+			skipped = append(skipped, folder)
+		} else {
+			ip, format, rerr, psxSerial, isPSX = res.ip, res.format, res.err, res.psx, res.isPSX
+		}
 		g.Format = format
-		if err != nil {
-			g.Error = err.Error()
+		if rerr != nil {
+			g.Error = rerr.Error()
 		}
 		raw := ""
 		if ip != nil {
@@ -287,9 +351,9 @@ func ScanCard(root string) (*Card, error) {
 					g.VGAState = "skipped"
 				}
 			}
-		} else if serial, ok := detectPSX(dir); ok {
+		} else if isPSX {
 			g.Type, g.Format, g.Error, g.Region = "psx", "PSX", "", "U"
-			g.Product = serial
+			g.Product = psxSerial
 			g.Name = folder
 		}
 		if s := readText(filepath.Join(dir, "serial.txt")); s != "" {
@@ -340,6 +404,7 @@ func ScanCard(root string) (*Card, error) {
 		g.HasVMU = vmuIDs[g.Product] || (mine && fileExists(artPath(root, folder, "vmu")))
 		g.Shots = len(shotsFor(root, g.Product))
 		c.Games = append(c.Games, g)
+		l.folderDone(folder, &g, time.Since(began), timedOut)
 		if n != i+2 && !gapWarned {
 			gapWarned = true
 			c.Warnings = append(c.Warnings, fmt.Sprintf("Folder numbers skip a number before %s. GDEMU expects 02, 03, 04 ... with no gaps and stops at the first one; Close the gaps (under Health and preview) renumbers the folders.", folder))
@@ -348,6 +413,10 @@ func ScanCard(root string) (*Card, error) {
 			c.Gaps = true
 		}
 	}
+	if len(skipped) > 0 {
+		c.Warnings = append(c.Warnings, fmt.Sprintf("Folder %s took more than %.0f seconds to read and was skipped this time (the game is still on the card). A slow reader, a damaged disc image or another program holding the file can do this; the scan log under Report a problem says more.", strings.Join(skipped, ", "), scanFolderLimit.Seconds()))
+	}
+	l.stage("Checking disc sets and duplicates")
 	for i := range c.Games {
 		g := &c.Games[i]
 		g.DiscNo, g.DiscOf = discNumbers(g.Disc)

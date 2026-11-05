@@ -25,6 +25,16 @@ in app mode. If none is installed it falls back to your default browser. Everyth
 **My card is not in the list.** Type its drive letter in the box on the SD card page and click **Scan**. Cards
 must be formatted FAT32 for GDEMU; **New card from scratch** does that for you.
 
+**Card Manager sits on "Reading" or says it could not read the card.** Card Manager reads the header of every
+disc on the card when it opens it, and shows which folder it is on while it does, with the time each one took.
+One disc that takes more than 30 seconds (a slow reader, a damaged image, another program holding the file) is
+skipped with a warning that names it, and the rest of the card opens; the game is still on the card. If the
+card could not be read at all, the page shows what Card Manager did step by step with **Copy scan report** and
+**Save scan report** under it; the same log is on the **Report a problem** page. The report holds that log,
+the card's drive and the Card Manager version, nothing else. Paste it into an
+[issue](https://github.com/TheGlengineer/SWIRL/issues/new/choose) so it can be fixed. A reader that works in
+Explorer but not here is still worth a report: the log says which step waits.
+
 **New games do not show on the Dreamcast.** Click **Update SWIRL** after adding, removing or editing games.
 Edits are saved on the card straight away, but only reach the menu when it is rebuilt.
 
@@ -156,5 +166,6 @@ preview version has the same button). Scan
 the codes with your phone and paste the text, in any order, or drop photos of the screen on the page. It shows
 the report in plain words and **Copy for GitHub** puts a ready to paste issue on the clipboard. Nothing is sent
 anywhere by itself. A photo needs to be sharp with the whole code in the frame; if it does not read, scan the
-code with your phone's camera app and paste the text instead. Check the
+code with your phone's camera app and paste the text instead. The same page holds **Card Manager's own scan
+log**, for a card that would not read or a game it skipped. Check the
 [known limits](../CHANGELOG.md#known-limits-and-open-questions) first; it may already be there.
